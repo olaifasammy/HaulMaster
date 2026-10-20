@@ -1,0 +1,6 @@
+{
+  "name": "HaulMaster: Global Logistics & Fleet Simulator",
+  "description": "High-fidelity truck fleet management simulation with realistic powertrain physics, dynamic meteorology, comprehensive maintenance telemetry, and global logistics corridors.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
