@@ -22,8 +22,11 @@ export interface StepPhysicsParams {
   gradePct: number; // e.g. 3.5% = +0.035
   speedLimitKmh: number;
   hasAeroPackage: boolean;
+  hasTrailerAeroSkirts?: boolean;
   hasRetarder: boolean;
   isReeferCargo: boolean;
+  tireCompound?: 'highway_eco' | 'all_weather' | 'severe_snow';
+  trailerEmptyWeightKg?: number;
   deltaSeconds: number; // e.g. 60s per sim minute
   currentSpeedKmh: number;
 }
@@ -49,18 +52,29 @@ export function computePhysicsStep(params: StepPhysicsParams): StepPhysicsResult
     gradePct,
     speedLimitKmh,
     hasAeroPackage,
+    hasTrailerAeroSkirts,
     hasRetarder,
     isReeferCargo,
+    tireCompound,
+    trailerEmptyWeightKg,
     deltaSeconds,
     currentSpeedKmh,
   } = params;
 
   // 1. Total Gross Combination Weight (GCW) in kg
-  const totalMassKg = specs.curbWeightKg + payloadKg;
+  const totalMassKg = specs.curbWeightKg + (trailerEmptyWeightKg || 0) + payloadKg;
 
   // 2. Road & Weather friction and speed targeting
-  // In adverse weather, max safe speed drops according to road friction
-  const frictionLimitSpeedKmh = 120 * Math.sqrt(weather.roadFrictionCoeff / 0.85);
+  // Tire compound adjusts wet/snow grip: severe_snow provides +25% grip on snow/ice
+  let compoundGripFactor = 1.0;
+  if (tireCompound === 'severe_snow' && weather.type.includes('Snow')) {
+    compoundGripFactor = 1.25;
+  } else if (tireCompound === 'highway_eco' && weather.type.includes('Snow')) {
+    compoundGripFactor = 0.88;
+  }
+
+  const effectiveRoadFriction = Math.min(1.0, weather.roadFrictionCoeff * compoundGripFactor);
+  const frictionLimitSpeedKmh = 120 * Math.sqrt(effectiveRoadFriction / 0.85);
   const targetSpeedKmh = Math.min(speedLimitKmh, frictionLimitSpeedKmh);
 
   // Smooth acceleration / cruise adjustment
@@ -80,15 +94,22 @@ export function computePhysicsStep(params: StepPhysicsParams): StepPhysicsResult
   const headwindKmh = weather.windSpeedKmh * Math.cos(windAngleRad);
   const relativeAirSpeedMs = Math.max(0, (speedKmh + headwindKmh) / 3.6);
 
-  // Aero package reduces Cd by 12%
-  const effectiveCd = hasAeroPackage ? specs.dragCoefficient * 0.88 : specs.dragCoefficient;
+  // Aero package reduces truck Cd by 12%; trailer aero skirts reduce total drag by another 6%
+  let effectiveCd = hasAeroPackage ? specs.dragCoefficient * 0.88 : specs.dragCoefficient;
+  if (hasTrailerAeroSkirts) {
+    effectiveCd *= 0.94;
+  }
+
   const altitudeScale = 1.0; // standard density
   const rhoAir = AIR_DENSITY_SEA_LEVEL * altitudeScale;
   const F_drag = 0.5 * rhoAir * effectiveCd * specs.frontalAreaM2 * Math.pow(relativeAirSpeedMs, 2);
 
   // 4. Rolling Resistance Force
-  // Base Crr = 0.0055 for low-resistance highway truck tires, increased by wet/snow surfaces
+  // Base Crr = 0.0055 for low-resistance highway truck tires
   let baseCrr = 0.0055;
+  if (tireCompound === 'highway_eco') baseCrr = 0.0048;
+  else if (tireCompound === 'severe_snow') baseCrr = 0.0065;
+
   if (subsystems.steerTires.wearPercentage < 30) baseCrr += 0.0015; // worn tires increase rolling resistance
   const effectiveCrr = baseCrr * weather.rollingResistanceMultiplier;
   const F_rr = effectiveCrr * totalMassKg * GRAVITY;

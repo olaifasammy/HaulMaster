@@ -1,6 +1,6 @@
 import React from 'react';
 import { useGame } from '../context/GameContext';
-import { TRUCK_MODELS } from '../constants/gameData';
+import { TRUCK_MODELS, TRAILER_MODELS, LIVERY_PALETTES } from '../constants/gameData';
 import {
   X,
   Gauge,
@@ -11,6 +11,9 @@ import {
   AlertTriangle,
   CheckCircle,
   Truck as TruckIcon,
+  Wind,
+  ShieldCheck,
+  Package,
 } from 'lucide-react';
 
 interface TruckInspectorModalProps {
@@ -292,6 +295,70 @@ export const TruckInspectorModal: React.FC<TruckInspectorModalProps> = ({ truckI
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Factory Customization & Equipment Specs */}
+          <div className="p-4 bg-slate-950/70 border border-slate-800 rounded-xl space-y-3">
+            <h4 className="text-[11px] font-mono font-bold text-slate-300 uppercase tracking-wider">
+              Dealership Factory Specification & Equipment
+            </h4>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs font-mono">
+              <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-lg">
+                <span className="text-[9px] text-slate-500 uppercase block">Aero Package</span>
+                <span className={`font-bold mt-0.5 block ${truck.hasAeroPackage ? 'text-sky-400' : 'text-slate-400'}`}>
+                  {truck.hasAeroPackage ? 'Aero Skirts (-12%)' : 'Standard Cab'}
+                </span>
+              </div>
+
+              <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-lg">
+                <span className="text-[9px] text-slate-500 uppercase block">Engine Retarder</span>
+                <span className={`font-bold mt-0.5 block ${truck.hasRetarder ? 'text-amber-400' : 'text-slate-400'}`}>
+                  {truck.hasRetarder ? 'Hydraulic Equipped' : 'Standard Disc'}
+                </span>
+              </div>
+
+              <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-lg">
+                <span className="text-[9px] text-slate-500 uppercase block">Tire Compound</span>
+                <span className="font-bold text-white mt-0.5 block capitalize">
+                  {truck.tireCompound ? truck.tireCompound.replace('_', ' ') : 'Highway Eco'}
+                </span>
+              </div>
+
+              <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-lg">
+                <span className="text-[9px] text-slate-500 uppercase block">Sleeper Amenity</span>
+                <span className="font-bold text-emerald-400 mt-0.5 block capitalize">
+                  {truck.sleeperTier ? truck.sleeperTier.replace('_', ' ') : 'Std Sleeper'}
+                </span>
+              </div>
+            </div>
+
+            {/* Coupled Trailer Info */}
+            <div className="p-2.5 bg-slate-900/60 border border-slate-800/80 rounded-lg flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-amber-400" />
+                <span className="text-slate-400">Coupled Trailer:</span>
+                {truck.assignedTrailerId ? (
+                  (() => {
+                    const trl = (state.trailers || []).find((t) => t.id === truck.assignedTrailerId);
+                    const trlModel = trl ? TRAILER_MODELS.find((m) => m.id === trl.modelId) : null;
+                    return (
+                      <span className="font-bold text-white font-mono">
+                        {trl?.serialNumber} · {trlModel?.name.split(' ')[0]} {trlModel?.name.split(' ')[1]}
+                      </span>
+                    );
+                  })()
+                ) : (
+                  <span className="text-slate-500 italic">No dedicated trailer coupled</span>
+                )}
+              </div>
+              {truck.liveryColor && (
+                <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
+                  <span>Livery:</span>
+                  <span className="capitalize text-slate-200">{truck.liveryColor.replace('_', ' ')}</span>
+                </div>
+              )}
             </div>
           </div>
 

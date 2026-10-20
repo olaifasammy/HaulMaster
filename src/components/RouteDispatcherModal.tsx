@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { TRUCK_MODELS } from '../constants/gameData';
+import { TRUCK_MODELS, TRAILER_MODELS } from '../constants/gameData';
 import {
   X,
   Send,
@@ -12,6 +12,8 @@ import {
   CheckCircle,
   Fuel,
   DollarSign,
+  Wind,
+  Snowflake,
 } from 'lucide-react';
 
 interface RouteDispatcherModalProps {
@@ -29,6 +31,7 @@ export const RouteDispatcherModal: React.FC<RouteDispatcherModalProps> = ({
     preselectedContractId || state.availableContracts[0]?.id || ''
   );
   const [selectedTruckId, setSelectedTruckId] = useState<string>('');
+  const [selectedTrailerId, setSelectedTrailerId] = useState<string>('');
   const [selectedDriverId, setSelectedDriverId] = useState<string>('');
   const [selectedRouteId, setSelectedRouteId] = useState<string>('');
 
@@ -45,6 +48,11 @@ export const RouteDispatcherModal: React.FC<RouteDispatcherModalProps> = ({
     (t) => t.status === 'idle' && t.currentHubId === contract?.originHubId
   );
   const selectedTruck = eligibleTrucks.find((t) => t.id === selectedTruckId) || eligibleTrucks[0];
+
+  // Eligible trailers at the origin hub
+  const eligibleTrailers = (state.trailers || []).filter(
+    (tr) => tr.status === 'idle' && tr.currentHubId === contract?.originHubId
+  );
 
   const availableDrivers = state.drivers.filter(
     (d) => d.hosStatus !== 'driving' && d.hosStatus !== 'resting'
@@ -71,7 +79,13 @@ export const RouteDispatcherModal: React.FC<RouteDispatcherModalProps> = ({
 
   const handleDispatch = () => {
     if (!contract || !selectedTruck || !selectedDriver || !activeRoute) return;
-    const ok = dispatchTrip(contract.id, selectedTruck.id, selectedDriver.id, activeRoute.id);
+    const ok = dispatchTrip(
+      contract.id,
+      selectedTruck.id,
+      selectedDriver.id,
+      activeRoute.id,
+      selectedTrailerId || undefined
+    );
     if (ok) {
       onClose();
     }
@@ -225,11 +239,78 @@ export const RouteDispatcherModal: React.FC<RouteDispatcherModalProps> = ({
             )}
           </div>
 
-          {/* Step 4: Driver Selection */}
+          {/* Step 4: Trailer Coupling & Hitching */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-300">
-                4. Assigned Driver
+                4. Trailer Coupling ({originHub?.name.split(' ')[0]})
+              </label>
+              <span className="text-[10px] text-slate-400">
+                {eligibleTrailers.length} idle at terminal
+              </span>
+            </div>
+
+            {eligibleTrailers.length === 0 ? (
+              <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl text-center text-xs text-slate-400">
+                <span>No standalone trailers parked at {originHub?.name.split(' ')[0]}. Using standard tractor hitch.</span>
+                <span className="block text-[10px] text-slate-500 mt-1">Acquire dedicated trailers in Fleet Dealership for cold-chain & hazmat freight bonuses.</span>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                  <button
+                    onClick={() => setSelectedTrailerId('')}
+                    className={`p-2.5 rounded-xl border text-left transition-all min-h-[44px] ${
+                      selectedTrailerId === ''
+                        ? 'bg-amber-500/10 border-amber-500 text-white'
+                        : 'bg-slate-950/50 border-slate-800 hover:border-slate-700 text-slate-400'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-xs font-bold text-white">
+                      <span>Standard Hitch</span>
+                      <span className="text-[10px] font-mono text-slate-500">Uncoupled</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-1">Default company freight carrier</div>
+                  </button>
+
+                  {eligibleTrailers.map((tr) => {
+                    const isSelected = tr.id === selectedTrailerId;
+                    const model = TRAILER_MODELS.find((m) => m.id === tr.modelId);
+                    const isOptimal = contract?.category === model?.category;
+
+                    return (
+                      <button
+                        key={tr.id}
+                        onClick={() => setSelectedTrailerId(tr.id)}
+                        className={`p-2.5 rounded-xl border text-left transition-all min-h-[44px] ${
+                          isSelected
+                            ? 'bg-amber-500/10 border-amber-500 text-white ring-1 ring-amber-500/30'
+                            : 'bg-slate-950/50 border-slate-800 hover:border-slate-700 text-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-xs font-bold">
+                          <span className="truncate mr-1 text-white">{model?.name.split(' ')[0]} {model?.name.split(' ')[1]}</span>
+                          <span className="font-mono text-amber-400 text-[10px] shrink-0">{tr.serialNumber}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1 font-mono">
+                          <span className={isOptimal ? 'text-emerald-400 font-bold' : ''}>
+                            {model?.category}
+                          </span>
+                          {tr.hasAeroSkirts && <span className="text-sky-400">-6% Drag</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Step 5: Driver Selection */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-300">
+                5. Assigned Driver
               </label>
               <span className="text-[10px] text-slate-400">{availableDrivers.length} ready</span>
             </div>
@@ -260,7 +341,7 @@ export const RouteDispatcherModal: React.FC<RouteDispatcherModalProps> = ({
             </div>
           </div>
 
-          {/* Step 5: Profitability Forecast */}
+          {/* Step 6: Profitability Forecast */}
           <div className="p-3.5 bg-slate-950/90 border border-slate-800 rounded-xl space-y-2.5">
             <div className="flex items-center justify-between text-[11px] font-mono font-bold text-slate-300 uppercase tracking-wider">
               <span>Financial Forecast</span>

@@ -183,8 +183,8 @@ export const FinancialLedger: React.FC = () => {
               Active Debt Facilities ({state.loans.length})
             </h4>
             <div className="space-y-2">
-              {state.loans.map((loan) => (
-                <div key={loan.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-lg text-xs font-mono gap-2">
+              {state.loans.map((loan, index) => (
+                <div key={`${loan.id}-${index}`} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-lg text-xs font-mono gap-2">
                   <div>
                     <span className="text-white font-bold">${Math.round(loan.remainingBalanceUsd).toLocaleString()} remaining</span>
                     <span className="text-slate-500 text-[11px] block sm:inline sm:ml-2">
@@ -269,10 +269,10 @@ export const FinancialLedger: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {filteredLedger.map((entry) => {
+                {filteredLedger.map((entry, index) => {
                   const isCredit = entry.amountUsd >= 0;
                   return (
-                    <tr key={entry.id} className="hover:bg-slate-800/40 transition-colors">
+                    <tr key={`${entry.id || 'led'}-${index}`} className="hover:bg-slate-800/40 transition-colors">
                       <td className="py-2.5 px-4 text-slate-400 whitespace-nowrap">
                         {entry.simTimeFormatted}
                       </td>

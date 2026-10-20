@@ -4,6 +4,10 @@ import {
   GeoRegion,
   ActiveTrip,
   TruckInstance,
+  TrailerInstance,
+  TrailerModelId,
+  TruckConfigOptions,
+  TrailerConfigOptions,
   Driver,
   CargoContract,
   LedgerEntry,
@@ -18,6 +22,8 @@ import {
   INITIAL_DRIVERS,
   INITIAL_CONTRACTS,
   TRUCK_MODELS,
+  TRAILER_MODELS,
+  INITIAL_TRAILERS,
   createPristineSubsystems,
 } from '../constants/gameData';
 import { computePhysicsStep } from '../utils/physicsEngine';
@@ -25,14 +31,34 @@ import { getLocalWeather } from '../utils/weatherEngine';
 
 const STORAGE_KEY = 'haulmaster_game_state_v1';
 
+export const deduplicateNotifications = (list: GameEventNotification[]): GameEventNotification[] => {
+  const seen = new Set<string>();
+  const result: GameEventNotification[] = [];
+  for (let i = 0; i < list.length; i++) {
+    const item = list[i];
+    if (!item) continue;
+    let id = item.id;
+    if (!id || seen.has(id)) {
+      id = `${id || 'notif'}-${i}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    }
+    seen.add(id);
+    result.push({ ...item, id });
+  }
+  return result;
+};
+
 interface GameContextType {
   state: GameState;
   setSimSpeed: (speed: 0 | 1 | 5 | 15) => void;
   setSelectedRegion: (region: GeoRegion) => void;
-  dispatchTrip: (contractId: string, truckId: string, driverId: string, routeId: string) => boolean;
+  dispatchTrip: (contractId: string, truckId: string, driverId: string, routeId: string, trailerId?: string | null) => boolean;
   serviceTruck: (truckId: string, serviceTier: 'A' | 'B' | 'Overhaul' | 'ReplaceTires') => void;
   buyTruck: (modelId: TruckModelId, hubId: string, aeroPackage: boolean) => boolean;
+  buyTruckWithConfig: (options: TruckConfigOptions) => boolean;
   sellTruck: (truckId: string) => void;
+  buyTrailer: (options: TrailerConfigOptions) => boolean;
+  sellTrailer: (trailerId: string) => void;
+  assignTrailerToTruck: (truckId: string, trailerId: string | null) => void;
   hireDriver: (driverData: Partial<Driver>) => boolean;
   fireDriver: (driverId: string) => void;
   trainDriver: (driverId: string, certType: 'mountain' | 'winter' | 'hazmat' | 'eco') => boolean;
@@ -67,6 +93,9 @@ const createInitialState = (): GameState => {
       hasAeroPackage: true,
       hasRetarder: true,
       tireCompound: 'highway_eco',
+      sleeperTier: 'standard_sleeper',
+      liveryColor: 'obsidian_slate',
+      assignedTrailerId: 'trl-01',
       serviceDueKm: 50000,
     },
     {
@@ -87,6 +116,9 @@ const createInitialState = (): GameState => {
       hasAeroPackage: true,
       hasRetarder: true,
       tireCompound: 'all_weather',
+      sleeperTier: 'deluxe_suite',
+      liveryColor: 'continental_emerald',
+      assignedTrailerId: 'trl-02',
       serviceDueKm: 40000,
     },
   ];
@@ -100,6 +132,7 @@ const createInitialState = (): GameState => {
     hubs: INITIAL_HUBS,
     routes: INITIAL_ROUTES,
     trucks: initialTrucks,
+    trailers: INITIAL_TRAILERS,
     drivers: INITIAL_DRIVERS,
     availableContracts: INITIAL_CONTRACTS,
     activeTrips: [],
@@ -120,7 +153,7 @@ const createInitialState = (): GameState => {
         id: 'notif-welcome',
         simTimeFormatted: 'Day 1 08:00',
         title: 'Operations Online',
-        message: 'Logistics command center initialized. 2 heavy trucks stationed at Seattle and Chicago ready for dispatch.',
+        message: 'Logistics command center initialized. 2 heavy trucks and trailers stationed at Seattle and Chicago ready for dispatch.',
         type: 'delivery',
         timestamp: Date.now(),
       },
@@ -139,7 +172,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.trucks && parsed.hubs) return parsed;
+        if (parsed && parsed.trucks && parsed.hubs) {
+          // Strictly deduplicate and ensure unique keys for any restored notifications
+          parsed.notifications = deduplicateNotifications(parsed.notifications || []);
+          if (!parsed.trailers || parsed.trailers.length === 0) {
+            parsed.trailers = INITIAL_TRAILERS;
+          }
+          return parsed;
+        }
       }
     } catch {
       // fallback
@@ -282,12 +322,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const remainingTrips: ActiveTrip[] = [];
           const completedTrips: ActiveTrip[] = [];
           let updatedTrucks = [...prevState.trucks];
+          let updatedTrailers = [...(prevState.trailers || [])];
           let updatedDrivers = [...prevState.drivers];
 
           for (const trip of prevState.activeTrips) {
             const truck = updatedTrucks.find((t) => t.id === trip.truckId);
             const driver = updatedDrivers.find((d) => d.id === trip.driverId);
             const model = TRUCK_MODELS.find((m) => m.id === truck?.modelId);
+            const trailer = trip.trailerId ? updatedTrailers.find((tr) => tr.id === trip.trailerId) : null;
+            const trailerModel = trailer ? TRAILER_MODELS.find((tm) => tm.id === trailer.modelId) : null;
 
             if (!truck || !driver || !model) {
               continue;
@@ -383,8 +426,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               gradePct,
               speedLimitKmh: trip.corridor.baseSpeedLimitKmh,
               hasAeroPackage: truck.hasAeroPackage,
+              hasTrailerAeroSkirts: trailer?.hasAeroSkirts || false,
               hasRetarder: truck.hasRetarder,
-              isReeferCargo: trip.contract.temperatureControlled,
+              isReeferCargo: trip.contract.temperatureControlled || (trailer?.hasReeferUnit ?? false),
+              tireCompound: truck.tireCompound,
+              trailerEmptyWeightKg: trailerModel?.emptyWeightKg || 0,
               deltaSeconds,
               currentSpeedKmh: trip.telemetry.currentSpeedKmh,
             });
@@ -407,7 +453,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 runningBalanceUsd: currentBalance,
               });
               newNotifications.push({
-                id: `notif-fuel-empty-${trip.id}`,
+                id: `notif-fuel-empty-${trip.id}-${newSimMinutes}-${Math.random().toString(36).substring(2, 7)}`,
                 simTimeFormatted: timeFormatted,
                 title: 'Fuel Depletion Alert',
                 message: `Truck ${truck.plate} exhausted fuel tanks. Roadside recovery tanker dispatched ($2,200).`,
@@ -422,7 +468,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               isBreakdown = true;
               currentBalance -= 3800;
               newLedgerEntries.push({
-                id: `led-cat-breakdown-${trip.id}`,
+                id: `led-cat-breakdown-${trip.id}-${newSimMinutes}-${Math.random().toString(36).substring(2, 7)}`,
                 simDay: currentDay,
                 simTimeFormatted: timeFormatted,
                 type: 'breakdown_recovery',
@@ -431,7 +477,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 runningBalanceUsd: currentBalance,
               });
               newNotifications.push({
-                id: `notif-cat-breakdown-${trip.id}`,
+                id: `notif-cat-breakdown-${trip.id}-${newSimMinutes}-${Math.random().toString(36).substring(2, 7)}`,
                 simTimeFormatted: timeFormatted,
                 title: 'Critical Mechanical Breakdown',
                 message: `Critical mechanical failure on ${truck.plate}. Tow truck dispatched to scene.`,
@@ -448,8 +494,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (continuousMins >= 270) {
               isResting = true;
               currentRestMins = 45;
+              continuousMins = 0; // Reset continuous drive timer so it doesn't repeatedly trigger
               newNotifications.push({
-                id: `notif-tach-rest-${trip.id}`,
+                id: `notif-tach-rest-${trip.id}-${newSimMinutes}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
                 simTimeFormatted: timeFormatted,
                 title: 'Tachograph Mandatory Rest (4.5h limit)',
                 message: `${driver.name} pulled into highway rest bay for 45-minute mandatory break.`,
@@ -461,8 +508,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               isResting = true;
               currentRestMins = 660;
               dailyMins = 0;
+              continuousMins = 0;
               newNotifications.push({
-                id: `notif-daily-rest-${trip.id}`,
+                id: `notif-daily-rest-${trip.id}-${newSimMinutes}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
                 simTimeFormatted: timeFormatted,
                 title: 'Mandatory Daily Sleeper Rest (9h Drive Cap)',
                 message: `${driver.name} concluded 9h shift. Truck parked in truck stop for 11h rest cycle.`,
@@ -542,7 +590,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             updatedCargoTons += finished.contract.weightTons;
 
             newLedgerEntries.push({
-              id: `led-deliv-${finished.id}`,
+              id: `led-deliv-${finished.id}-${newSimMinutes}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
               simDay: currentDay,
               simTimeFormatted: timeFormatted,
               type: 'freight_revenue',
@@ -552,7 +600,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
 
             newLedgerEntries.push({
-              id: `led-wage-${finished.id}`,
+              id: `led-wage-${finished.id}-${newSimMinutes}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
               simDay: currentDay,
               simTimeFormatted: timeFormatted,
               type: 'driver_wages',
@@ -563,7 +611,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             if (tolls > 0) {
               newLedgerEntries.push({
-                id: `led-toll-${finished.id}`,
+                id: `led-toll-${finished.id}-${newSimMinutes}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
                 simDay: currentDay,
                 simTimeFormatted: timeFormatted,
                 type: 'toll_expense',
@@ -574,7 +622,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
 
             newNotifications.push({
-              id: `notif-deliv-${finished.id}`,
+              id: `notif-deliv-${finished.id}-${newSimMinutes}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
               simTimeFormatted: timeFormatted,
               title: 'Freight Consignment Delivered',
               message: `Cargo arrived at ${destHub?.name}. Net payment: $${finalRevenue.toLocaleString()}. Fuel consumed: ${Math.round(finished.fuelConsumedLiters)}L.`,
@@ -582,7 +630,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               timestamp: Date.now(),
             });
 
-            // Set truck and driver to idle at destination hub
+            // Set truck, trailer, and driver to idle at destination hub
             updatedTrucks = updatedTrucks.map((t) =>
               t.id === finished.truckId
                 ? {
@@ -593,6 +641,20 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   }
                 : t
             );
+
+            if (finished.trailerId) {
+              updatedTrailers = updatedTrailers.map((tr) =>
+                tr.id === finished.trailerId
+                  ? {
+                      ...tr,
+                      status: 'idle',
+                      currentHubId: finished.contract.destinationHubId,
+                      assignedTripId: null,
+                      odometerKm: tr.odometerKm + finished.totalDistanceKm,
+                    }
+                  : tr
+              );
+            }
 
             updatedDrivers = updatedDrivers.map((d) =>
               d.id === finished.driverId
@@ -609,16 +671,20 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             );
           }
 
+          // Deduplicate notifications strictly
+          const uniqueNotifications = deduplicateNotifications([...newNotifications, ...prevState.notifications]);
+
           return {
             ...prevState,
             balanceUsd: currentBalance,
             simTimeMinutes: newSimMinutes,
             activeTrips: remainingTrips,
             trucks: updatedTrucks,
+            trailers: updatedTrailers,
             drivers: updatedDrivers,
             loans: updatedLoans,
             ledger: [...newLedgerEntries, ...prevState.ledger].slice(0, 150),
-            notifications: [...newNotifications, ...prevState.notifications].slice(0, 40),
+            notifications: uniqueNotifications.slice(0, 40),
             totalCargoDeliveredTons: updatedCargoTons,
             totalFuelBurnedLiters: updatedFuelBurned,
             totalKilometersDriven: updatedKmDriven,
@@ -639,7 +705,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setState((prev) => ({ ...prev, selectedRegion: region }));
   };
 
-  const dispatchTrip = (contractId: string, truckId: string, driverId: string, routeId: string): boolean => {
+  const dispatchTrip = (contractId: string, truckId: string, driverId: string, routeId: string, trailerId?: string | null): boolean => {
     const contract = state.availableContracts.find((c) => c.id === contractId);
     const truck = state.trucks.find((t) => t.id === truckId);
     const driver = state.drivers.find((d) => d.id === driverId);
@@ -647,6 +713,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!contract || !truck || !driver || !corridor) return false;
     if (truck.status !== 'idle' || driver.hosStatus === 'driving') return false;
+
+    // Check trailer if provided
+    if (trailerId) {
+      const trailer = state.trailers.find((tr) => tr.id === trailerId);
+      if (!trailer || trailer.status !== 'idle') {
+        alert('Selected trailer is currently en route or unavailable.');
+        return false;
+      }
+    }
 
     // Check truck fuel capacity & range
     if (truck.fuelCurrentLiters < 100) {
@@ -687,6 +762,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       corridor,
       truckId,
       driverId,
+      trailerId: trailerId || null,
       progressKm: 0,
       totalDistanceKm: corridor.distanceKm,
       elapsedMinutes: 0,
@@ -702,19 +778,22 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...prev,
       availableContracts: prev.availableContracts.filter((c) => c.id !== contractId),
       activeTrips: [...prev.activeTrips, newTrip],
-      trucks: prev.trucks.map((t) => (t.id === truckId ? { ...t, status: 'en_route', activeTripId: newTripId } : t)),
+      trucks: prev.trucks.map((t) => (t.id === truckId ? { ...t, status: 'en_route', activeTripId: newTripId, assignedTrailerId: trailerId || t.assignedTrailerId } : t)),
+      trailers: trailerId
+        ? prev.trailers.map((tr) => (tr.id === trailerId ? { ...tr, status: 'en_route', assignedTruckId: truckId, assignedTripId: newTripId } : tr))
+        : prev.trailers,
       drivers: prev.drivers.map((d) => (d.id === driverId ? { ...d, hosStatus: 'driving', assignedTruckId: truckId } : d)),
-      notifications: [
+      notifications: deduplicateNotifications([
         {
-          id: `notif-disp-${newTripId}`,
+          id: `notif-disp-${newTripId}-${Date.now()}`,
           simTimeFormatted: `Day ${Math.floor(prev.simTimeMinutes / 1440) + 1}`,
           title: 'Haul Dispatched',
-          message: `${contract.title} dispatched via ${corridor.name} with truck ${truck.plate} & driver ${driver.name}.`,
+          message: `${contract.title} dispatched via ${corridor.name} with truck ${truck.plate}${trailerId ? ' & trailer' : ''} & driver ${driver.name}.`,
           type: 'delivery',
           timestamp: Date.now(),
         },
         ...prev.notifications,
-      ],
+      ]),
     }));
 
     return true;
@@ -811,9 +890,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           },
           ...prev.ledger,
         ],
-        notifications: [
+        notifications: deduplicateNotifications([
           {
-            id: `notif-srv-${Date.now()}`,
+            id: `notif-srv-${truckId}-${Date.now()}`,
             simTimeFormatted: `Day ${simDay}`,
             title: 'Maintenance Certified',
             message: `${description} completed. All diagnostic codes reset to nominal.`,
@@ -821,7 +900,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             timestamp: Date.now(),
           },
           ...prev.notifications,
-        ],
+        ]),
       };
     });
   };
@@ -857,6 +936,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       hasAeroPackage: aeroPackage,
       hasRetarder: true,
       tireCompound: 'highway_eco',
+      sleeperTier: 'standard_sleeper',
+      liveryColor: 'obsidian_slate',
+      assignedTrailerId: null,
       serviceDueKm: 45000,
     };
 
@@ -879,9 +961,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         ...prev.ledger,
       ],
-      notifications: [
+      notifications: deduplicateNotifications([
         {
-          id: `notif-buy-${newTruck.id}`,
+          id: `notif-buy-${newTruck.id}-${Date.now()}`,
           simTimeFormatted: `Day ${simDay}`,
           title: 'Fleet Expansion',
           message: `${model.name} delivered to hub. Ready for crew assignment.`,
@@ -889,10 +971,268 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           timestamp: Date.now(),
         },
         ...prev.notifications,
-      ],
+      ]),
     }));
 
     return true;
+  };
+
+  const buyTruckWithConfig = (options: TruckConfigOptions): boolean => {
+    const model = TRUCK_MODELS.find((m) => m.id === options.modelId);
+    if (!model) return false;
+
+    let extraCost = 0;
+    if (options.hasAeroPackage) extraCost += 4500;
+    if (options.hasRetarder) extraCost += 3200;
+    if (options.tireCompound === 'severe_snow') extraCost += 1800;
+    else if (options.tireCompound === 'all_weather') extraCost += 800;
+    if (options.sleeperTier === 'deluxe_suite') extraCost += 8500;
+    else if (options.sleeperTier === 'standard_sleeper') extraCost += 3500;
+    if (options.liveryColor !== 'obsidian_slate') extraCost += 1200;
+
+    const totalCost = model.basePriceUsd + extraCost;
+    const isLease = options.financingMethod === 'lease_60d';
+    const cashRequired = isLease ? Math.round(totalCost * 0.20) : totalCost;
+
+    if (state.balanceUsd < cashRequired) {
+      alert(`Insufficient funds. ${isLease ? '20% Lease Down Payment is' : 'Acquisition cost is'} $${cashRequired.toLocaleString()}, but treasury holds $${state.balanceUsd.toLocaleString()}.`);
+      return false;
+    }
+
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const newTruck: TruckInstance = {
+      id: `trk-${Date.now()}`,
+      modelId: options.modelId,
+      vin: `1${options.modelId.toUpperCase().slice(0, 3)}${randomSuffix}K09${Math.floor(1000 + Math.random() * 9000)}`,
+      plate: `TX-${randomSuffix}-FL`,
+      currentHubId: options.hubId,
+      status: 'idle',
+      odometerKm: 250,
+      fuelCurrentLiters: model.specs.fuelTankCapacityLiters * 0.9,
+      adBlueCurrentLiters: model.specs.adBlueTankLiters * 0.9,
+      subsystems: createPristineSubsystems(),
+      activeDTCs: [],
+      assignedDriverId: null,
+      activeTripId: null,
+      lastServiceKm: 0,
+      hasAeroPackage: options.hasAeroPackage,
+      hasRetarder: options.hasRetarder,
+      tireCompound: options.tireCompound,
+      sleeperTier: options.sleeperTier,
+      liveryColor: options.liveryColor,
+      assignedTrailerId: null,
+      serviceDueKm: 45000,
+    };
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd - cashRequired;
+
+    let newLoans = state.loans;
+    const newLedgerItems: LedgerEntry[] = [];
+
+    if (isLease) {
+      const financedAmount = totalCost - cashRequired;
+      const leaseInterest = 0.06; // 6% flat term financing
+      const totalLeaseRepay = Math.round(financedAmount * (1 + leaseInterest));
+      const dailyPayment = Math.round(totalLeaseRepay / 60);
+
+      const leaseLoan: BankLoan = {
+        id: `loan-lease-${newTruck.id}`,
+        principalUsd: financedAmount,
+        remainingBalanceUsd: totalLeaseRepay,
+        annualInterestRate: leaseInterest,
+        dailyPaymentUsd: dailyPayment,
+        daysRemaining: 60,
+      };
+      newLoans = [...state.loans, leaseLoan];
+
+      newLedgerItems.push({
+        id: `led-down-${newTruck.id}`,
+        simDay,
+        simTimeFormatted: `Day ${simDay}`,
+        type: 'equipment_purchase',
+        description: `20% Lease Down Payment: ${model.name} (${newTruck.plate})`,
+        amountUsd: -cashRequired,
+        runningBalanceUsd: nextBal,
+      });
+    } else {
+      newLedgerItems.push({
+        id: `led-buy-${newTruck.id}`,
+        simDay,
+        simTimeFormatted: `Day ${simDay}`,
+        type: 'equipment_purchase',
+        description: `Acquired new ${model.name} (${newTruck.plate}) in custom specification`,
+        amountUsd: -totalCost,
+        runningBalanceUsd: nextBal,
+      });
+    }
+
+    setState((prev) => ({
+      ...prev,
+      balanceUsd: nextBal,
+      trucks: [...prev.trucks, newTruck],
+      loans: newLoans,
+      ledger: [...newLedgerItems, ...prev.ledger],
+      notifications: deduplicateNotifications([
+        {
+          id: `notif-buy-${newTruck.id}-${Date.now()}`,
+          simTimeFormatted: `Day ${simDay}`,
+          title: isLease ? 'Commercial Truck Leased' : 'Commercial Truck Acquired',
+          message: `${model.name} (${newTruck.plate}) delivered to destination depot. Ready for operation.`,
+          type: 'finance',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ]),
+    }));
+
+    return true;
+  };
+
+  const buyTrailer = (options: TrailerConfigOptions): boolean => {
+    const model = TRAILER_MODELS.find((m) => m.id === options.modelId);
+    if (!model) return false;
+
+    let extraCost = 0;
+    if (options.hasAeroSkirts) extraCost += 2200;
+    if (options.hasReeferUnit && model.supportsReeferUnit) extraCost += 9500;
+    if (options.tireCompound === 'severe_snow') extraCost += 1200;
+    else if (options.tireCompound === 'all_weather') extraCost += 600;
+
+    const totalCost = model.basePriceUsd + extraCost;
+    const isLease = options.financingMethod === 'lease_60d';
+    const cashRequired = isLease ? Math.round(totalCost * 0.20) : totalCost;
+
+    if (state.balanceUsd < cashRequired) {
+      alert(`Insufficient funds. ${isLease ? '20% Lease Down Payment is' : 'Trailer price is'} $${cashRequired.toLocaleString()}, but treasury holds $${state.balanceUsd.toLocaleString()}.`);
+      return false;
+    }
+
+    const serialNum = `${options.modelId.toUpperCase().slice(0, 3)}-${Math.floor(10000 + Math.random() * 90000)}`;
+    const newTrailer: TrailerInstance = {
+      id: `trl-${Date.now()}`,
+      modelId: options.modelId,
+      serialNumber: serialNum,
+      currentHubId: options.hubId,
+      status: 'idle',
+      odometerKm: 0,
+      hasAeroSkirts: options.hasAeroSkirts,
+      hasReeferUnit: options.hasReeferUnit && model.supportsReeferUnit,
+      reeferFuelCurrentLiters: options.hasReeferUnit && model.supportsReeferUnit ? 180 : 0,
+      tireCompound: options.tireCompound,
+      assignedTruckId: null,
+      assignedTripId: null,
+    };
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd - cashRequired;
+
+    let newLoans = state.loans;
+    const newLedgerItems: LedgerEntry[] = [];
+
+    if (isLease) {
+      const financedAmount = totalCost - cashRequired;
+      const leaseInterest = 0.06;
+      const totalLeaseRepay = Math.round(financedAmount * (1 + leaseInterest));
+      const dailyPayment = Math.round(totalLeaseRepay / 60);
+
+      const leaseLoan: BankLoan = {
+        id: `loan-lease-trl-${newTrailer.id}`,
+        principalUsd: financedAmount,
+        remainingBalanceUsd: totalLeaseRepay,
+        annualInterestRate: leaseInterest,
+        dailyPaymentUsd: dailyPayment,
+        daysRemaining: 60,
+      };
+      newLoans = [...state.loans, leaseLoan];
+
+      newLedgerItems.push({
+        id: `led-down-${newTrailer.id}`,
+        simDay,
+        simTimeFormatted: `Day ${simDay}`,
+        type: 'equipment_purchase',
+        description: `20% Lease Down Payment: ${model.name} (${newTrailer.serialNumber})`,
+        amountUsd: -cashRequired,
+        runningBalanceUsd: nextBal,
+      });
+    } else {
+      newLedgerItems.push({
+        id: `led-buy-${newTrailer.id}`,
+        simDay,
+        simTimeFormatted: `Day ${simDay}`,
+        type: 'equipment_purchase',
+        description: `Acquired new ${model.name} (${newTrailer.serialNumber})`,
+        amountUsd: -totalCost,
+        runningBalanceUsd: nextBal,
+      });
+    }
+
+    setState((prev) => ({
+      ...prev,
+      balanceUsd: nextBal,
+      trailers: [...(prev.trailers || []), newTrailer],
+      loans: newLoans,
+      ledger: [...newLedgerItems, ...prev.ledger],
+      notifications: deduplicateNotifications([
+        {
+          id: `notif-buy-trl-${newTrailer.id}-${Date.now()}`,
+          simTimeFormatted: `Day ${simDay}`,
+          title: isLease ? 'Commercial Trailer Leased' : 'Commercial Trailer Acquired',
+          message: `${model.name} (${newTrailer.serialNumber}) delivered to terminal. Ready for freight assignment.`,
+          type: 'finance',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ]),
+    }));
+
+    return true;
+  };
+
+  const sellTrailer = (trailerId: string) => {
+    const trailer = state.trailers.find((t) => t.id === trailerId);
+    if (!trailer || trailer.status === 'en_route') return;
+    const model = TRAILER_MODELS.find((m) => m.id === trailer.modelId);
+    if (!model) return;
+
+    const saleValue = Math.round(model.basePriceUsd * 0.70);
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd + saleValue;
+
+    setState((prev) => ({
+      ...prev,
+      balanceUsd: nextBal,
+      trailers: prev.trailers.filter((t) => t.id !== trailerId),
+      trucks: prev.trucks.map((trk) => (trk.assignedTrailerId === trailerId ? { ...trk, assignedTrailerId: null } : trk)),
+      ledger: [
+        {
+          id: `led-sell-${trailerId}`,
+          simDay,
+          simTimeFormatted: `Day ${simDay}`,
+          type: 'equipment_purchase',
+          description: `Liquidated trailer ${model.name} (${trailer.serialNumber})`,
+          amountUsd: saleValue,
+          runningBalanceUsd: nextBal,
+        },
+        ...prev.ledger,
+      ],
+    }));
+  };
+
+  const assignTrailerToTruck = (truckId: string, trailerId: string | null) => {
+    setState((prev) => ({
+      ...prev,
+      trucks: prev.trucks.map((trk) => {
+        if (trk.id === truckId) return { ...trk, assignedTrailerId: trailerId };
+        if (trailerId && trk.assignedTrailerId === trailerId) return { ...trk, assignedTrailerId: null };
+        return trk;
+      }),
+      trailers: prev.trailers.map((trl) => {
+        if (trl.id === trailerId) return { ...trl, assignedTruckId: truckId };
+        if (trl.assignedTruckId === truckId && trl.id !== trailerId) return { ...trl, assignedTruckId: null };
+        return trl;
+      }),
+    }));
   };
 
   const sellTruck = (truckId: string) => {
@@ -913,6 +1253,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...prev,
       balanceUsd: nextBal,
       trucks: prev.trucks.filter((t) => t.id !== truckId),
+      trailers: prev.trailers.map((trl) => (trl.assignedTruckId === truckId ? { ...trl, assignedTruckId: null } : trl)),
       drivers: prev.drivers.map((d) => (d.assignedTruckId === truckId ? { ...d, assignedTruckId: null } : d)),
       ledger: [
         {
@@ -982,9 +1323,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         ...prev.ledger,
       ],
-      notifications: [
+      notifications: deduplicateNotifications([
         {
-          id: `notif-hire-${newDriver.id}`,
+          id: `notif-hire-${newDriver.id}-${Date.now()}`,
           simTimeFormatted: `Day ${simDay}`,
           title: 'Crew Member Recruited',
           message: `${newDriver.name} inducted into company driver roster.`,
@@ -992,7 +1333,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           timestamp: Date.now(),
         },
         ...prev.notifications,
-      ],
+      ]),
     }));
 
     return true;
@@ -1240,7 +1581,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         dispatchTrip,
         serviceTruck,
         buyTruck,
+        buyTruckWithConfig,
         sellTruck,
+        buyTrailer,
+        sellTrailer,
+        assignTrailerToTruck,
         hireDriver,
         fireDriver,
         trainDriver,

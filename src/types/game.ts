@@ -116,6 +116,65 @@ export interface TruckModel {
   description: string;
 }
 
+export type SleeperTier = 'day_cab' | 'standard_sleeper' | 'deluxe_suite';
+export type FleetLivery = 'obsidian_slate' | 'titanium_silver' | 'continental_emerald' | 'apex_amber';
+export type FinancingMethod = 'cash' | 'lease_60d';
+
+export interface TruckConfigOptions {
+  modelId: TruckModelId;
+  hubId: string;
+  hasAeroPackage: boolean;
+  hasRetarder: boolean;
+  tireCompound: 'highway_eco' | 'all_weather' | 'severe_snow';
+  sleeperTier: SleeperTier;
+  liveryColor: FleetLivery;
+  financingMethod: FinancingMethod;
+}
+
+export type TrailerModelId = 'dry-van-53' | 'reefer-temp' | 'lowboy-heavy' | 'adr-chemical' | 'intermodal-chassis';
+
+export interface TrailerModel {
+  id: TrailerModelId;
+  name: string;
+  manufacturer: string;
+  category: CargoCategory;
+  image: string;
+  basePriceUsd: number;
+  emptyWeightKg: number;
+  maxPayloadKg: number;
+  lengthFeet: number;
+  axleCount: number;
+  supportsReeferUnit: boolean;
+  supportsHazmatADR: boolean;
+  description: string;
+}
+
+export type TrailerStatus = 'idle' | 'en_route' | 'maintenance';
+
+export interface TrailerInstance {
+  id: string; // e.g. trl-8921
+  modelId: TrailerModelId;
+  serialNumber: string;
+  currentHubId: string;
+  status: TrailerStatus;
+  odometerKm: number;
+  hasAeroSkirts: boolean; // -6% aerodynamic drag
+  hasReeferUnit: boolean;
+  reeferFuelCurrentLiters: number;
+  tireCompound: 'highway_eco' | 'all_weather' | 'severe_snow';
+  assignedTruckId: string | null;
+  assignedTripId: string | null;
+}
+
+export interface TrailerConfigOptions {
+  modelId: TrailerModelId;
+  hubId: string;
+  hasAeroSkirts: boolean;
+  hasReeferUnit: boolean;
+  tireCompound: 'highway_eco' | 'all_weather' | 'severe_snow';
+  financingMethod: FinancingMethod;
+}
+
 export type TruckStatus = 'idle' | 'en_route' | 'maintenance' | 'breakdown';
 
 export interface TruckInstance {
@@ -136,6 +195,9 @@ export interface TruckInstance {
   hasAeroPackage: boolean;
   hasRetarder: boolean;
   tireCompound: 'highway_eco' | 'all_weather' | 'severe_snow';
+  sleeperTier: SleeperTier;
+  liveryColor: FleetLivery;
+  assignedTrailerId: string | null;
   serviceDueKm: number;
 }
 
@@ -214,6 +276,7 @@ export interface ActiveTrip {
   corridor: RouteCorridor;
   truckId: string;
   driverId: string;
+  trailerId?: string | null;
   progressKm: number;
   totalDistanceKm: number;
   elapsedMinutes: number;
@@ -264,6 +327,7 @@ export interface GameState {
   hubs: Hub[];
   routes: RouteCorridor[];
   trucks: TruckInstance[];
+  trailers: TrailerInstance[];
   drivers: Driver[];
   availableContracts: CargoContract[];
   activeTrips: ActiveTrip[];

@@ -1,4 +1,14 @@
-import { Hub, RouteCorridor, TruckModel, Driver, CargoContract, SubsystemHealth } from '../types/game';
+import {
+  Hub,
+  RouteCorridor,
+  TruckModel,
+  TrailerModel,
+  TrailerInstance,
+  Driver,
+  CargoContract,
+  SubsystemHealth,
+  FleetLivery,
+} from '../types/game';
 
 // High-fidelity generated image paths
 export const TRUCK_IMAGES = {
@@ -7,6 +17,130 @@ export const TRUCK_IMAGES = {
   vanguard600: '/src/assets/images/vanguard_flagship_truck_1792534414864.jpg',
   metro320: '/src/assets/images/distribution_rigid_truck_1792534429932.jpg',
 };
+
+export const TRAILER_IMAGES = {
+  dryVan: '/src/assets/images/dry_van_trailer_1792537081033.jpg',
+  reefer: '/src/assets/images/reefer_trailer_1792537081832.jpg',
+  lowboy: '/src/assets/images/lowboy_trailer_1792537082599.jpg',
+  adrTanker: '/src/assets/images/adr_tanker_trailer_1792537096996.jpg',
+  intermodal: '/src/assets/images/dry_van_trailer_1792537081033.jpg',
+};
+
+export const LIVERY_PALETTES: { id: FleetLivery; name: string; hex: string; border: string; bgClass: string }[] = [
+  { id: 'obsidian_slate', name: 'Obsidian Slate', hex: '#1e293b', border: '#64748b', bgClass: 'bg-slate-800' },
+  { id: 'titanium_silver', name: 'Titanium Silver', hex: '#94a3b8', border: '#cbd5e1', bgClass: 'bg-slate-400' },
+  { id: 'continental_emerald', name: 'Continental Emerald', hex: '#065f46', border: '#10b981', bgClass: 'bg-emerald-800' },
+  { id: 'apex_amber', name: 'Apex Amber', hex: '#78350f', border: '#f59e0b', bgClass: 'bg-amber-800' },
+];
+
+export const TRAILER_MODELS: TrailerModel[] = [
+  {
+    id: 'dry-van-53',
+    name: 'AeroHaul 53ft Dry Freight Van',
+    manufacturer: 'AeroHaul Logistics Corp',
+    category: 'Dry Freight',
+    image: TRAILER_IMAGES.dryVan,
+    basePriceUsd: 48000,
+    emptyWeightKg: 6200,
+    maxPayloadKg: 26000,
+    lengthFeet: 53,
+    axleCount: 2,
+    supportsReeferUnit: false,
+    supportsHazmatADR: false,
+    description: 'High-volume 53ft composite dry freight van with aerodynamic side fairings. Ideal for general merchandise, consumer retail, and automotive parts.',
+  },
+  {
+    id: 'reefer-temp',
+    name: 'PolarFlow 53ft Cold-Chain Reefer',
+    manufacturer: 'PolarFlow Cryo Logistics',
+    category: 'Refrigerated Food',
+    image: TRAILER_IMAGES.reefer,
+    basePriceUsd: 74000,
+    emptyWeightKg: 7800,
+    maxPayloadKg: 24000,
+    lengthFeet: 53,
+    axleCount: 2,
+    supportsReeferUnit: true,
+    supportsHazmatADR: false,
+    description: 'Thermo King equipped temperature-controlled trailer capable of -25°C deep freeze. Features auxiliary 180L diesel reefer tank and microprocessor monitoring.',
+  },
+  {
+    id: 'lowboy-heavy',
+    name: 'TitanHaul Quad-Axle Heavy Lowboy',
+    manufacturer: 'Titan Industrial Transport',
+    category: 'Heavy Machinery',
+    image: TRAILER_IMAGES.lowboy,
+    basePriceUsd: 86000,
+    emptyWeightKg: 9400,
+    maxPayloadKg: 38000,
+    lengthFeet: 48,
+    axleCount: 4,
+    supportsReeferUnit: false,
+    supportsHazmatADR: false,
+    description: 'Reinforced drop-deck lowboy with hydraulic gooseneck and quad air-ride axles. Specially certified for industrial excavators, turbines, and aerospace modules.',
+  },
+  {
+    id: 'adr-chemical',
+    name: 'SafeTech ADR Certified Stainless Tanker',
+    manufacturer: 'SafeTech Tank Solutions',
+    category: 'Hazardous Chemicals',
+    image: TRAILER_IMAGES.adrTanker,
+    basePriceUsd: 92000,
+    emptyWeightKg: 7200,
+    maxPayloadKg: 28000,
+    lengthFeet: 45,
+    axleCount: 3,
+    supportsReeferUnit: false,
+    supportsHazmatADR: true,
+    description: 'High-grade 316 stainless steel insulated tanker with roll-over protection, emergency shut-off valves, and vapor recovery. Certified for Class 3 and 8 chemicals.',
+  },
+  {
+    id: 'intermodal-chassis',
+    name: 'PortLink Intermodal Container Chassis',
+    manufacturer: 'PortLink Cargo Systems',
+    category: 'High-Value Tech',
+    image: TRAILER_IMAGES.intermodal,
+    basePriceUsd: 36000,
+    emptyWeightKg: 4600,
+    maxPayloadKg: 30000,
+    lengthFeet: 40,
+    axleCount: 2,
+    supportsReeferUnit: false,
+    supportsHazmatADR: false,
+    description: 'Heavy-duty skeletal container chassis designed for fast port-to-rail intermodal transfers and sealed 40ft/45ft shipping containers.',
+  },
+];
+
+export const INITIAL_TRAILERS: TrailerInstance[] = [
+  {
+    id: 'trl-01',
+    modelId: 'dry-van-53',
+    serialNumber: 'AH53-99214',
+    currentHubId: 'hub-seattle',
+    status: 'idle',
+    odometerKm: 28400,
+    hasAeroSkirts: true,
+    hasReeferUnit: false,
+    reeferFuelCurrentLiters: 0,
+    tireCompound: 'highway_eco',
+    assignedTruckId: 'trk-01',
+    assignedTripId: null,
+  },
+  {
+    id: 'trl-02',
+    modelId: 'reefer-temp',
+    serialNumber: 'PF53-81092',
+    currentHubId: 'hub-chicago',
+    status: 'idle',
+    odometerKm: 14200,
+    hasAeroSkirts: true,
+    hasReeferUnit: true,
+    reeferFuelCurrentLiters: 160,
+    tireCompound: 'all_weather',
+    assignedTruckId: 'trk-02',
+    assignedTripId: null,
+  },
+];
 
 export const TRUCK_MODELS: TruckModel[] = [
   {
