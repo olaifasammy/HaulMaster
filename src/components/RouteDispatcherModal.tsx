@@ -55,6 +55,26 @@ export const RouteDispatcherModal: React.FC<RouteDispatcherModalProps> = ({
   );
   const selectedDriver = availableDrivers.find((d) => d.id === selectedDriverId) || availableDrivers[0];
 
+  React.useEffect(() => {
+    if (selectedTruck && selectedTruck.assignedTrailerId && !selectedTrailerId) {
+      const assignedTr = eligibleTrailers.find((tr) => tr.id === selectedTruck.assignedTrailerId);
+      if (assignedTr) {
+        setSelectedTrailerId(assignedTr.id);
+      }
+    }
+  }, [selectedTruckId]);
+
+  const handleSelectTruck = (truckId: string) => {
+    setSelectedTruckId(truckId);
+    const truck = eligibleTrucks.find((t) => t.id === truckId);
+    if (truck && truck.assignedTrailerId) {
+      const assignedTr = eligibleTrailers.find((tr) => tr.id === truck.assignedTrailerId);
+      if (assignedTr) {
+        setSelectedTrailerId(assignedTr.id);
+      }
+    }
+  };
+
   const distanceKm = activeRoute?.distanceKm || 1000;
   const payloadTons = contract?.weightTons || 15;
   const gradeAdd = activeRoute ? Math.max(0, activeRoute.avgElevationGradePct) * 2.5 : 0;
@@ -253,7 +273,7 @@ export const RouteDispatcherModal: React.FC<RouteDispatcherModalProps> = ({
                   return (
                     <button
                       key={t.id}
-                      onClick={() => setSelectedTruckId(t.id)}
+                      onClick={() => handleSelectTruck(t.id)}
                       className={`p-2.5 rounded-xl border text-left transition-all min-h-[44px] ${
                         isSelected
                           ? 'bg-amber-500/10 border-amber-500 text-white ring-1 ring-amber-500/30'
