@@ -9,6 +9,7 @@ import { Marketplace } from './components/Marketplace';
 import { DriverRoster } from './components/DriverRoster';
 import { HubsManager } from './components/HubsManager';
 import { FinancialLedger } from './components/FinancialLedger';
+import { AchievementsPage } from './components/AchievementsPage';
 import { TruckInspectorModal } from './components/TruckInspectorModal';
 import { RouteDispatcherModal } from './components/RouteDispatcherModal';
 import { OnboardingWizard } from './components/OnboardingWizard';
@@ -28,6 +29,7 @@ import {
   HelpCircle,
   X,
   Bell,
+  Trophy,
 } from 'lucide-react';
 
 const DashboardContent: React.FC = () => {
@@ -51,6 +53,7 @@ const DashboardContent: React.FC = () => {
     { id: 'hubs', label: 'Hubs', icon: MapPin },
     { id: 'drivers', label: 'Crew', icon: Users },
     { id: 'ledger', label: 'P&L', icon: DollarSign },
+    { id: 'achievements', label: 'Awards', icon: Trophy },
   ];
 
   // Latest notification toast
@@ -142,6 +145,9 @@ const DashboardContent: React.FC = () => {
 
         {/* Financial P&L & Banking View */}
         {currentTab === 'ledger' && <FinancialLedger />}
+
+        {/* Achievements & Executive Rewards Full Page View */}
+        {currentTab === 'achievements' && <AchievementsPage />}
       </main>
 
       {/* Floating Mobile Quick Dispatch Action Button */}
@@ -178,43 +184,6 @@ const DashboardContent: React.FC = () => {
         })}
       </nav>
 
-      {/* Desktop Footer */}
-      <footer className="hidden lg:flex border-t border-slate-900 bg-slate-950/80 px-6 py-4 text-xs text-slate-500 items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-slate-400">HAULMASTER</span>
-          <span>·</span>
-          <span>High-Fidelity Global Freight Simulation Engine</span>
-          <span>·</span>
-          <span className="text-amber-400 font-mono">Rank {state.playerRank}: {state.rankTitle}</span>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setShowGuide(true)}
-            className="flex items-center gap-1.5 text-slate-400 hover:text-amber-400 transition-colors cursor-pointer"
-          >
-            <HelpCircle className="w-3.5 h-3.5" />
-            <span>Field Guide</span>
-          </button>
-
-          <button
-            onClick={restartOnboarding}
-            className="flex items-center gap-1.5 text-slate-400 hover:text-sky-400 transition-colors cursor-pointer"
-          >
-            <Compass className="w-3.5 h-3.5" />
-            <span>Setup Wizard</span>
-          </button>
-
-          <button
-            onClick={resetGame}
-            className="flex items-center gap-1.5 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reset Company Fleet</span>
-          </button>
-        </div>
-      </footer>
-
       {/* Full-screen / Bottom-sheet Modals */}
       {inspectedTruckId && (
         <TruckInspectorModal
@@ -234,7 +203,13 @@ const DashboardContent: React.FC = () => {
       )}
 
       {isCompanyProfileOpen && (
-        <CompanyProfileModal onClose={() => setIsCompanyProfileOpen(false)} />
+        <CompanyProfileModal
+          onClose={() => setIsCompanyProfileOpen(false)}
+          onOpenAchievements={() => {
+            setIsCompanyProfileOpen(false);
+            setCurrentTab('achievements');
+          }}
+        />
       )}
 
       {/* New User Onboarding Setup Wizard (Automatic on new game, or via restart) */}

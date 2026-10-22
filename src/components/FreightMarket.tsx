@@ -31,6 +31,10 @@ export const FreightMarket: React.FC<FreightMarketProps> = ({ onDispatchContract
   ];
 
   const filteredContracts = state.availableContracts.filter((c) => {
+    const originHub = state.hubs.find((h) => h.id === c.originHubId);
+    const unlockedRegions = state.unlockedRegions || ['North America'];
+    if (originHub && !unlockedRegions.includes(originHub.region)) return false;
+
     if (selectedCategory !== 'all' && c.category !== selectedCategory) return false;
     return true;
   });

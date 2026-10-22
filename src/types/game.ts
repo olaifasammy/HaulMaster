@@ -377,4 +377,5 @@ export interface GameState {
   hasCompletedOnboarding: boolean;
   showGuide: boolean;
   lastMarketRefreshSimTime?: number;
+  unlockedRegions: GeoRegion[];
 }

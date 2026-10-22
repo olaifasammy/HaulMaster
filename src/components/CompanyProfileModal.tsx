@@ -28,7 +28,6 @@ export const CompanyProfileModal: React.FC<CompanyProfileModalProps> = ({ onClos
   const handleSaveName = (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyNameInput.trim()) return;
-    // Update company name directly in state
     state.companyName = companyNameInput.trim();
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2500);
@@ -149,15 +148,15 @@ export const CompanyProfileModal: React.FC<CompanyProfileModalProps> = ({ onClos
               </div>
               <div className="text-left">
                 <div className="text-sm font-bold text-white group-hover:text-amber-300 transition-colors">
-                  View Achievements & Executive Rewards
+                  View Achievements & Executive Rewards Page
                 </div>
                 <div className="text-[11px] text-slate-400">
-                  Claim cash bonuses and XP milestones for your logistics operations
+                  Open dedicated achievements page to claim treasury cash bonuses and executive XP rank milestones
                 </div>
               </div>
             </div>
             <div className="text-amber-400 font-mono text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-900 border border-amber-500/30 group-hover:bg-amber-400 group-hover:text-slate-950 transition-colors">
-              View →
+              Open Page →
             </div>
           </button>
 
@@ -167,15 +166,15 @@ export const CompanyProfileModal: React.FC<CompanyProfileModalProps> = ({ onClos
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div className="flex justify-between p-2 bg-slate-900 rounded">
                 <span className="text-slate-500">Total Cargo Delivered:</span>
-                <span className="font-bold text-white">{state.totalCargoDeliveredTons.toLocaleString()} metric tons</span>
+                <span className="font-bold text-white">{Math.round(state.totalCargoDeliveredTons).toLocaleString()} metric tons</span>
               </div>
               <div className="flex justify-between p-2 bg-slate-900 rounded">
                 <span className="text-slate-500">Total Distance Driven:</span>
-                <span className="font-bold text-white">{state.totalKilometersDriven.toLocaleString()} km</span>
+                <span className="font-bold text-white">{Math.round(state.totalKilometersDriven).toLocaleString()} km</span>
               </div>
               <div className="flex justify-between p-2 bg-slate-900 rounded">
                 <span className="text-slate-500">Total Fuel Consumed:</span>
-                <span className="font-bold text-white">{state.totalFuelBurnedLiters.toLocaleString()} liters</span>
+                <span className="font-bold text-white">{Math.round(state.totalFuelBurnedLiters).toLocaleString()} liters</span>
               </div>
               <div className="flex justify-between p-2 bg-slate-900 rounded">
                 <span className="text-slate-500">Active Crew Roster:</span>

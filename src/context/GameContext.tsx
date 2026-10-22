@@ -31,9 +31,8 @@ import {
 } from '../constants/gameData';
 import { computePhysicsStep } from '../utils/physicsEngine';
 import { getLocalWeather } from '../utils/weatherEngine';
-import { ensureCorridorBetweenHubs, selfHealNetworkCorridors } from '../utils/routeUtils';
 
-const STORAGE_KEY = 'haulmaster_game_state_v2';
+const STORAGE_KEY = 'haulmaster_game_state_v3';
 
 export const deduplicateNotifications = (list: GameEventNotification[]): GameEventNotification[] => {
   const seen = new Set<string>();
@@ -134,19 +133,19 @@ interface GameContextType {
   restartOnboarding: () => void;
   refreshAvailableContracts: (paidByPlayer?: boolean) => boolean;
   buySpokeLocationRoute: (hubId: string, spokeLocationId: string) => boolean;
-  claimAchievementReward: (achievementId: string, cashReward: number, xpReward: number) => boolean;
+  claimAchievementReward: (achievementId: string, cashReward: number, xpReward: number, currentValue: number, targetValue: number) => boolean;
+  unlockRegion: (region: GeoRegion) => boolean;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
 const createInitialState = (): GameState => {
   const primaryHubId = 'hub-seattle';
-  const connectedLocationId = 'hub-denver'; // 1 location to connect as hub (High Realism)
-  const activeHubIds = [primaryHubId, connectedLocationId];
+  const activeHubIds = [primaryHubId];
 
-  // Configure initial hubs: strictly 1 primary headquarters hub + 1 connected delivery location are unlocked
+  // Configure initial hubs: strictly 1 primary headquarters hub is unlocked initially (no default connected second hub/location)
   const initialHubs = INITIAL_HUBS.map((hub) => {
-    const isOwned = activeHubIds.includes(hub.id);
+    const isOwned = hub.id === primaryHubId;
     return {
       ...hub,
       isUnlocked: isOwned,
@@ -154,27 +153,14 @@ const createInitialState = (): GameState => {
     };
   });
 
-  // Guarantee bidirectional corridors between primary base and connected destination
-  const { updatedRoutes: routesWithActiveCorridor } = ensureCorridorBetweenHubs(
-    INITIAL_ROUTES,
-    initialHubs,
-    primaryHubId,
-    connectedLocationId,
-    true
-  );
+  // Configure initial routes: strictly NO routes unlocked by default
+  const initialRoutes = INITIAL_ROUTES.map((route) => ({
+    ...route,
+    isUnlocked: false,
+  }));
 
-  const initialRoutes = routesWithActiveCorridor.map((route) => {
-    const isOwned =
-      (route.originHubId === primaryHubId && route.destinationHubId === connectedLocationId) ||
-      (route.originHubId === connectedLocationId && route.destinationHubId === primaryHubId);
-    return {
-      ...route,
-      isUnlocked: isOwned,
-    };
-  });
-
-  const ownedHubIds = initialHubs.filter((h) => h.isUnlocked).map((h) => h.id);
-  const ownedRouteIds = initialRoutes.filter((r) => r.isUnlocked).map((r) => r.id);
+  const ownedHubIds = [primaryHubId];
+  const ownedRouteIds: string[] = [];
 
   // Free starter commercial vehicle: MetroFreight Rigid 320 Urban stationed at Seattle primary base
   const initialTrucks: TruckInstance[] = [
@@ -219,13 +205,6 @@ const createInitialState = (): GameState => {
     },
   ];
 
-  // Generate contracts strictly for the unlocked route
-  const initialContracts = generateContractsForRoutes(
-    initialRoutes.filter((r) => r.isUnlocked),
-    initialHubs,
-    8
-  );
-
   return {
     companyName: 'Apex Continental Freight',
     balanceUsd: 145000,
@@ -237,7 +216,7 @@ const createInitialState = (): GameState => {
     trucks: initialTrucks,
     trailers: initialTrailers,
     drivers: initialDrivers,
-    availableContracts: initialContracts,
+    availableContracts: [],
     activeTrips: [],
     ledger: [
       {
@@ -256,7 +235,7 @@ const createInitialState = (): GameState => {
         id: 'notif-welcome',
         simTimeFormatted: 'Day 1 08:00',
         title: 'Operations Online',
-        message: 'Logistics enterprise initialized. Starter terminal active with 2 connected regional corridors. All other hubs locked until rank promotion.',
+        message: 'Logistics enterprise initialized. Starter terminal active. No routes or locations have default connections. Connect routes to hubs in the Marketplace to begin freight dispatch.',
         type: 'delivery',
         timestamp: Date.now(),
       },
@@ -270,10 +249,11 @@ const createInitialState = (): GameState => {
     rankTitle: 'Novice Carrier',
     ownedHubIds,
     ownedRouteIds,
-    ownedSpokeConnections: [`${primaryHubId}:${connectedLocationId}`],
+    ownedSpokeConnections: [],
     claimedAchievementIds: [],
     hasCompletedOnboarding: false,
     showGuide: false,
+    unlockedRegions: ['North America'],
   };
 };
 
@@ -290,32 +270,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (!parsed.trailers || parsed.trailers.length === 0) {
             parsed.trailers = INITIAL_TRAILERS;
           }
-
-          // Self-heal routes: Ensure unlocked hubs always have connected corridors
-          const healRes = selfHealNetworkCorridors(
-            parsed.routes && parsed.routes.length > 0 ? parsed.routes : INITIAL_ROUTES,
-            parsed.hubs,
-            parsed.selectedRegion
-          );
-          parsed.routes = healRes.updatedRoutes;
-          parsed.ownedRouteIds = healRes.unlockedRoutes.map((r: RouteCorridor) => r.id);
-
-          // If availableContracts is empty or less than 4 contracts remain, generate fresh contracts immediately
-          if (!parsed.availableContracts || parsed.availableContracts.length < 4) {
-            parsed.availableContracts = generateContractsForRoutes(healRes.unlockedRoutes, parsed.hubs, 8);
-          }
-
-          // Ensure trucks are stationed at an unlocked hub
-          const unlockedHubIds = parsed.hubs.filter((h: Hub) => h.isUnlocked).map((h: Hub) => h.id);
-          if (unlockedHubIds.length > 0 && parsed.trucks) {
-            parsed.trucks = parsed.trucks.map((trk: TruckInstance) => {
-              if (!unlockedHubIds.includes(trk.currentHubId)) {
-                return { ...trk, currentHubId: unlockedHubIds[0] };
-              }
-              return trk;
-            });
-          }
-
           return parsed;
         }
       }
@@ -436,33 +390,19 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
 
             // Restock fresh available contracts ONLY for unlocked routes in the active region!
-            let unlockedRoutes = prevState.routes.filter(
+            const unlockedRoutes = prevState.routes.filter(
               (r) => r.isUnlocked && prevState.hubs.find((h) => h.id === r.originHubId)?.region === prevState.selectedRegion
             );
-            let currentRoutes = prevState.routes;
-            if (unlockedRoutes.length === 0) {
-              const healRes = selfHealNetworkCorridors(prevState.routes, updatedHubs, prevState.selectedRegion);
-              currentRoutes = healRes.updatedRoutes;
-              unlockedRoutes = healRes.unlockedRoutes.filter(
-                (r) => updatedHubs.find((h) => h.id === r.originHubId)?.region === prevState.selectedRegion
-              );
-              if (unlockedRoutes.length === 0) {
-                unlockedRoutes = healRes.unlockedRoutes;
-              }
-            }
-
             if (prevState.availableContracts.length < 8 && unlockedRoutes.length > 0) {
-              const freshContracts = generateContractsForRoutes(unlockedRoutes, updatedHubs, 4);
+              const freshContracts = generateContractsForRoutes(unlockedRoutes, updatedHubs, 3);
               prevState = {
                 ...prevState,
-                routes: currentRoutes,
                 availableContracts: [...prevState.availableContracts, ...freshContracts],
                 hubs: updatedHubs,
               };
             } else {
               prevState = {
                 ...prevState,
-                routes: currentRoutes,
                 hubs: updatedHubs,
               };
             }
@@ -472,27 +412,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const lastRefreshTime = prevState.lastMarketRefreshSimTime || 0;
           const shouldAutoRefresh = (newSimMinutes - lastRefreshTime >= 180) || (prevState.availableContracts.length < 4);
           if (shouldAutoRefresh) {
-            let activeRegionRoutes = prevState.routes.filter(
+            const activeRegionRoutes = prevState.routes.filter(
               (r) => r.isUnlocked && prevState.hubs.find((h) => h.id === r.originHubId)?.region === prevState.selectedRegion
             );
-            let routesPool = prevState.routes;
-            if (activeRegionRoutes.length === 0) {
-              const healRes = selfHealNetworkCorridors(prevState.routes, prevState.hubs, prevState.selectedRegion);
-              routesPool = healRes.updatedRoutes;
-              activeRegionRoutes = healRes.unlockedRoutes.filter(
-                (r) => prevState.hubs.find((h) => h.id === r.originHubId)?.region === prevState.selectedRegion
-              );
-              if (activeRegionRoutes.length === 0) {
-                activeRegionRoutes = healRes.unlockedRoutes;
-              }
-            }
-
             if (activeRegionRoutes.length > 0) {
               const freshBids = generateContractsForRoutes(activeRegionRoutes, prevState.hubs, 4);
               const prunedExisting = prevState.availableContracts.slice(-4);
               prevState = {
                 ...prevState,
-                routes: routesPool,
                 availableContracts: [...prunedExisting, ...freshBids],
                 lastMarketRefreshSimTime: newSimMinutes,
               };
@@ -1788,11 +1715,29 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const completeOnboarding = (config: OnboardingConfig) => {
     const primaryHubId = config.primaryHubId;
-    const connectedLocationId =
-      config.connectedLocationId ||
-      (config.connectedHubIds && config.connectedHubIds[0]) ||
-      (config.region === 'Europe' ? 'hub-hamburg' : 'hub-denver');
-    const activeHubIds = [primaryHubId, connectedLocationId];
+    const connectedLocationId = config.connectedLocationId;
+    const activeHubIds = [primaryHubId];
+    const initialSpokeConnections: string[] = [];
+    let updatedRoutes = INITIAL_ROUTES.map((route) => ({ ...route, isUnlocked: false }));
+
+    const primaryHubObj = INITIAL_HUBS.find((h) => h.id === primaryHubId);
+    const connHubObj = connectedLocationId ? INITIAL_HUBS.find((h) => h.id === connectedLocationId) : null;
+
+    if (
+      connHubObj &&
+      primaryHubObj &&
+      connHubObj.region === primaryHubObj.region &&
+      connHubObj.id !== primaryHubId
+    ) {
+      activeHubIds.push(connHubObj.id);
+      initialSpokeConnections.push(`${primaryHubId}:${connHubObj.id}`);
+      updatedRoutes = updatedRoutes.map((r) =>
+        (r.originHubId === primaryHubId && r.destinationHubId === connHubObj.id) ||
+        (r.originHubId === connHubObj.id && r.destinationHubId === primaryHubId)
+          ? { ...r, isUnlocked: true }
+          : r
+      );
+    }
 
     const updatedHubs = INITIAL_HUBS.map((hub) => {
       const isOwned = activeHubIds.includes(hub.id);
@@ -1800,26 +1745,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...hub,
         isUnlocked: isOwned,
         isPrimaryBase: hub.id === primaryHubId,
-      };
-    });
-
-    // Guarantee bidirectional corridors exist between the chosen primary headquarters and connected location
-    const { updatedRoutes: routesWithActiveCorridor } = ensureCorridorBetweenHubs(
-      INITIAL_ROUTES,
-      updatedHubs,
-      primaryHubId,
-      connectedLocationId,
-      true
-    );
-
-    // Lock all other routes so strictly only the user's selected corridor is unlocked from day 1
-    const updatedRoutes = routesWithActiveCorridor.map((route) => {
-      const isOwned =
-        (route.originHubId === primaryHubId && route.destinationHubId === connectedLocationId) ||
-        (route.originHubId === connectedLocationId && route.destinationHubId === primaryHubId);
-      return {
-        ...route,
-        isUnlocked: isOwned,
       };
     });
 
@@ -1896,10 +1821,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const unlockedRouteList = updatedRoutes.filter((r) => r.isUnlocked);
-    const starterContracts = generateContractsForRoutes(unlockedRouteList, updatedHubs, 10);
+    const starterContracts = generateContractsForRoutes(unlockedRouteList, updatedHubs, 8);
 
     const primaryHub = updatedHubs.find((h) => h.id === primaryHubId);
-    const connHub = updatedHubs.find((h) => h.id === connectedLocationId);
+    const connHub = connHubObj ? updatedHubs.find((h) => h.id === connHubObj.id) : null;
 
     setState((prev) => ({
       ...prev,
@@ -1909,7 +1834,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       routes: updatedRoutes,
       ownedHubIds: activeHubIds,
       ownedRouteIds: unlockedRouteList.map((r) => r.id),
-      ownedSpokeConnections: [`${primaryHubId}:${connectedLocationId}`],
+      ownedSpokeConnections: initialSpokeConnections,
       trucks: [starterTruck],
       trailers: [starterTrailer],
       drivers: [starterDriver],
@@ -1920,6 +1845,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       rankTitle: 'Novice Carrier',
       hasCompletedOnboarding: true,
       showGuide: true,
+      unlockedRegions: [config.region],
       lastMarketRefreshSimTime: prev.simTimeMinutes,
       ledger: [
         {
@@ -1937,7 +1863,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: `notif-launch-${Date.now()}`,
           simTimeFormatted: 'Day 1 08:00',
           title: 'Carrier Network Mobilized',
-          message: `Network launched with headquarters at ${primaryHub?.name} connected to ${connHub?.name}. Commercial freight corridor unlocked with ${starterContracts.length} freight consignments available for immediate dispatch!`,
+          message: connHub
+            ? `Network launched with headquarters at ${primaryHub?.name} connected to ${connHub.name}.`
+            : `Network launched with headquarters at ${primaryHub?.name}. Connect corridors or locations in the Marketplace to begin freight operations.`,
           type: 'delivery',
           timestamp: Date.now(),
         },
@@ -2140,50 +2068,84 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const spoke = state.hubs.find((h) => h.id === spokeLocationId);
     if (!hub || !spoke) return false;
 
+    // 1. Same-region rule
+    if (hub.region !== spoke.region) {
+      notifyUser(
+        'Region Mismatch',
+        `Routes must connect locations within the same region. ${spoke.name} is in ${spoke.region}, while ${hub.name} is in ${hub.region}.`,
+        'maintenance'
+      );
+      return false;
+    }
+
+    // 2. Region unlocked rule
+    const isRegionUnlocked = state.hubs.some((h) => h.isUnlocked && h.region === spoke.region);
+    if (!isRegionUnlocked) {
+      notifyUser(
+        'Region Locked',
+        `The ${spoke.region} region is not yet unlocked. You must unlock an operating hub in this region first.`,
+        'finance'
+      );
+      return false;
+    }
+
+    // 3. Base hub must be unlocked
     if (!hub.isUnlocked) {
       notifyUser('Terminal Locked', `Your base hub (${hub.name}) must be unlocked first.`, 'finance');
       return false;
     }
 
+    // 4. Cannot connect to the SAME hub twice (can connect to many hubs)
     const connectionKey = `${hubId}:${spokeLocationId}`;
     if (state.ownedSpokeConnections && state.ownedSpokeConnections.includes(connectionKey)) {
-      notifyUser('Already Connected', `${spoke.name} is already connected and purchased for ${hub.name}.`, 'delivery');
-      return true;
+      notifyUser('Already Connected', `${spoke.name} is already connected to ${hub.name}. A location cannot be connected to the same hub twice.`, 'delivery');
+      return false;
     }
 
-    const cost = spoke.purchasePriceUsd || 18000;
+    // 5. Payment calculation & treasury check
+    const dx = hub.coord.x - spoke.coord.x;
+    const dy = hub.coord.y - spoke.coord.y;
+    const dist = Math.max(120, Math.round(Math.sqrt(dx * dx + dy * dy) * 3.2));
+    const cost = spoke.purchasePriceUsd || Math.max(16000, Math.round(dist * 16));
+
     if (state.balanceUsd < cost) {
-      notifyUser('Insufficient Treasury', `Corridor purchase costs $${cost.toLocaleString()}, but treasury has $${state.balanceUsd.toLocaleString()}.`, 'finance');
+      notifyUser('Insufficient Treasury', `Connection fee requires $${cost.toLocaleString()}, but available company treasury has $${state.balanceUsd.toLocaleString()}.`, 'finance');
       return false;
     }
 
     const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
     const nextBal = state.balanceUsd - cost;
 
-    const existingRoute = state.routes.find(
-      (r) =>
+    // Check if routes already exist or create forward and reverse corridors
+    const forwardRouteId = `route-${hub.code.toLowerCase()}-${spoke.code.toLowerCase()}`;
+    const returnRouteId = `route-${spoke.code.toLowerCase()}-${hub.code.toLowerCase()}`;
+
+    let updatedRoutes = state.routes.map((r) => {
+      if (
         (r.originHubId === hubId && r.destinationHubId === spokeLocationId) ||
         (r.originHubId === spokeLocationId && r.destinationHubId === hubId)
-    );
+      ) {
+        return { ...r, isUnlocked: true };
+      }
+      return r;
+    });
 
-    let updatedRoutes = state.routes;
-    if (existingRoute) {
-      updatedRoutes = state.routes.map((r) => (r.id === existingRoute.id ? { ...r, isUnlocked: true } : r));
-    } else {
-      const dx = hub.coord.x - spoke.coord.x;
-      const dy = hub.coord.y - spoke.coord.y;
-      const dist = Math.max(150, Math.round(Math.sqrt(dx * dx + dy * dy) * 3.2));
-      const newRoute: RouteCorridor = {
-        id: `route-${hub.code.toLowerCase()}-${spoke.code.toLowerCase()}-${Date.now()}`,
+    const hasForward = updatedRoutes.some((r) => r.originHubId === hubId && r.destinationHubId === spokeLocationId);
+    const hasReturn = updatedRoutes.some((r) => r.originHubId === spokeLocationId && r.destinationHubId === hubId);
+
+    const routesToAdd: RouteCorridor[] = [];
+    if (!hasForward) {
+      routesToAdd.push({
+        id: forwardRouteId,
         originHubId: hubId,
         destinationHubId: spokeLocationId,
-        name: `${hub.name.split(' ')[0]} - ${spoke.name.split(' ')[0]} Corridor`,
+        name: `${hub.name.split(' ')[0]} - ${spoke.name.split(' ')[0]} Route`,
         distanceKm: dist,
         roadType: 'Interstate Highway',
-        baseSpeedLimitKmh: 105,
+        baseSpeedLimitKmh: hub.region === 'Europe' ? 90 : 105,
         avgElevationGradePct: 1.0,
-        maxGradePct: 5.0,
-        tollCostUsd: 25,
+        maxGradePct: 4.5,
+        tollCostUsd: Math.round(dist * 0.05),
         waypoints: [
           { name: hub.name, coord: hub.coord, elevationMeters: 50 },
           { name: spoke.name, coord: spoke.coord, elevationMeters: 40 },
@@ -2193,18 +2155,49 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         licenseFeeUsd: cost,
         requiredRank: 1,
         trafficRateScore: spoke.trafficDemandScore,
-      };
-      updatedRoutes = [...state.routes, newRoute];
+      });
+    }
+    if (!hasReturn) {
+      routesToAdd.push({
+        id: returnRouteId,
+        originHubId: spokeLocationId,
+        destinationHubId: hubId,
+        name: `${spoke.name.split(' ')[0]} - ${hub.name.split(' ')[0]} Route (Return)`,
+        distanceKm: dist,
+        roadType: 'Interstate Highway',
+        baseSpeedLimitKmh: hub.region === 'Europe' ? 90 : 105,
+        avgElevationGradePct: -1.0,
+        maxGradePct: 4.5,
+        tollCostUsd: Math.round(dist * 0.05),
+        waypoints: [
+          { name: spoke.name, coord: spoke.coord, elevationMeters: 40 },
+          { name: hub.name, coord: hub.coord, elevationMeters: 50 },
+        ],
+        hazardRisk: 0.12,
+        isUnlocked: true,
+        licenseFeeUsd: cost,
+        requiredRank: 1,
+        trafficRateScore: spoke.trafficDemandScore,
+      });
     }
 
-    const allUnlockedRoutes = updatedRoutes.filter((r) => r.isUnlocked);
-    const newContracts = generateContractsForRoutes(allUnlockedRoutes, state.hubs, 4);
+    updatedRoutes = [...updatedRoutes, ...routesToAdd];
+    const updatedHubs = state.hubs.map((h) => (h.id === spokeLocationId ? { ...h, isUnlocked: true } : h));
+
+    const newlyActiveRoutes = updatedRoutes.filter(
+      (r) =>
+        (r.originHubId === hubId && r.destinationHubId === spokeLocationId) ||
+        (r.originHubId === spokeLocationId && r.destinationHubId === hubId)
+    );
+    const newContracts = generateContractsForRoutes(newlyActiveRoutes, updatedHubs, 4);
 
     setState((prev) => ({
       ...prev,
       balanceUsd: nextBal,
+      hubs: updatedHubs,
       routes: updatedRoutes,
       ownedSpokeConnections: [...(prev.ownedSpokeConnections || []), connectionKey],
+      ownedRouteIds: Array.from(new Set([...prev.ownedRouteIds, ...newlyActiveRoutes.map((r) => r.id)])),
       availableContracts: [...newContracts, ...prev.availableContracts].slice(0, 35),
       ledger: [
         {
@@ -2222,8 +2215,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         {
           id: `notif-spoke-${Date.now()}`,
           simTimeFormatted: `Day ${simDay}`,
-          title: 'Delivery Route Acquired',
-          message: `${spoke.name} successfully connected to ${hub.name}. New freight contracts available on this route.`,
+          title: 'Location Route Connected',
+          message: `${spoke.name} connected to ${hub.name} terminal network. Paid $${cost.toLocaleString()} connection fee. Freight contracts now available.`,
           type: 'delivery',
           timestamp: Date.now(),
         },
@@ -2231,11 +2224,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ],
     }));
 
-    notifyUser('Route Connected', `${spoke.name} is now connected to ${hub.name} terminal network.`, 'delivery');
+    notifyUser('Route Connected', `${spoke.name} is now connected to ${hub.name} ($${cost.toLocaleString()} fee paid).`, 'delivery');
     return true;
   };
 
-  const claimAchievementReward = (achievementId: string, cashReward: number, xpReward: number): boolean => {
+  const claimAchievementReward = (achievementId: string, cashReward: number, xpReward: number, currentValue: number, targetValue: number): boolean => {
+    if (currentValue < targetValue) {
+      notifyUser('Milestone Locked', 'You have not yet reached the required target for this reward tier.', 'maintenance');
+      return false;
+    }
     if (state.claimedAchievementIds && state.claimedAchievementIds.includes(achievementId)) {
       return false;
     }
@@ -2274,6 +2271,69 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
 
     notifyUser('Reward Claimed', `Awarded $${cashReward.toLocaleString()} and ${xpReward} XP!`, 'delivery');
+    return true;
+  };
+
+  const unlockRegion = (region: GeoRegion): boolean => {
+    if (state.unlockedRegions && state.unlockedRegions.includes(region)) {
+      notifyUser('Region Active', `${region} is already unlocked in your corporate network.`, 'delivery');
+      return true;
+    }
+
+    const requiredRank = 4;
+    const unlockPriceUsd = 450000;
+
+    if (state.playerRank < requiredRank) {
+      notifyUser(
+        'Rank Restriction',
+        `Unlocking intercontinental expansion to ${region} requires Rank 4 (Logistics Enterprise). Current rank: Rank ${state.playerRank}.`,
+        'finance'
+      );
+      return false;
+    }
+
+    if (state.balanceUsd < unlockPriceUsd) {
+      notifyUser(
+        'Insufficient Treasury',
+        `Intercontinental concession fee for ${region} requires $${unlockPriceUsd.toLocaleString()}, but available capital is $${state.balanceUsd.toLocaleString()}.`,
+        'finance'
+      );
+      return false;
+    }
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd - unlockPriceUsd;
+
+    setState((prev) => ({
+      ...prev,
+      balanceUsd: nextBal,
+      unlockedRegions: [...(prev.unlockedRegions || [prev.selectedRegion]), region],
+      ledger: [
+        {
+          id: `led-region-${region}-${Date.now()}`,
+          simDay,
+          simTimeFormatted: `Day ${simDay}`,
+          type: 'depot_upgrade',
+          description: `Acquired intercontinental operating concession & gateway rights for ${region}`,
+          amountUsd: -unlockPriceUsd,
+          runningBalanceUsd: nextBal,
+        },
+        ...prev.ledger,
+      ],
+      notifications: deduplicateNotifications([
+        {
+          id: `notif-region-${region}-${Date.now()}`,
+          simTimeFormatted: `Day ${simDay}`,
+          title: `🌍 Intercontinental Expansion: ${region} Unlocked`,
+          message: `${region} network access successfully acquired! Terminal concessions and trade routes are now available for licensing.`,
+          type: 'delivery',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ]),
+    }));
+
+    notifyUser('Region Unlocked', `${region} intercontinental network is now unlocked!`, 'delivery');
     return true;
   };
 
@@ -2348,6 +2408,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const hubA = state.hubs.find((h) => h.id === hubAId);
     const hubB = state.hubs.find((h) => h.id === hubBId);
     if (!hubA || !hubB) return false;
+
+    // Both hubs must be in the same region
+    if (hubA.region !== hubB.region) {
+      notifyUser(
+        'Region Mismatch',
+        `Routes must connect hubs within the same region. ${hubA.name} is in ${hubA.region}, while ${hubB.name} is in ${hubB.region}.`,
+        'maintenance'
+      );
+      return false;
+    }
 
     if (!hubA.isUnlocked || !hubB.isUnlocked) {
       notifyUser(
@@ -2510,25 +2580,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshAvailableContracts = (paidByPlayer: boolean = false): boolean => {
-    let unlockedRoutes = state.routes.filter(
+    const unlockedRoutes = state.routes.filter(
       (r) => r.isUnlocked && state.hubs.find((h) => h.id === r.originHubId)?.region === state.selectedRegion
     );
-    let updatedRoutesPool = state.routes;
-
-    // Self-heal if no corridors are unlocked in this region
-    if (unlockedRoutes.length === 0) {
-      const healRes = selfHealNetworkCorridors(state.routes, state.hubs, state.selectedRegion);
-      updatedRoutesPool = healRes.updatedRoutes;
-      unlockedRoutes = healRes.unlockedRoutes.filter(
-        (r) => state.hubs.find((h) => h.id === r.originHubId)?.region === state.selectedRegion
-      );
-      if (unlockedRoutes.length === 0) {
-        unlockedRoutes = healRes.unlockedRoutes;
-      }
-    }
 
     if (unlockedRoutes.length === 0) {
-      notifyUser('No Active Corridors', 'No trade corridors are currently unlocked in this region. Please unlock or connect a corridor in the Marketplace.', 'delivery');
+      notifyUser('No Active Corridors', 'No trade corridors are currently unlocked in this region to generate freight contracts.', 'delivery');
       return false;
     }
 
@@ -2561,8 +2618,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return {
         ...prev,
         balanceUsd: nextBal,
-        routes: updatedRoutesPool,
-        ownedRouteIds: Array.from(new Set([...prev.ownedRouteIds, ...unlockedRoutes.map((r) => r.id)])),
         availableContracts: freshContracts,
         ledger: newLedger,
         lastMarketRefreshSimTime: prev.simTimeMinutes,
@@ -2619,6 +2674,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshAvailableContracts,
         buySpokeLocationRoute,
         claimAchievementReward,
+        unlockRegion,
       }}
     >
       {children}

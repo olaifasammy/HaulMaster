@@ -40,18 +40,31 @@ export const Marketplace: React.FC = () => {
     buySpokeLocationRoute,
     buyTruckWithConfig,
     buyTrailer,
+    unlockRegion,
   } = useGame();
 
-  const [activeMarketTab, setActiveMarketTab] = useState<'hubs' | 'routes' | 'dealership' | 'spokes'>('hubs');
+  const [activeMarketTab, setActiveMarketTab] = useState<'hubs' | 'routes' | 'dealership' | 'spokes' | 'regions'>('hubs');
 
   // Customer Route Connection to Hub builder state
-  const ownedHubs = state.hubs.filter((h) => h.isUnlocked);
+  const ownedHubs = state.hubs.filter((h) => h.isUnlocked && (h.isHub ?? true));
   const [connectHubOriginId, setConnectHubOriginId] = useState<string>(
     ownedHubs[0]?.id || 'hub-seattle'
   );
-  const [connectHubDestId, setConnectHubDestId] = useState<string>(
-    state.hubs.find((h) => h.region === state.selectedRegion && h.id !== (ownedHubs[0]?.id || 'hub-seattle'))?.id || 'hub-denver'
+
+  const originHub = state.hubs.find((h) => h.id === connectHubOriginId) || ownedHubs[0] || state.hubs[0];
+  const availableDestHubs = state.hubs.filter(
+    (h) => h.id !== originHub?.id && h.region === originHub?.region && (h.isHub ?? true)
   );
+
+  const [connectHubDestId, setConnectHubDestId] = useState<string>(
+    availableDestHubs[0]?.id || ''
+  );
+
+  // Delivery Locations (Spoke Terminals) State
+  const [selectedHubPerLocation, setSelectedHubPerLocation] = useState<Record<string, string>>({});
+  const [spokeRegionFilter, setSpokeRegionFilter] = useState<'all' | GeoRegion>('all');
+  const [spokeStatusFilter, setSpokeStatusFilter] = useState<'all' | 'connected' | 'unconnected' | 'unlocked_region'>('all');
+  const [spokeSearch, setSpokeSearch] = useState<string>('');
 
   // Hub filters
   const [hubRegionFilter, setHubRegionFilter] = useState<'all' | GeoRegion>('all');
@@ -136,8 +149,11 @@ export const Marketplace: React.FC = () => {
     });
   };
 
-  // Filtered Hubs
+  // Filtered Hubs (Strictly restricted to unlocked regions)
   const filteredHubs = state.hubs.filter((h) => {
+    const unlockedRegions = state.unlockedRegions || ['North America'];
+    if (!unlockedRegions.includes(h.region)) return false;
+
     if (hubRegionFilter !== 'all' && h.region !== hubRegionFilter) return false;
     if (hubStatusFilter === 'owned' && !h.isUnlocked) return false;
     if (hubStatusFilter === 'available' && (h.isUnlocked || state.playerRank < h.requiredRank)) return false;
@@ -145,14 +161,26 @@ export const Marketplace: React.FC = () => {
     return true;
   });
 
-  // Filtered Routes
+  // Filtered Routes (Strictly restricted to unlocked regions)
   const filteredRoutes = state.routes.filter((r) => {
-    const originHub = state.hubs.find((h) => h.id === r.originHubId);
-    if (!originHub) return false;
-    if (routeRegionFilter !== 'all' && originHub.region !== routeRegionFilter) return false;
+    const rOrigin = state.hubs.find((h) => h.id === r.originHubId);
+    const rDest = state.hubs.find((h) => h.id === r.destinationHubId);
+    if (!rOrigin || !rDest) return false;
 
-    const destHub = state.hubs.find((h) => h.id === r.destinationHubId);
-    const bothHubsOwned = originHub.isUnlocked && (destHub?.isUnlocked ?? false);
+    const unlockedRegions = state.unlockedRegions || ['North America'];
+    if (!unlockedRegions.includes(rOrigin.region) || !unlockedRegions.includes(rDest.region)) return false;
+
+    // Both ends must be in the same region for a regional corridor
+    if (rOrigin.region !== rDest.region) return false;
+
+    // If a hub is selected, the route list will only show what's in that hub's region
+    if (originHub && rOrigin.region !== originHub.region) {
+      return false;
+    }
+
+    if (routeRegionFilter !== 'all' && rOrigin.region !== routeRegionFilter) return false;
+
+    const bothHubsOwned = rOrigin.isUnlocked && rDest.isUnlocked;
 
     if (routeStatusFilter === 'unlocked' && !r.isUnlocked) return false;
     if (routeStatusFilter === 'licensable' && (r.isUnlocked || !bothHubsOwned)) return false;
@@ -248,9 +276,137 @@ export const Marketplace: React.FC = () => {
           <MapPin className="w-4 h-4" />
           <span>Spoke Terminals & Delivery Routes</span>
         </button>
+
+        <button
+          onClick={() => setActiveMarketTab('regions')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+            activeMarketTab === 'regions'
+              ? 'bg-amber-400 text-slate-950 shadow-md font-extrabold'
+              : 'text-slate-400 hover:text-white bg-slate-900 border border-slate-800'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Intercontinental Regions</span>
+        </button>
       </div>
 
       {/* ========================================================================= */}
+      {/* SECTION 5: INTERCONTINENTAL REGIONS & EXPANSION                          */}
+      {/* ========================================================================= */}
+      {activeMarketTab === 'regions' && (
+        <div className="space-y-5">
+          <div className="p-5 bg-gradient-to-br from-slate-900 via-slate-900/90 to-amber-950/20 border border-amber-500/30 rounded-2xl shadow-xl space-y-3">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-amber-400" />
+              <span>Intercontinental Expansion & Regional Concessions</span>
+            </h3>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              To expand your corporate logistics network across continents (e.g. from North America to Europe or vice versa), your company must achieve Rank 4 (Logistics Enterprise) and invest a substantial expansion capital fee of $450,000. Until unlocked, you cannot view hub listings or trade corridors in locked regions.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {(['North America', 'Europe'] as const).map((region) => {
+              const unlockedRegions = state.unlockedRegions || ['North America'];
+              const isUnlocked = unlockedRegions.includes(region);
+              const requiredRank = 4;
+              const unlockPrice = 450000;
+              const hasRank = state.playerRank >= requiredRank;
+              const canAfford = state.balanceUsd >= unlockPrice;
+
+              return (
+                <div
+                  key={region}
+                  className={`p-6 rounded-2xl border transition-all flex flex-col justify-between space-y-6 shadow-xl ${
+                    isUnlocked
+                      ? 'bg-slate-900/90 border-emerald-500/40 ring-1 ring-emerald-500/20'
+                      : 'bg-slate-950/90 border-slate-800'
+                  }`}
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-amber-400 font-bold block">
+                          Geographic Territory
+                        </span>
+                        <h3 className="text-xl font-extrabold text-white mt-1">{region} Expansion Zone</h3>
+                      </div>
+                      {isUnlocked ? (
+                        <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold rounded-xl flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Unlocked & Active</span>
+                        </span>
+                      ) : (
+                        <span className="px-3 py-1 bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-mono font-bold rounded-xl flex items-center gap-1.5">
+                          <Lock className="w-4 h-4" />
+                          <span>Territory Locked</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      {region === 'North America'
+                        ? 'Features Seattle, Los Angeles, Chicago, New York, Denver, Dallas, and 14 regional spoke terminals across transcontinental highway and mountain pass corridors.'
+                        : 'Features Rotterdam Europort, Hamburg, Paris, London, Milan, Munich, Warsaw, and 13 European commercial gateway and port terminals.'}
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+                      <div className="p-3 bg-slate-900/80 border border-slate-800 rounded-xl">
+                        <span className="text-[10px] text-slate-500 uppercase block">Required Rank</span>
+                        <span className={`text-sm font-bold ${hasRank ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          Rank {requiredRank} (Logistics Enterprise)
+                        </span>
+                      </div>
+                      <div className="p-3 bg-slate-900/80 border border-slate-800 rounded-xl">
+                        <span className="text-[10px] text-slate-500 uppercase block">Expansion Fee</span>
+                        <span className="text-sm font-bold text-amber-400">${unlockPrice.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    {isUnlocked ? (
+                      <div className="w-full py-3 px-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-mono font-bold flex items-center justify-center gap-2">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Operating Concession Fully Active</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => unlockRegion(region)}
+                        disabled={!hasRank || !canAfford}
+                        className={`w-full py-3 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                          !hasRank
+                            ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                            : !canAfford
+                            ? 'bg-slate-800 text-amber-500/70 border border-slate-700 cursor-not-allowed'
+                            : 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-lg active:scale-95 cursor-pointer'
+                        }`}
+                      >
+                        {!hasRank ? (
+                          <>
+                            <Lock className="w-4 h-4 text-rose-400" />
+                            <span>Locked · Requires Rank {requiredRank} (Current: Rank {state.playerRank})</span>
+                          </>
+                        ) : !canAfford ? (
+                          <>
+                            <DollarSign className="w-4 h-4" />
+                            <span>Insufficient Treasury (${unlockPrice.toLocaleString()})</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4" />
+                            <span>Unlock {region} Territory ($450,000)</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {/* SECTION 1: HUB CONCESSIONS & REAL ESTATE MARKET                           */}
       {/* ========================================================================= */}
       {activeMarketTab === 'hubs' && (
@@ -426,43 +582,141 @@ export const Marketplace: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* SPOKE TERMINALS & DELIVERY ROUTES CONNECTION NETWORK                      */}
+      {/* SECTION 4: DELIVERY LOCATIONS & SPOKE TERMINALS                           */}
       {/* ========================================================================= */}
       {activeMarketTab === 'spokes' && (
         <div className="space-y-5">
-          <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl space-y-2">
-            <h3 className="text-xs font-mono uppercase tracking-wider text-amber-400 font-bold">
-              Regional Spoke Terminals & Delivery Depots Connection Network
-            </h3>
-            <p className="text-xs text-slate-400">
-              Acquire exclusive route delivery rights to spoke terminals connected to your corporate hubs. Each location can be connected once per hub.
-            </p>
+          {/* Information & Policy Header */}
+          <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl space-y-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="text-xs font-mono uppercase tracking-wider text-amber-400 font-bold flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4" />
+                  Regional Delivery Locations & Spoke Terminals Network
+                </h3>
+                <p className="text-xs text-slate-300 mt-1">
+                  Locations can be purchased if their region is unlocked. A location can be connected to any owned hub in its region, and can connect to multiple hubs (each connection requires payment), but cannot connect to the same hub twice.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs font-mono bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 text-slate-400">
+                  Total Active Connections: {state.ownedSpokeConnections?.length || 0}
+                </span>
+              </div>
+            </div>
           </div>
 
+          {/* Filter Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+            <div className="flex items-center gap-1.5 overflow-x-auto text-xs">
+              <span className="text-slate-500 font-mono text-[11px] mr-1 hidden sm:inline">Region:</span>
+              {(['all', 'North America', 'Europe'] as const).map((reg) => (
+                <button
+                  key={reg}
+                  onClick={() => setSpokeRegionFilter(reg)}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                    spokeRegionFilter === reg
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      : 'text-slate-400 hover:text-white bg-slate-950/70'
+                  }`}
+                >
+                  {reg === 'all' ? 'All Regions' : reg}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 overflow-x-auto text-xs">
+                {[
+                  { id: 'all', label: 'All Cities' },
+                  { id: 'connected', label: 'Connected' },
+                  { id: 'unconnected', label: 'Unconnected' },
+                  { id: 'unlocked_region', label: 'Region Unlocked' },
+                ].map((st) => (
+                  <button
+                    key={st.id}
+                    onClick={() => setSpokeStatusFilter(st.id as any)}
+                    className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                      spokeStatusFilter === st.id
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        : 'text-slate-400 hover:text-white bg-slate-950/70'
+                    }`}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
+
+              <input
+                type="text"
+                placeholder="Search city/code..."
+                value={spokeSearch}
+                onChange={(e) => setSpokeSearch(e.target.value)}
+                className="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 outline-none focus:border-amber-400 w-36 sm:w-44"
+              />
+            </div>
+          </div>
+
+          {/* Spoke Locations Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {state.hubs
-              .filter((h) => !h.isHub && h.connectedToHubId)
-              .filter((spoke) => !state.ownedSpokeConnections?.includes(`${spoke.connectedToHubId}:${spoke.id}`))
+              .filter((h) => !h.isHub)
+              .filter((spoke) => {
+                if (spokeRegionFilter !== 'all' && spoke.region !== spokeRegionFilter) return false;
+                if (spokeSearch) {
+                  const q = spokeSearch.toLowerCase();
+                  if (
+                    !spoke.name.toLowerCase().includes(q) &&
+                    !spoke.code.toLowerCase().includes(q) &&
+                    !spoke.country.toLowerCase().includes(q)
+                  ) {
+                    return false;
+                  }
+                }
+                const connectedKeys = (state.ownedSpokeConnections || []).filter((k) => k.endsWith(`:${spoke.id}`));
+                const hasConnections = connectedKeys.length > 0;
+                const isRegionUnlocked = state.hubs.some((h) => (h.isHub ?? true) && h.isUnlocked && h.region === spoke.region);
+
+                if (spokeStatusFilter === 'connected' && !hasConnections) return false;
+                if (spokeStatusFilter === 'unconnected' && hasConnections) return false;
+                if (spokeStatusFilter === 'unlocked_region' && !isRegionUnlocked) return false;
+                return true;
+              })
               .map((spoke) => {
-                const parentHub = state.hubs.find((h) => h.id === spoke.connectedToHubId);
-                const isParentOwned = parentHub?.isUnlocked ?? false;
-                const connectionKey = `${spoke.connectedToHubId}:${spoke.id}`;
-                const canAfford = state.balanceUsd >= (spoke.purchasePriceUsd || 18000);
+                const isRegionUnlocked = state.hubs.some((h) => (h.isHub ?? true) && h.isUnlocked && h.region === spoke.region);
+                const ownedRegionalHubs = state.hubs.filter((h) => (h.isHub ?? true) && h.isUnlocked && h.region === spoke.region);
+                const connectedHubKeys = (state.ownedSpokeConnections || []).filter((k) => k.endsWith(`:${spoke.id}`));
+                const connectedHubIds = connectedHubKeys.map((k) => k.split(':')[0]);
+                const connectedHubs = state.hubs.filter((h) => connectedHubIds.includes(h.id));
+
+                const defaultHubChoice =
+                  selectedHubPerLocation[spoke.id] ||
+                  ownedRegionalHubs.find((h) => !connectedHubIds.includes(h.id))?.id ||
+                  ownedRegionalHubs[0]?.id ||
+                  '';
+
+                const targetHub = state.hubs.find((h) => h.id === defaultHubChoice);
+                const isAlreadyConnectedToTarget = connectedHubIds.includes(defaultHubChoice);
+                const fee = spoke.purchasePriceUsd || 18000;
+                const canAfford = state.balanceUsd >= fee;
 
                 return (
                   <div
                     key={spoke.id}
                     className={`p-5 rounded-2xl border transition-all flex flex-col justify-between space-y-4 shadow-xl ${
-                      isParentOwned
+                      connectedHubs.length > 0
+                        ? 'bg-slate-900/90 border-emerald-500/40 ring-1 ring-emerald-500/20'
+                        : isRegionUnlocked
                         ? 'bg-slate-900/80 border-slate-700 hover:border-amber-400'
                         : 'bg-slate-950/70 border-slate-800/80 opacity-75'
                     }`}
                   >
                     <div>
+                      {/* Header */}
                       <div className="flex items-start justify-between">
                         <div>
                           <span className="text-[10px] font-mono uppercase tracking-wider text-amber-400 font-bold block">
-                            {spoke.region} · Connected to {parentHub?.name || 'Hub'}
+                            {spoke.region} · {spoke.country}
                           </span>
                           <h3 className="text-base font-bold text-white mt-0.5">{spoke.name}</h3>
                         </div>
@@ -471,38 +725,119 @@ export const Marketplace: React.FC = () => {
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 mt-4 text-[11px] font-mono">
+                      {/* Region Status Pill */}
+                      <div className="mt-2.5">
+                        {isRegionUnlocked ? (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-mono font-bold">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Region Unlocked ({ownedRegionalHubs.length} Owned Base{ownedRegionalHubs.length > 1 ? 's' : ''})</span>
+                          </div>
+                        ) : (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-500/10 border border-rose-500/30 text-rose-400 text-[10px] font-mono font-bold">
+                            <Lock className="w-3 h-3" />
+                            <span>Region Locked (No owned hub in {spoke.region})</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Location Metrics */}
+                      <div className="grid grid-cols-2 gap-2 mt-3 text-[11px] font-mono">
                         <div className="p-2.5 bg-slate-950/70 border border-slate-800 rounded-lg">
                           <span className="text-[10px] text-slate-500 uppercase block">Traffic Demand</span>
                           <span className="text-sm font-bold text-emerald-400">{spoke.trafficDemandScore}%</span>
                           <span className="text-[9px] text-slate-500 block">{spoke.monthlyCargoVolume}</span>
                         </div>
                         <div className="p-2.5 bg-slate-950/70 border border-slate-800 rounded-lg">
-                          <span className="text-[10px] text-slate-500 uppercase block">Route Rights Fee</span>
-                          <span className="text-sm font-bold text-amber-400">${(spoke.purchasePriceUsd || 18000).toLocaleString()}</span>
+                          <span className="text-[10px] text-slate-500 uppercase block">Connection Fee</span>
+                          <span className="text-sm font-bold text-amber-400">${fee.toLocaleString()}</span>
+                          <span className="text-[9px] text-slate-500 block">Per Hub Connection</span>
                         </div>
+                      </div>
+
+                      {/* Connected Hubs list */}
+                      <div className="mt-3 p-2.5 bg-slate-950/50 border border-slate-800/80 rounded-lg text-xs font-mono space-y-1.5">
+                        <span className="text-[10px] text-slate-500 uppercase font-bold block">
+                          Connected Hubs ({connectedHubs.length}):
+                        </span>
+                        {connectedHubs.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {connectedHubs.map((h) => (
+                              <span
+                                key={h.id}
+                                className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold flex items-center gap-1"
+                              >
+                                <Check className="w-3 h-3" />
+                                {h.name.split(' ')[0]} ({h.code})
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-slate-500 italic block">
+                            No hub connections yet (no default connections)
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    <div>
-                      {!isParentOwned ? (
+                    {/* Action Panel */}
+                    <div className="space-y-2 pt-2 border-t border-slate-800/60">
+                      {!isRegionUnlocked ? (
+                        <div className="w-full py-2.5 px-3 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-400 text-xs font-mono font-bold flex items-center justify-center gap-2">
+                          <Lock className="w-3.5 h-3.5 text-rose-400" />
+                          <span>Acquire a {spoke.region} Hub First</span>
+                        </div>
+                      ) : ownedRegionalHubs.length === 0 ? (
                         <div className="w-full py-2.5 px-3 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-400 text-xs font-mono font-bold flex items-center justify-center gap-2">
                           <Lock className="w-3.5 h-3.5" />
-                          <span>Parent Hub ({parentHub?.code}) Not Owned</span>
+                          <span>No Active Hubs in {spoke.region}</span>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => buySpokeLocationRoute(spoke.connectedToHubId!, spoke.id)}
-                          disabled={!canAfford}
-                          className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                            !canAfford
-                              ? 'bg-slate-800 text-amber-500/70 border border-slate-700 cursor-not-allowed'
-                              : 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-lg active:scale-95'
-                          }`}
-                        >
-                          <Route className="w-4 h-4" />
-                          <span>Connect & Buy Route (${((spoke.purchasePriceUsd || 18000) / 1000).toFixed(0)}k)</span>
-                        </button>
+                        <div className="space-y-2">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-mono uppercase text-slate-400 font-bold block">
+                              Connect to Hub in {spoke.region}:
+                            </label>
+                            <select
+                              value={defaultHubChoice}
+                              onChange={(e) =>
+                                setSelectedHubPerLocation((prev) => ({
+                                  ...prev,
+                                  [spoke.id]: e.target.value,
+                                }))
+                              }
+                              className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-white font-medium text-xs focus:border-amber-400 outline-none"
+                            >
+                              {ownedRegionalHubs.map((h) => {
+                                const isConn = connectedHubIds.includes(h.id);
+                                return (
+                                  <option key={h.id} value={h.id}>
+                                    {h.name} ({h.code}) {isConn ? '· [Connected]' : '· [Available]'}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </div>
+
+                          {isAlreadyConnectedToTarget ? (
+                            <div className="w-full py-2 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-mono font-bold flex items-center justify-center gap-2">
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>Connected to {targetHub?.code} (Cannot connect twice)</span>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => defaultHubChoice && buySpokeLocationRoute(defaultHubChoice, spoke.id)}
+                              disabled={!canAfford}
+                              className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                                !canAfford
+                                  ? 'bg-slate-800 text-amber-500/70 border border-slate-700 cursor-not-allowed'
+                                  : 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-lg active:scale-95 cursor-pointer'
+                              }`}
+                            >
+                              <Route className="w-4 h-4" />
+                              <span>Connect to {targetHub?.code} (${(fee / 1000).toFixed(0)}k Fee)</span>
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -566,34 +901,42 @@ export const Marketplace: React.FC = () => {
                     </label>
                     <select
                       value={connectHubOriginId}
-                      onChange={(e) => setConnectHubOriginId(e.target.value)}
+                      onChange={(e) => {
+                        const newOriginId = e.target.value;
+                        setConnectHubOriginId(newOriginId);
+                        const newOrigin = state.hubs.find((h) => h.id === newOriginId);
+                        const validDests = state.hubs.filter(
+                          (h) => h.id !== newOriginId && h.region === newOrigin?.region && (h.isHub ?? true)
+                        );
+                        if (validDests.length > 0 && !validDests.some((h) => h.id === connectHubDestId)) {
+                          setConnectHubDestId(validDests[0].id);
+                        }
+                      }}
                       className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium text-xs focus:border-amber-400 outline-none"
                     >
                       {ownedHubs.map((h) => (
                         <option key={h.id} value={h.id}>
-                          {h.name} ({h.code} · {h.country}) - Base Terminal
+                          {h.name} ({h.code} · {h.country}) - {h.region} Base
                         </option>
                       ))}
                     </select>
                   </div>
 
-                  {/* Destination Hub */}
+                  {/* Destination Hub (Strictly Same Region) */}
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-mono uppercase text-slate-400 font-bold block">
-                      2. Connect Route to Destination Hub
+                      2. Connect Route to Destination Hub (Same Region: {originHub?.region})
                     </label>
                     <select
                       value={connectHubDestId}
                       onChange={(e) => setConnectHubDestId(e.target.value)}
                       className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium text-xs focus:border-amber-400 outline-none"
                     >
-                      {state.hubs
-                        .filter((h) => h.id !== connectHubOriginId)
-                        .map((h) => (
-                          <option key={h.id} value={h.id}>
-                            {h.name} ({h.code}) · {h.isUnlocked ? 'Owned Base' : `Unowned ($${(h.purchasePriceUsd / 1000).toFixed(0)}k)`}
-                          </option>
-                        ))}
+                      {availableDestHubs.map((h) => (
+                        <option key={h.id} value={h.id}>
+                          {h.name} ({h.code} · {h.country}) · {h.isUnlocked ? 'Owned Base' : `Unowned Concession ($${(h.purchasePriceUsd / 1000).toFixed(0)}k)`}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -669,6 +1012,21 @@ export const Marketplace: React.FC = () => {
               </div>
             );
           })()}
+
+          {/* Hub Region Filter Sync Notice */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3.5 bg-slate-900/80 border border-amber-500/30 rounded-xl text-xs font-mono">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+              <span className="text-slate-400">Selected Hub:</span>
+              <span className="text-white font-bold">{originHub?.name} ({originHub?.code})</span>
+              <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 text-[10px] uppercase">
+                {originHub?.region}
+              </span>
+            </div>
+            <span className="text-slate-400 text-[11px]">
+              Routes list filtered strictly to {originHub?.region} corridors
+            </span>
+          </div>
 
           {/* Route Filter Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-800">

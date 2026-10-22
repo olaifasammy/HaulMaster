@@ -1,6 +1,6 @@
 import React from 'react';
 import { useGame } from '../context/GameContext';
-import { Play, Pause, PlusCircle, Fuel, HelpCircle, Award, ShoppingBag, Truck, Package } from 'lucide-react';
+import { Play, Pause, PlusCircle, Fuel, HelpCircle, Award, ShoppingBag, Truck, Package, Trophy } from 'lucide-react';
 
 interface NavbarProps {
   currentTab: string;
@@ -25,6 +25,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
     { id: 'hubs', label: 'Hubs' },
     { id: 'drivers', label: 'Drivers' },
     { id: 'ledger', label: 'Financials' },
+    { id: 'achievements', label: 'Achievements' },
   ];
 
   return (

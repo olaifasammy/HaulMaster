@@ -21,8 +21,8 @@ export const OnboardingWizard: React.FC = () => {
   const [step, setStep] = useState<number>(1);
   const [selectedRegion, setSelectedRegion] = useState<GeoRegion>('North America');
   const [primaryHubId, setPrimaryHubId] = useState<string>('hub-seattle');
-  // High realism: 1 primary headquarters hub and 1 location to connect as hub (exactly 2 locations at startup)
-  const [connectedLocationId, setConnectedLocationId] = useState<string>('hub-denver');
+  // High realism: pure headquarters base at start, no default connections
+  const [connectedLocationId, setConnectedLocationId] = useState<string>('');
   const [companyName, setCompanyName] = useState<string>('Apex Continental Freight');
   // Free starter commercial vehicle is the Rigid truck (metro-320)
   const [starterTruckId, setStarterTruckId] = useState<TruckModelId>('metro-320');
@@ -32,16 +32,15 @@ export const OnboardingWizard: React.FC = () => {
   // Filter hubs based on region
   const regionHubs = state.hubs.filter((h) => h.region === selectedRegion);
 
-  // When region changes, auto-select sensible defaults
+  // When region changes, auto-select sensible defaults without default connections
   const handleRegionChange = (newRegion: GeoRegion) => {
     setSelectedRegion(newRegion);
+    setConnectedLocationId('');
     if (newRegion === 'Europe') {
       setPrimaryHubId('hub-rotterdam');
-      setConnectedLocationId('hub-hamburg');
       setStarterTruckId('metro-320');
     } else {
       setPrimaryHubId('hub-seattle');
-      setConnectedLocationId('hub-denver');
       setStarterTruckId('metro-320');
     }
   };
@@ -49,8 +48,7 @@ export const OnboardingWizard: React.FC = () => {
   const handleSelectPrimaryHub = (hubId: string) => {
     setPrimaryHubId(hubId);
     if (connectedLocationId === hubId) {
-      const other = regionHubs.find((h) => h.id !== hubId);
-      if (other) setConnectedLocationId(other.id);
+      setConnectedLocationId('');
     }
   };
 
@@ -59,12 +57,11 @@ export const OnboardingWizard: React.FC = () => {
   };
 
   const handleFinish = () => {
-    if (!connectedLocationId) return;
     completeOnboarding({
       region: selectedRegion,
       primaryHubId,
-      connectedLocationId,
-      connectedHubIds: [connectedLocationId],
+      connectedLocationId: connectedLocationId || '',
+      connectedHubIds: connectedLocationId ? [connectedLocationId] : [],
       companyName: companyName.trim() || 'Apex Continental Logistics',
       starterTruckModelId: starterTruckId,
       starterTrailerModelId: starterTrailerId,
@@ -73,7 +70,7 @@ export const OnboardingWizard: React.FC = () => {
   };
 
   const selectedPrimaryHub = regionHubs.find((h) => h.id === primaryHubId) || regionHubs[0];
-  const selectedConnectedHub = regionHubs.find((h) => h.id === connectedLocationId) || regionHubs[1];
+  const selectedConnectedHub = connectedLocationId ? regionHubs.find((h) => h.id === connectedLocationId) : null;
   const selectedTruckModel = TRUCK_MODELS.find((m) => m.id === starterTruckId) || TRUCK_MODELS[0];
   const selectedTrailerModel = TRAILER_MODELS.find((m) => m.id === starterTrailerId) || TRAILER_MODELS[0];
 
@@ -284,20 +281,53 @@ export const OnboardingWizard: React.FC = () => {
             </div>
           )}
 
-          {/* STEP 3: Connect 1 Strategic Terminal (High Realism: 1 hub + 1 location) */}
+          {/* STEP 3: Connect 1 Strategic Terminal or Start with Base Only */}
           {step === 3 && (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs text-slate-400">
                 <p>
-                  High Realism: Connect <span className="text-amber-400 font-bold">1 commercial terminal</span> to{' '}
-                  <span className="text-white font-bold">{selectedPrimaryHub.name}</span> as your initial freight corridor. Not every location is a mega hub — all other regional terminals will unlock as your carrier rank advances!
+                  No routes or locations have default connections. You may launch with your headquarters base only, or establish an optional initial corridor to a terminal in <span className="text-amber-400 font-bold">{selectedRegion}</span>.
                 </p>
-                <span className="font-mono text-xs font-bold text-emerald-400 shrink-0">
-                  Target: 1 Connected Corridor
+                <span className="font-mono text-xs font-bold text-amber-400 shrink-0">
+                  {connectedLocationId ? '1 Initial Corridor' : 'Base Terminal Only'}
                 </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {/* Zero Default Connections Option */}
+                <div
+                  onClick={() => handleSelectConnectedLocation('')}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between space-y-3 sm:col-span-2 ${
+                    connectedLocationId === ''
+                      ? 'bg-amber-500/10 border-amber-500 shadow-md ring-1 ring-amber-500/40'
+                      : 'bg-slate-950/70 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="text-[10px] font-mono text-amber-400 font-bold uppercase">
+                        Zero Default Connections (Recommended)
+                      </span>
+                      <h4 className="text-sm font-bold text-white mt-0.5">
+                        Start with Headquarters Base Only (No Default Routes)
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Begin with pure operations at {selectedPrimaryHub.name}. No routes, cities, or locations start pre-connected. You will purchase and establish routes in the Marketplace.
+                      </p>
+                    </div>
+
+                    <div
+                      className={`w-6 h-6 rounded-md flex items-center justify-center border transition-colors shrink-0 ml-3 ${
+                        connectedLocationId === ''
+                          ? 'bg-amber-400 text-slate-950 border-amber-400 font-bold'
+                          : 'border-slate-700 bg-slate-900 text-transparent'
+                      }`}
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                    </div>
+                  </div>
+                </div>
+
                 {regionHubs
                   .filter((h) => h.id !== primaryHubId)
                   .map((hub) => {
@@ -357,12 +387,6 @@ export const OnboardingWizard: React.FC = () => {
                     );
                   })}
               </div>
-
-              {!connectedLocationId && (
-                <p className="text-xs font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-lg text-center">
-                  Please select 1 destination terminal to establish your starter commercial trade lane.
-                </p>
-              )}
             </div>
           )}
 
@@ -524,7 +548,9 @@ export const OnboardingWizard: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-slate-500 text-[10px] block">Connected Corridor</span>
-                    <span className="font-bold text-emerald-400">{selectedConnectedHub.name.split(' ')[0]}</span>
+                    <span className="font-bold text-emerald-400">
+                      {selectedConnectedHub ? selectedConnectedHub.name.split(' ')[0] : 'None (Independent)'}
+                    </span>
                   </div>
                   <div>
                     <span className="text-slate-500 text-[10px] block">Starter Vehicle</span>
@@ -532,7 +558,9 @@ export const OnboardingWizard: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-slate-500 text-[10px] block">Unlocked Network</span>
-                    <span className="font-bold text-amber-400">2 Terminals (1 Arterial)</span>
+                    <span className="font-bold text-amber-400">
+                      {selectedConnectedHub ? '2 Terminals (1 Arterial)' : '1 Headquarters Base (0 Connected Routes)'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -556,16 +584,8 @@ export const OnboardingWizard: React.FC = () => {
 
           {step < 4 ? (
             <button
-              onClick={() => {
-                if (step === 3 && !connectedLocationId) return;
-                setStep(step + 1);
-              }}
-              disabled={step === 3 && !connectedLocationId}
-              className={`flex items-center gap-1.5 px-6 py-2.5 text-xs font-bold rounded-xl transition-all shadow-lg ${
-                step === 3 && !connectedLocationId
-                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                  : 'bg-amber-400 hover:bg-amber-300 text-slate-950'
-              }`}
+              onClick={() => setStep(step + 1)}
+              className="flex items-center gap-1.5 px-6 py-2.5 text-xs font-bold rounded-xl transition-all shadow-lg bg-amber-400 hover:bg-amber-300 text-slate-950 cursor-pointer"
             >
               <span>Continue</span>
               <ArrowRight className="w-4 h-4" />

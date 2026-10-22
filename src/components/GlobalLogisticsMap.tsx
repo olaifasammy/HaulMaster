@@ -432,6 +432,20 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
         onClick={handleCanvasClick}
         className="w-full h-auto cursor-crosshair block touch-manipulation"
       />
+
+      {!((state.unlockedRegions || ['North America']).includes(currentRegion)) && (
+        <div className="absolute inset-0 z-20 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center space-y-3">
+          <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400">
+            <Navigation className="w-8 h-8 animate-pulse" />
+          </div>
+          <h4 className="text-base font-bold text-white">
+            {currentRegion} Territory Locked
+          </h4>
+          <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
+            Intercontinental region access requires Rank 4 (Logistics Enterprise) and a $450,000 concession fee. Visit the Marketplace → Intercontinental Regions tab to unlock.
+          </p>
+        </div>
+      )}
     </div>
   );
 };
