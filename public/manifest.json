@@ -1,0 +1,17 @@
+{
+  "name": "HaulMaster: Global Logistics & Fleet Simulator",
+  "short_name": "HaulMaster",
+  "description": "High-fidelity truck fleet management simulation with realistic powertrain physics and global logistics corridors.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#030712",
+  "theme_color": "#f59e0b",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
