@@ -29,6 +29,10 @@ import {
   Check,
   CreditCard,
   Package,
+  ChevronDown,
+  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 export const Marketplace: React.FC = () => {
@@ -249,6 +253,82 @@ export const Marketplace: React.FC = () => {
     if (routeStatusFilter === 'locked' && (r.isUnlocked || bothHubsOwned)) return false;
     return true;
   });
+
+  const [hubPage, setHubPage] = useState<number>(1);
+  const [spokePage, setSpokePage] = useState<number>(1);
+  const [routePage, setRoutePage] = useState<number>(1);
+  const marketPageSize = 6;
+
+  const [expandedHubMarketIds, setExpandedHubMarketIds] = useState<Record<string, boolean>>({});
+  const [expandedSpokeIds, setExpandedSpokeIds] = useState<Record<string, boolean>>({});
+  const [expandedRouteIds, setExpandedRouteIds] = useState<Record<string, boolean>>({});
+
+  const toggleHubMarketExpand = (id: string) => setExpandedHubMarketIds(p => ({ ...p, [id]: !p[id] }));
+  const toggleSpokeExpand = (id: string) => setExpandedSpokeIds(p => ({ ...p, [id]: !p[id] }));
+  const toggleRouteExpand = (id: string) => setExpandedRouteIds(p => ({ ...p, [id]: !p[id] }));
+
+  const filteredSpokes = state.hubs
+    .filter((h) => !h.isHub)
+    .filter((spoke) => {
+      if (spokeRegionFilter !== 'all' && spoke.region !== spokeRegionFilter) return false;
+      if (spokeSearch) {
+        const q = spokeSearch.toLowerCase();
+        if (
+          !spoke.name.toLowerCase().includes(q) &&
+          !spoke.code.toLowerCase().includes(q) &&
+          !spoke.country.toLowerCase().includes(q)
+        ) {
+          return false;
+        }
+      }
+      const connectedKeys = (state.ownedSpokeConnections || []).filter((k) => k.endsWith(`:${spoke.id}`));
+      const hasConnections = connectedKeys.length > 0;
+      const isRegionUnlocked = state.hubs.some((h) => (h.isHub ?? true) && h.isUnlocked && h.region === spoke.region);
+
+      if (spokeStatusFilter === 'connected' && !hasConnections) return false;
+      if (spokeStatusFilter === 'unconnected' && hasConnections) return false;
+      if (spokeStatusFilter === 'unlocked_region' && !isRegionUnlocked) return false;
+      return true;
+    });
+
+  const totalHubPages = Math.ceil(filteredHubs.length / marketPageSize) || 1;
+  const paginatedHubs = filteredHubs.slice((hubPage - 1) * marketPageSize, hubPage * marketPageSize);
+
+  const totalSpokePages = Math.ceil(filteredSpokes.length / marketPageSize) || 1;
+  const paginatedSpokes = filteredSpokes.slice((spokePage - 1) * marketPageSize, spokePage * marketPageSize);
+
+  const totalRoutePages = Math.ceil(filteredRoutes.length / marketPageSize) || 1;
+  const paginatedRoutes = filteredRoutes.slice((routePage - 1) * marketPageSize, routePage * marketPageSize);
+
+  const renderMarketPagination = (currentPage: number, totalPages: number, setPage: (p: number | ((prev: number) => number)) => void, totalItems: number, label: string) => {
+    if (totalPages <= 1) return null;
+    return (
+      <div className="flex items-center justify-between pt-4 border-t border-slate-800 text-xs font-mono text-slate-400 mt-6">
+        <div>
+          Showing {(currentPage - 1) * marketPageSize + 1} - {Math.min(currentPage * marketPageSize, totalItems)} of {totalItems} {label}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setPage((p) => Math.max(p - 1, 1))}
+            disabled={currentPage === 1}
+            className="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="px-3 py-1 bg-slate-900 border border-slate-800 rounded-lg text-white font-bold">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -480,7 +560,7 @@ export const Marketplace: React.FC = () => {
               {(['all', 'North America', 'Europe'] as const).map((reg) => (
                 <button
                   key={reg}
-                  onClick={() => setHubRegionFilter(reg)}
+                  onClick={() => { setHubRegionFilter(reg); setHubPage(1); }}
                   className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${
                     hubRegionFilter === reg
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
@@ -502,7 +582,7 @@ export const Marketplace: React.FC = () => {
               ].map((st) => (
                 <button
                   key={st.id}
-                  onClick={() => setHubStatusFilter(st.id as any)}
+                  onClick={() => { setHubStatusFilter(st.id as any); setHubPage(1); }}
                   className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${
                     hubStatusFilter === st.id
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
@@ -675,7 +755,7 @@ export const Marketplace: React.FC = () => {
               {(['all', 'North America', 'Europe'] as const).map((reg) => (
                 <button
                   key={reg}
-                  onClick={() => setSpokeRegionFilter(reg)}
+                  onClick={() => { setSpokeRegionFilter(reg); setSpokePage(1); }}
                   className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${
                     spokeRegionFilter === reg
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
@@ -697,7 +777,7 @@ export const Marketplace: React.FC = () => {
                 ].map((st) => (
                   <button
                     key={st.id}
-                    onClick={() => setSpokeStatusFilter(st.id as any)}
+                    onClick={() => { setSpokeStatusFilter(st.id as any); setSpokePage(1); }}
                     className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${
                       spokeStatusFilter === st.id
                         ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
@@ -713,7 +793,7 @@ export const Marketplace: React.FC = () => {
                 type="text"
                 placeholder="Search city/code..."
                 value={spokeSearch}
-                onChange={(e) => setSpokeSearch(e.target.value)}
+                onChange={(e) => { setSpokeSearch(e.target.value); setSpokePage(1); }}
                 className="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 outline-none focus:border-amber-400 w-36 sm:w-44"
               />
             </div>
