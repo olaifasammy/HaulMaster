@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { Driver } from '../types/game';
 import {
@@ -11,72 +11,72 @@ import {
   PlusCircle,
   Check,
   Zap,
+  RefreshCw,
 } from 'lucide-react';
 
 export const DriverRoster: React.FC = () => {
   const { state, trainDriver, hireDriver, fireDriver } = useGame();
   const [showHireModal, setShowHireModal] = useState(false);
 
-  // Candidate pool for recruitment
-  const candidatePool = [
-    {
-      name: 'Darius Vance',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
-      experienceYears: 11,
-      wagePerKmUsd: 0.46,
-      dailyRetainerUsd: 115,
-      homeHubId: 'hub-seattle',
-      stats: {
-        ecoDrivingRating: 91,
-        mechanicalSympathy: 92,
-        mountainCert: true,
-        winterCert: true,
-        hazmatCert: false,
-        fatiguePercent: 0,
-        totalKmDriven: 110000,
-        deliveriesCompleted: 78,
-        safetyScore: 97,
-      },
-    },
-    {
-      name: 'Sofia Alvarez',
-      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80',
-      experienceYears: 7,
-      wagePerKmUsd: 0.43,
-      dailyRetainerUsd: 105,
-      homeHubId: 'hub-dallas',
-      stats: {
-        ecoDrivingRating: 89,
-        mechanicalSympathy: 88,
-        mountainCert: false,
-        winterCert: false,
-        hazmatCert: true,
-        fatiguePercent: 0,
-        totalKmDriven: 65000,
-        deliveriesCompleted: 45,
-        safetyScore: 96,
-      },
-    },
-    {
-      name: 'Matteo Rossi',
-      avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=150&q=80',
-      experienceYears: 14,
-      wagePerKmUsd: 0.50,
-      dailyRetainerUsd: 130,
-      homeHubId: 'hub-milan',
-      stats: {
-        ecoDrivingRating: 95,
-        mechanicalSympathy: 94,
-        mountainCert: true,
-        winterCert: true,
-        hazmatCert: true,
-        fatiguePercent: 0,
-        totalKmDriven: 160000,
-        deliveriesCompleted: 112,
-        safetyScore: 99,
-      },
-    },
-  ];
+  const [candidatePool, setCandidatePool] = useState<any[]>([]);
+
+  const generateCandidates = () => {
+    const firstNames = ['Marcus', 'Elena', 'Lucas', 'Sarah', 'Viktor', 'Hans', 'Chiara', 'Mateo', 'Darius', 'Sofia', 'Hiroshi', 'Kaito', 'Astrid', 'Bjorn', 'Guillaume', 'Camille', 'Javier', 'Carmen', 'Krzysztof', 'Zofia', 'Liam', 'Chloe', 'Oliver', 'Mia', 'Gabriel', 'Nadia'];
+    const lastNames = ['Vance', 'Alvarez', 'Rossi', 'Schmidt', 'Weber', 'Dubois', 'Lefevre', 'Novak', 'Kovacs', 'Jensen', 'Larsson', 'Tanaka', 'Sato', 'Moreau', 'Santos', 'Garcia', 'Wagner', 'Becker', 'Popov', 'Andersen', 'O’Connor', 'Van Der Berg', 'Dubov', 'Miller'];
+    const avatars = [
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
+      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80',
+      'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=150&q=80',
+      'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=150&q=80',
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+      'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=150&q=80',
+      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80',
+      'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80'
+    ];
+
+    const ownedHubs = state.hubs.filter(h => h.isUnlocked);
+    const availableHubIds = ownedHubs.length > 0 ? ownedHubs.map(h => h.id) : ['hub-seattle'];
+    const pool = [];
+    const usedNames = new Set();
+
+    while (pool.length < 3) {
+      const fName = firstNames[Math.floor(Math.random() * firstNames.length)];
+      const lName = lastNames[Math.floor(Math.random() * lastNames.length)];
+      const fullName = `${fName} ${lName}`;
+      if (usedNames.has(fullName)) continue;
+      usedNames.add(fullName);
+
+      const exp = Math.floor(Math.random() * 14) + 2;
+      const wage = Number((0.38 + exp * 0.01).toFixed(2));
+      const retainer = Math.round(90 + exp * 3);
+      const hubId = availableHubIds[Math.floor(Math.random() * availableHubIds.length)];
+
+      pool.push({
+        name: fullName,
+        avatar: avatars[Math.floor(Math.random() * avatars.length)],
+        experienceYears: exp,
+        wagePerKmUsd: wage,
+        dailyRetainerUsd: retainer,
+        homeHubId: hubId,
+        stats: {
+          ecoDrivingRating: Math.floor(Math.random() * 15) + 82,
+          mechanicalSympathy: Math.floor(Math.random() * 15) + 82,
+          mountainCert: Math.random() > 0.4,
+          winterCert: Math.random() > 0.5,
+          hazmatCert: Math.random() > 0.6,
+          fatiguePercent: 0,
+          totalKmDriven: exp * 10000 + Math.floor(Math.random() * 20000),
+          deliveriesCompleted: exp * 8 + Math.floor(Math.random() * 15),
+          safetyScore: Math.floor(Math.random() * 6) + 94,
+        },
+      });
+    }
+    setCandidatePool(pool);
+  };
+
+  useEffect(() => {
+    generateCandidates();
+  }, [showHireModal]);
 
   return (
     <div className="space-y-8">
@@ -108,12 +108,21 @@ export const DriverRoster: React.FC = () => {
             <h4 className="text-xs font-mono font-bold uppercase text-amber-400">
               Commercial Driver Recruitment Pool ($2,500 Onboarding Fee)
             </h4>
-            <button
-              onClick={() => setShowHireModal(false)}
-              className="text-xs text-slate-400 hover:text-white"
-            >
-              Close
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={generateCandidates}
+                className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 font-mono transition-colors cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Refresh Candidates</span>
+              </button>
+              <button
+                onClick={() => setShowHireModal(false)}
+                className="text-xs text-slate-400 hover:text-white"
+              >
+                Close
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

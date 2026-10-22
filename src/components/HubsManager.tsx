@@ -17,22 +17,24 @@ interface HubsManagerProps {
 export const HubsManager: React.FC<HubsManagerProps> = ({ onSelectHub }) => {
   const { state, upgradeHub } = useGame();
 
+  const ownedHubs = state.hubs.filter((h) => h.isUnlocked);
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
         <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 font-mono flex items-center gap-2">
           <MapPin className="w-4 h-4 text-amber-400" />
-          <span>Regional Hub Depots & Terminal Logistics Network ({state.hubs.length} Hubs)</span>
+          <span>Regional Hub Depots & Terminal Logistics Network ({ownedHubs.length} Owned Hubs)</span>
         </h3>
         <p className="text-xs text-slate-400 mt-0.5">
-          Manage spot diesel wholesale pricing, bulk fuel bunkering storage, and certified maintenance bays.
+          Manage spot diesel wholesale pricing, bulk fuel bunkering storage, and certified maintenance bays for your company-operated terminals.
         </p>
       </div>
 
       {/* Hubs Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {state.hubs.map((hub) => {
+        {ownedHubs.map((hub) => {
           const stationedTrucks = state.trucks.filter((t) => t.currentHubId === hub.id && t.status !== 'en_route');
           const stationedDrivers = state.drivers.filter((d) => d.currentHubId === hub.id);
 

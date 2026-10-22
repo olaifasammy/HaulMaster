@@ -15,6 +15,8 @@ import {
   GameEventNotification,
   TruckModelId,
   Hub,
+  RouteCorridor,
+  OnboardingConfig,
 } from '../types/game';
 import {
   INITIAL_HUBS,
@@ -25,11 +27,12 @@ import {
   TRAILER_MODELS,
   INITIAL_TRAILERS,
   createPristineSubsystems,
+  RANK_TIERS,
 } from '../constants/gameData';
 import { computePhysicsStep } from '../utils/physicsEngine';
 import { getLocalWeather } from '../utils/weatherEngine';
 
-const STORAGE_KEY = 'haulmaster_game_state_v1';
+const STORAGE_KEY = 'haulmaster_game_state_v2';
 
 export const deduplicateNotifications = (list: GameEventNotification[]): GameEventNotification[] => {
   const seen = new Set<string>();
@@ -45,6 +48,57 @@ export const deduplicateNotifications = (list: GameEventNotification[]): GameEve
     result.push({ ...item, id });
   }
   return result;
+};
+
+export const generateContractsForRoutes = (
+  unlockedRoutes: RouteCorridor[],
+  hubs: Hub[],
+  count: number = 6
+): CargoContract[] => {
+  if (unlockedRoutes.length === 0) return [];
+
+  const cargoCatalog = [
+    { title: 'Pharmaceutical Cold-Chain Vaccines', category: 'Refrigerated Food' as const, isCold: true, haz: false, rate: 4.8 },
+    { title: 'Aerospace Jet Engine Turbine Castings', category: 'Heavy Machinery' as const, isCold: false, haz: false, rate: 5.2 },
+    { title: 'Precision CNC 5-Axis Milling Centers', category: 'Heavy Machinery' as const, isCold: false, haz: false, rate: 4.5 },
+    { title: 'Semiconductor Silicon Ingot Billets', category: 'High-Value Tech' as const, isCold: false, haz: false, rate: 5.6 },
+    { title: 'Industrial Solvent Stabilizer Base', category: 'Hazardous Chemicals' as const, isCold: false, haz: true, hazClass: 'Class 3 Flammable' as const, rate: 5.0 },
+    { title: 'Organic Citrus & Fresh Berry Freight', category: 'Refrigerated Food' as const, isCold: true, haz: false, rate: 4.2 },
+    { title: 'High-Density Automotive Battery Modules', category: 'High-Value Tech' as const, isCold: false, haz: false, rate: 5.1 },
+    { title: 'Consumer Electronics & Display Glass', category: 'Dry Freight' as const, isCold: false, haz: false, rate: 3.8 },
+    { title: 'Commercial Wind Turbine Gearboxes', category: 'Heavy Machinery' as const, isCold: false, haz: false, rate: 5.4 },
+    { title: 'Hydrochloric Acid ADR Bulk Solution', category: 'Hazardous Chemicals' as const, isCold: false, haz: true, hazClass: 'Class 8 Corrosive' as const, rate: 5.2 },
+  ];
+
+  const contracts: CargoContract[] = [];
+  for (let i = 0; i < count; i++) {
+    const route = unlockedRoutes[i % unlockedRoutes.length];
+    const originHub = hubs.find((h) => h.id === route.originHubId);
+    const destHub = hubs.find((h) => h.id === route.destinationHubId);
+    if (!originHub || !destHub) continue;
+
+    const template = cargoCatalog[(i + Math.floor(Math.random() * cargoCatalog.length)) % cargoCatalog.length];
+    const weightTons = Number((12 + Math.random() * 16).toFixed(1));
+    const dist = route.distanceKm;
+    const basePayout = Math.round(dist * template.rate * (0.9 + Math.random() * 0.25));
+
+    contracts.push({
+      id: `cnt-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 6)}`,
+      title: template.title,
+      originHubId: route.originHubId,
+      destinationHubId: route.destinationHubId,
+      category: template.category,
+      weightTons,
+      payoutUsd: basePayout,
+      bonusOnTimeUsd: Math.round(basePayout * 0.15),
+      penaltyLateUsd: Math.round(basePayout * 0.3),
+      deadlineMinutes: Math.round((dist / (route.baseSpeedLimitKmh * 0.85)) * 60 * 1.5),
+      temperatureControlled: template.isCold,
+      isHazardous: template.haz,
+      hazardClass: template.hazClass,
+    });
+  }
+  return contracts;
 };
 
 interface GameContextType {
@@ -68,60 +122,101 @@ interface GameContextType {
   repayLoan: (loanId: string, amount: number) => void;
   dismissNotification: (id: string) => void;
   resetGame: () => void;
+  // New onboarding, guide, and marketplace capabilities
+  completeOnboarding: (config: OnboardingConfig) => void;
+  skipOnboarding: () => void;
+  setShowGuide: (show: boolean) => void;
+  buyHubConcession: (hubId: string) => boolean;
+  buyRouteLicense: (routeId: string) => boolean;
+  connectRouteBetweenHubs: (hubAId: string, hubBId: string) => boolean;
+  ferryTruck: (truckId: string, destinationHubId: string) => boolean;
+  restartOnboarding: () => void;
+  refreshAvailableContracts: (paidByPlayer?: boolean) => boolean;
+  buySpokeLocationRoute: (hubId: string, spokeLocationId: string) => boolean;
+  claimAchievementReward: (achievementId: string, cashReward: number, xpReward: number) => boolean;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
 const createInitialState = (): GameState => {
-  // Initial 2 trucks
+  const primaryHubId = 'hub-seattle';
+  const connectedLocationId = 'hub-denver'; // 1 location to connect as hub (High Realism)
+  const activeHubIds = [primaryHubId, connectedLocationId];
+
+  // Configure initial hubs: strictly 1 primary headquarters hub + 1 connected delivery location are unlocked
+  const initialHubs = INITIAL_HUBS.map((hub) => {
+    const isOwned = activeHubIds.includes(hub.id);
+    return {
+      ...hub,
+      isUnlocked: isOwned,
+      isPrimaryBase: hub.id === primaryHubId,
+    };
+  });
+
+  // Configure initial routes: only corridor connecting primary base to the single connected destination is unlocked
+  const initialRoutes = INITIAL_ROUTES.map((route) => {
+    const isOwned =
+      activeHubIds.includes(route.originHubId) &&
+      activeHubIds.includes(route.destinationHubId) &&
+      (route.originHubId === primaryHubId || route.destinationHubId === primaryHubId);
+    return {
+      ...route,
+      isUnlocked: isOwned,
+    };
+  });
+
+  const ownedHubIds = initialHubs.filter((h) => h.isUnlocked).map((h) => h.id);
+  const ownedRouteIds = initialRoutes.filter((r) => r.isUnlocked).map((r) => r.id);
+
+  // Free starter commercial vehicle: MetroFreight Rigid 320 Urban stationed at Seattle primary base
   const initialTrucks: TruckInstance[] = [
     {
       id: 'trk-01',
-      modelId: 'titan-540',
-      vin: '1TTN982H7K002914',
-      plate: 'WA-792-TL',
-      currentHubId: 'hub-seattle',
+      modelId: 'metro-320', // Free starter rigid truck
+      vin: '1MTR320U9K001844',
+      plate: 'WA-320-RG',
+      currentHubId: primaryHubId,
       status: 'idle',
-      odometerKm: 34200,
-      fuelCurrentLiters: 580,
-      adBlueCurrentLiters: 65,
+      odometerKm: 8500,
+      fuelCurrentLiters: 300,
+      adBlueCurrentLiters: 42,
       subsystems: createPristineSubsystems(),
       activeDTCs: [],
       assignedDriverId: 'drv-01',
       activeTripId: null,
-      lastServiceKm: 30000,
+      lastServiceKm: 8000,
       hasAeroPackage: true,
-      hasRetarder: true,
+      hasRetarder: false,
       tireCompound: 'highway_eco',
-      sleeperTier: 'standard_sleeper',
+      sleeperTier: 'day_cab',
       liveryColor: 'obsidian_slate',
       assignedTrailerId: 'trl-01',
       serviceDueKm: 50000,
     },
+  ];
+
+  const initialTrailers: TrailerInstance[] = [
     {
-      id: 'trk-02',
-      modelId: 'strada-460',
-      vin: '4STR460E8M110482',
-      plate: 'IL-415-MX',
-      currentHubId: 'hub-chicago',
-      status: 'idle',
-      odometerKm: 18400,
-      fuelCurrentLiters: 480,
-      adBlueCurrentLiters: 55,
-      subsystems: createPristineSubsystems(),
-      activeDTCs: [],
-      assignedDriverId: 'drv-02',
-      activeTripId: null,
-      lastServiceKm: 15000,
-      hasAeroPackage: true,
-      hasRetarder: true,
-      tireCompound: 'all_weather',
-      sleeperTier: 'deluxe_suite',
-      liveryColor: 'continental_emerald',
-      assignedTrailerId: 'trl-02',
-      serviceDueKm: 40000,
+      ...INITIAL_TRAILERS[0],
+      currentHubId: primaryHubId,
     },
   ];
+
+  const initialDrivers: Driver[] = [
+    {
+      ...INITIAL_DRIVERS[0],
+      homeHubId: primaryHubId,
+      currentHubId: primaryHubId,
+      assignedTruckId: 'trk-01',
+    },
+  ];
+
+  // Generate contracts strictly for the unlocked route
+  const initialContracts = generateContractsForRoutes(
+    initialRoutes.filter((r) => r.isUnlocked),
+    initialHubs,
+    8
+  );
 
   return {
     companyName: 'Apex Continental Freight',
@@ -129,12 +224,12 @@ const createInitialState = (): GameState => {
     simTimeMinutes: 480, // Day 1, 08:00 AM
     simSpeed: 1,
     selectedRegion: 'North America',
-    hubs: INITIAL_HUBS,
-    routes: INITIAL_ROUTES,
+    hubs: initialHubs,
+    routes: initialRoutes,
     trucks: initialTrucks,
-    trailers: INITIAL_TRAILERS,
-    drivers: INITIAL_DRIVERS,
-    availableContracts: INITIAL_CONTRACTS,
+    trailers: initialTrailers,
+    drivers: initialDrivers,
+    availableContracts: initialContracts,
     activeTrips: [],
     ledger: [
       {
@@ -153,7 +248,7 @@ const createInitialState = (): GameState => {
         id: 'notif-welcome',
         simTimeFormatted: 'Day 1 08:00',
         title: 'Operations Online',
-        message: 'Logistics command center initialized. 2 heavy trucks and trailers stationed at Seattle and Chicago ready for dispatch.',
+        message: 'Logistics enterprise initialized. Starter terminal active with 2 connected regional corridors. All other hubs locked until rank promotion.',
         type: 'delivery',
         timestamp: Date.now(),
       },
@@ -162,6 +257,15 @@ const createInitialState = (): GameState => {
     totalFuelBurnedLiters: 0,
     totalKilometersDriven: 0,
     ratingScore: 4.8,
+    playerRank: 1,
+    playerXp: 0,
+    rankTitle: 'Novice Carrier',
+    ownedHubIds,
+    ownedRouteIds,
+    ownedSpokeConnections: [`${primaryHubId}:${connectedLocationId}`],
+    claimedAchievementIds: [],
+    hasCompletedOnboarding: false,
+    showGuide: false,
   };
 };
 
@@ -189,6 +293,25 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  const notifyUser = (title: string, message: string, type: GameEventNotification['type'] = 'maintenance') => {
+    const simDay = Math.floor(stateRef.current.simTimeMinutes / 1440) + 1;
+    const hours = Math.floor((stateRef.current.simTimeMinutes % 1440) / 60);
+    const mins = stateRef.current.simTimeMinutes % 60;
+    const simTimeFormatted = `Day ${simDay} ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    const newNotif: GameEventNotification = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      simTimeFormatted,
+      title,
+      message,
+      type,
+      timestamp: Date.now(),
+    };
+    setState((prev) => ({
+      ...prev,
+      notifications: deduplicateNotifications([newNotif, ...prev.notifications]),
+    }));
+  };
 
   // Persist state to localStorage
   useEffect(() => {
@@ -278,42 +401,39 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return { ...h, fuelPricePerLiter: newPrice };
             });
 
-            // Restock fresh available contracts
-            if (prevState.availableContracts.length < 8) {
-              const randomHubA = updatedHubs[Math.floor(Math.random() * updatedHubs.length)];
-              const randomHubB = updatedHubs.find((h) => h.id !== randomHubA.id && h.region === randomHubA.region) || updatedHubs[0];
-              const cargoTitles = [
-                'Pharmaceutical Cold-Chain Vaccines',
-                'High-Precision CNC Lathes',
-                'Aircraft Jet Engine Components',
-                'Electronics Display Panels',
-                'Organic Citrus & Avocado Produce',
-                'Automotive Transmission Assemblies',
-              ];
-              const randomTitle = cargoTitles[Math.floor(Math.random() * cargoTitles.length)];
-              const isCold = randomTitle.includes('Cold-Chain') || randomTitle.includes('Produce');
-              const weight = Number((10 + Math.random() * 18).toFixed(1));
-              const distEst = 1200;
-              const payout = Math.round(distEst * (3.8 + Math.random() * 2.2));
-
-              const generatedContract: CargoContract = {
-                id: `cnt-${newSimMinutes}-${Math.random().toString(36).substring(2, 6)}`,
-                title: randomTitle,
-                originHubId: randomHubA.id,
-                destinationHubId: randomHubB.id,
-                category: isCold ? 'Refrigerated Food' : 'Heavy Machinery',
-                weightTons: weight,
-                payoutUsd: payout,
-                bonusOnTimeUsd: Math.round(payout * 0.15),
-                penaltyLateUsd: Math.round(payout * 0.3),
-                deadlineMinutes: Math.round((distEst / 85) * 60 * 1.5),
-                temperatureControlled: isCold,
-                isHazardous: false,
-              };
+            // Restock fresh available contracts ONLY for unlocked routes in the active region!
+            const unlockedRoutes = prevState.routes.filter(
+              (r) => r.isUnlocked && prevState.hubs.find((h) => h.id === r.originHubId)?.region === prevState.selectedRegion
+            );
+            if (prevState.availableContracts.length < 8 && unlockedRoutes.length > 0) {
+              const freshContracts = generateContractsForRoutes(unlockedRoutes, updatedHubs, 3);
               prevState = {
                 ...prevState,
-                availableContracts: [...prevState.availableContracts, generatedContract],
+                availableContracts: [...prevState.availableContracts, ...freshContracts],
                 hubs: updatedHubs,
+              };
+            } else {
+              prevState = {
+                ...prevState,
+                hubs: updatedHubs,
+              };
+            }
+          }
+
+          // Periodic commercial freight board auto-refresh (every 180 sim minutes or when < 4 contracts remain)
+          const lastRefreshTime = prevState.lastMarketRefreshSimTime || 0;
+          const shouldAutoRefresh = (newSimMinutes - lastRefreshTime >= 180) || (prevState.availableContracts.length < 4);
+          if (shouldAutoRefresh) {
+            const activeRegionRoutes = prevState.routes.filter(
+              (r) => r.isUnlocked && prevState.hubs.find((h) => h.id === r.originHubId)?.region === prevState.selectedRegion
+            );
+            if (activeRegionRoutes.length > 0) {
+              const freshBids = generateContractsForRoutes(activeRegionRoutes, prevState.hubs, 4);
+              const prunedExisting = prevState.availableContracts.slice(-4);
+              prevState = {
+                ...prevState,
+                availableContracts: [...prunedExisting, ...freshBids],
+                lastMarketRefreshSimTime: newSimMinutes,
               };
             }
           }
@@ -575,6 +695,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
 
           // 3. Process Completed Trips & Financial Payouts
+          let updatedPlayerXp = prevState.playerXp;
+          let updatedPlayerRank = prevState.playerRank;
+          let updatedRankTitle = prevState.rankTitle;
+
           for (const finished of completedTrips) {
             const destHub = prevState.hubs.find((h) => h.id === finished.contract.destinationHubId);
             const isOnTime = finished.elapsedMinutes <= finished.contract.deadlineMinutes;
@@ -589,12 +713,31 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             currentBalance += finalRevenue - driverWage - tolls;
             updatedCargoTons += finished.contract.weightTons;
 
+            // XP and Rank Promotion
+            const earnedXp = Math.round(finished.totalDistanceKm * 0.35 + finished.contract.weightTons * 12);
+            updatedPlayerXp += earnedXp;
+
+            for (const tier of RANK_TIERS) {
+              if (updatedPlayerXp >= tier.xpRequired && tier.rank > updatedPlayerRank) {
+                updatedPlayerRank = tier.rank;
+                updatedRankTitle = tier.title;
+                newNotifications.push({
+                  id: `notif-rank-${tier.rank}-${newSimMinutes}-${Date.now()}`,
+                  simTimeFormatted: timeFormatted,
+                  title: `⭐ PROMOTED: ${tier.title.toUpperCase()} (Rank ${tier.rank})`,
+                  message: `Carrier reputation elevated to Rank ${tier.rank} (${tier.title}). New hub concessions and trade corridors are now unlocked in the Marketplace!`,
+                  type: 'delivery',
+                  timestamp: Date.now(),
+                });
+              }
+            }
+
             newLedgerEntries.push({
               id: `led-deliv-${finished.id}-${newSimMinutes}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
               simDay: currentDay,
               simTimeFormatted: timeFormatted,
               type: 'freight_revenue',
-              description: `Delivered: ${finished.contract.title} (${finished.contract.weightTons}t) to ${destHub?.name || 'Destination'}${isOnTime ? ' (On-Time Bonus)' : ' (Late Penalty)'}`,
+              description: `Delivered: ${finished.contract.title} (${finished.contract.weightTons}t) to ${destHub?.name || 'Destination'}${isOnTime ? ' (On-Time Bonus)' : ' (Late Penalty)'} [+${earnedXp} XP]`,
               amountUsd: finalRevenue,
               runningBalanceUsd: currentBalance,
             });
@@ -688,6 +831,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             totalCargoDeliveredTons: updatedCargoTons,
             totalFuelBurnedLiters: updatedFuelBurned,
             totalKilometersDriven: updatedKmDriven,
+            playerRank: updatedPlayerRank,
+            playerXp: updatedPlayerXp,
+            rankTitle: updatedRankTitle,
           };
         });
       });
@@ -718,20 +864,41 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (trailerId) {
       const trailer = state.trailers.find((tr) => tr.id === trailerId);
       if (!trailer || trailer.status !== 'idle') {
-        alert('Selected trailer is currently en route or unavailable.');
+        notifyUser('Trailer Unavailable', 'Selected trailer is currently en route or unavailable.', 'maintenance');
         return false;
       }
     }
 
     // Check truck fuel capacity & range
     if (truck.fuelCurrentLiters < 100) {
-      alert(`Truck ${truck.plate} has low fuel (${Math.round(truck.fuelCurrentLiters)}L). Please refuel at hub depot before departure.`);
+      notifyUser('Low Fuel Warning', `Truck ${truck.plate} has low fuel (${Math.round(truck.fuelCurrentLiters)}L). Please refuel at hub depot before departure.`, 'maintenance');
       return false;
     }
 
     // Check hazardous cert
     if (contract.isHazardous && !driver.stats.hazmatCert) {
-      alert(`Driver ${driver.name} lacks Hazardous Materials (ADR/HAZMAT) certification required for this cargo.`);
+      notifyUser('Certification Missing', `Driver ${driver.name} lacks Hazardous Materials (ADR/HAZMAT) certification required for this cargo.`, 'driver');
+      return false;
+    }
+
+    // Vehicle combination legal payload limits (High Realism)
+    const truckModel = TRUCK_MODELS.find((m) => m.id === truck.modelId);
+    const trailerInstance = trailerId ? state.trailers.find((tr) => tr.id === trailerId) : null;
+    const trailerModel = trailerInstance ? TRAILER_MODELS.find((tm) => tm.id === trailerInstance.modelId) : null;
+
+    const truckMaxTons = (truckModel?.specs.maxPayloadKg || 24000) / 1000;
+    let maxAllowedPayloadTons = truckMaxTons;
+    if (trailerModel) {
+      const trailerMaxTons = trailerModel.maxPayloadKg / 1000;
+      maxAllowedPayloadTons = Math.min(truckMaxTons, trailerMaxTons);
+    }
+
+    if (contract.weightTons > maxAllowedPayloadTons) {
+      notifyUser(
+        'Gross Overload Violation',
+        `GVWR Overload: Consignment weight (${contract.weightTons}t) exceeds legal rated capacity (${maxAllowedPayloadTons}t max). Upgrade to a multi-axle heavy hauler or heavy machinery lowbed.`,
+        'breakdown'
+      );
       return false;
     }
 
@@ -856,7 +1023,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (prev.balanceUsd < cost) {
-        alert('Insufficient company capital for this maintenance procedure.');
+        notifyUser('Insufficient Funds', 'Insufficient company capital for this maintenance procedure.', 'finance');
         return prev;
       }
 
@@ -913,7 +1080,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const totalCost = model.basePriceUsd + aeroCost;
 
     if (state.balanceUsd < totalCost) {
-      alert(`Insufficient funds. Price is $${totalCost.toLocaleString()}, but treasury holds $${state.balanceUsd.toLocaleString()}. Consider taking an equipment loan.`);
+      notifyUser('Insufficient Capital', `Price is $${totalCost.toLocaleString()}, but treasury holds $${state.balanceUsd.toLocaleString()}. Consider taking an equipment loan.`, 'finance');
       return false;
     }
 
@@ -995,7 +1162,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cashRequired = isLease ? Math.round(totalCost * 0.20) : totalCost;
 
     if (state.balanceUsd < cashRequired) {
-      alert(`Insufficient funds. ${isLease ? '20% Lease Down Payment is' : 'Acquisition cost is'} $${cashRequired.toLocaleString()}, but treasury holds $${state.balanceUsd.toLocaleString()}.`);
+      notifyUser('Insufficient Capital', `${isLease ? '20% Lease Down Payment is' : 'Acquisition cost is'} $${cashRequired.toLocaleString()}, but treasury holds $${state.balanceUsd.toLocaleString()}.`, 'finance');
       return false;
     }
 
@@ -1104,7 +1271,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cashRequired = isLease ? Math.round(totalCost * 0.20) : totalCost;
 
     if (state.balanceUsd < cashRequired) {
-      alert(`Insufficient funds. ${isLease ? '20% Lease Down Payment is' : 'Trailer price is'} $${cashRequired.toLocaleString()}, but treasury holds $${state.balanceUsd.toLocaleString()}.`);
+      notifyUser('Insufficient Capital', `${isLease ? '20% Lease Down Payment is' : 'Trailer price is'} $${cashRequired.toLocaleString()}, but treasury holds $${state.balanceUsd.toLocaleString()}.`, 'finance');
       return false;
     }
 
@@ -1273,7 +1440,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const hireDriver = (driverData: Partial<Driver>): boolean => {
     const hiringBonus = 2500;
     if (state.balanceUsd < hiringBonus) {
-      alert('Insufficient funds for driver onboarding and recruitment stipend ($2,500).');
+      notifyUser('Insufficient Funds', 'Insufficient funds for driver onboarding and recruitment stipend ($2,500).', 'finance');
       return false;
     }
 
@@ -1357,7 +1524,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cost = costMap[certType];
 
     if (state.balanceUsd < cost) {
-      alert(`Insufficient funds for this certification course ($${cost.toLocaleString()}).`);
+      notifyUser('Insufficient Funds', `Insufficient funds for this certification course ($${cost.toLocaleString()}).`, 'finance');
       return false;
     }
 
@@ -1409,7 +1576,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (state.balanceUsd < cost) {
-      alert(`Insufficient funds for infrastructure upgrade ($${cost.toLocaleString()}).`);
+      notifyUser('Insufficient Capital', `Insufficient funds for infrastructure upgrade ($${cost.toLocaleString()}).`, 'finance');
       return false;
     }
 
@@ -1458,7 +1625,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const fuelCost = Math.round(toPump * hub.fuelPricePerLiter);
     if (state.balanceUsd < fuelCost) {
-      alert('Insufficient funds to fill fuel tanks.');
+      notifyUser('Insufficient Capital', 'Insufficient company funds to bunker fuel tanks.', 'finance');
       return false;
     }
 
@@ -1530,7 +1697,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const repaySum = Math.min(amount, loan.remainingBalanceUsd);
     if (state.balanceUsd < repaySum) {
-      alert('Insufficient funds to execute loan repayment.');
+      notifyUser('Insufficient Capital', 'Insufficient company funds to execute loan repayment.', 'finance');
       return;
     }
 
@@ -1558,6 +1725,703 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   };
 
+  const completeOnboarding = (config: OnboardingConfig) => {
+    const primaryHubId = config.primaryHubId;
+    const connectedLocationId =
+      config.connectedLocationId ||
+      (config.connectedHubIds && config.connectedHubIds[0]) ||
+      (config.region === 'Europe' ? 'hub-hamburg' : 'hub-denver');
+    const activeHubIds = [primaryHubId, connectedLocationId];
+
+    const updatedHubs = INITIAL_HUBS.map((hub) => {
+      const isOwned = activeHubIds.includes(hub.id);
+      return {
+        ...hub,
+        isUnlocked: isOwned,
+        isPrimaryBase: hub.id === primaryHubId,
+      };
+    });
+
+    const updatedRoutes = INITIAL_ROUTES.map((route) => {
+      const isOwned =
+        activeHubIds.includes(route.originHubId) &&
+        activeHubIds.includes(route.destinationHubId) &&
+        (route.originHubId === primaryHubId || route.destinationHubId === primaryHubId);
+      return {
+        ...route,
+        isUnlocked: isOwned,
+      };
+    });
+
+    const starterTruckModel = TRUCK_MODELS.find((m) => m.id === config.starterTruckModelId) || TRUCK_MODELS[0];
+    const starterTrailerModel = TRAILER_MODELS.find((m) => m.id === config.starterTrailerModelId) || TRAILER_MODELS[0];
+
+    const starterTruck: TruckInstance = {
+      id: 'trk-01',
+      modelId: starterTruckModel.id,
+      vin: `1${starterTruckModel.id.toUpperCase().slice(0, 3)}889K001`,
+      plate: config.region === 'Europe' ? 'EU-792-HM' : 'WA-792-HM',
+      currentHubId: primaryHubId,
+      status: 'idle',
+      odometerKm: 24000,
+      fuelCurrentLiters: starterTruckModel.specs.fuelTankCapacityLiters * 0.95,
+      adBlueCurrentLiters: starterTruckModel.specs.adBlueTankLiters * 0.9,
+      subsystems: createPristineSubsystems(),
+      activeDTCs: [],
+      assignedDriverId: 'drv-01',
+      activeTripId: null,
+      lastServiceKm: 20000,
+      hasAeroPackage: true,
+      hasRetarder: true,
+      tireCompound: 'highway_eco',
+      sleeperTier: 'standard_sleeper',
+      liveryColor: config.starterLivery,
+      assignedTrailerId: 'trl-01',
+      serviceDueKm: 50000,
+    };
+
+    const starterTrailer: TrailerInstance = {
+      id: 'trl-01',
+      modelId: starterTrailerModel.id,
+      serialNumber: `AH-${Math.floor(10000 + Math.random() * 90000)}`,
+      currentHubId: primaryHubId,
+      status: 'idle',
+      odometerKm: 12000,
+      hasAeroSkirts: true,
+      hasReeferUnit: starterTrailerModel.supportsReeferUnit,
+      reeferFuelCurrentLiters: starterTrailerModel.supportsReeferUnit ? 180 : 0,
+      tireCompound: 'highway_eco',
+      assignedTruckId: 'trk-01',
+      assignedTripId: null,
+    };
+
+    const starterDriver: Driver = {
+      id: 'drv-01',
+      name: config.region === 'Europe' ? 'Klaus Lindemann' : 'Marcus Vance',
+      avatar:
+        config.region === 'Europe'
+          ? 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80'
+          : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+      experienceYears: 12,
+      wagePerKmUsd: 0.46,
+      dailyRetainerUsd: 115,
+      homeHubId: primaryHubId,
+      currentHubId: primaryHubId,
+      assignedTruckId: 'trk-01',
+      hosStatus: 'off_duty',
+      continuousDriveMinutes: 0,
+      dailyDriveMinutes: 0,
+      currentRestMinutesRemaining: 0,
+      stats: {
+        ecoDrivingRating: 92,
+        mechanicalSympathy: 94,
+        mountainCert: true,
+        winterCert: true,
+        hazmatCert: true,
+        fatiguePercent: 0,
+        totalKmDriven: 110000,
+        deliveriesCompleted: 85,
+        safetyScore: 98,
+      },
+    };
+
+    const unlockedRouteList = updatedRoutes.filter((r) => r.isUnlocked);
+    const starterContracts = generateContractsForRoutes(unlockedRouteList, updatedHubs, 8);
+
+    const primaryHub = updatedHubs.find((h) => h.id === primaryHubId);
+    const connHub = updatedHubs.find((h) => h.id === connectedLocationId);
+
+    setState((prev) => ({
+      ...prev,
+      companyName: config.companyName || prev.companyName,
+      selectedRegion: config.region,
+      hubs: updatedHubs,
+      routes: updatedRoutes,
+      ownedHubIds: activeHubIds,
+      ownedRouteIds: unlockedRouteList.map((r) => r.id),
+      trucks: [starterTruck],
+      trailers: [starterTrailer],
+      drivers: [starterDriver],
+      availableContracts: starterContracts,
+      balanceUsd: 135000,
+      playerRank: 1,
+      playerXp: 0,
+      rankTitle: 'Novice Carrier',
+      hasCompletedOnboarding: true,
+      showGuide: true,
+      lastMarketRefreshSimTime: prev.simTimeMinutes,
+      ledger: [
+        {
+          id: `led-launch-${Date.now()}`,
+          simDay: 1,
+          simTimeFormatted: 'Day 1 08:00',
+          type: 'equipment_purchase',
+          description: `Enterprise incorporation & fleet mobilization at ${primaryHub?.name}`,
+          amountUsd: 135000,
+          runningBalanceUsd: 135000,
+        },
+      ],
+      notifications: deduplicateNotifications([
+        {
+          id: `notif-launch-${Date.now()}`,
+          simTimeFormatted: 'Day 1 08:00',
+          title: 'Carrier Network Mobilized',
+          message: `Network launched with headquarters at ${primaryHub?.name} connected to ${connHub?.name}. All other regional corridors are locked awaiting rank expansion.`,
+          type: 'delivery',
+          timestamp: Date.now(),
+        },
+      ]),
+    }));
+  };
+
+  const skipOnboarding = () => {
+    setState((prev) => ({
+      ...prev,
+      hasCompletedOnboarding: true,
+      showGuide: false,
+    }));
+  };
+
+  const setShowGuide = (show: boolean) => {
+    setState((prev) => ({ ...prev, showGuide: show }));
+  };
+
+  const buyHubConcession = (hubId: string): boolean => {
+    const hub = state.hubs.find((h) => h.id === hubId);
+    if (!hub) return false;
+    if (hub.isUnlocked) {
+      notifyUser('Concession Active', `${hub.name} is already part of your active logistics network.`, 'delivery');
+      return true;
+    }
+
+    if (state.playerRank < hub.requiredRank) {
+      notifyUser(
+        'Rank Restriction',
+        `Access restricted: Requires ${hub.rankTitle} (Company Rank ${hub.requiredRank}). Current rank: Rank ${state.playerRank} (${state.rankTitle}). Complete more deliveries to level up.`,
+        'finance'
+      );
+      return false;
+    }
+
+    if (state.balanceUsd < hub.purchasePriceUsd) {
+      notifyUser(
+        'Insufficient Treasury',
+        `Insufficient company treasury. Hub concession costs $${hub.purchasePriceUsd.toLocaleString()}, but available capital is $${state.balanceUsd.toLocaleString()}.`,
+        'finance'
+      );
+      return false;
+    }
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd - hub.purchasePriceUsd;
+
+    // Check which corridors now connect this hub to other owned hubs
+    const currentlyOwnedHubIds = [...state.ownedHubIds, hubId];
+    const newlyUnlockedRouteIds: string[] = [];
+
+    const updatedRoutes = state.routes.map((route) => {
+      if (
+        (route.originHubId === hubId && currentlyOwnedHubIds.includes(route.destinationHubId)) ||
+        (route.destinationHubId === hubId && currentlyOwnedHubIds.includes(route.originHubId))
+      ) {
+        newlyUnlockedRouteIds.push(route.id);
+        return { ...route, isUnlocked: true };
+      }
+      return route;
+    });
+
+    const updatedHubs = state.hubs.map((h) => (h.id === hubId ? { ...h, isUnlocked: true } : h));
+    const allUnlockedRoutes = updatedRoutes.filter((r) => r.isUnlocked);
+    const newContracts = generateContractsForRoutes(allUnlockedRoutes, updatedHubs, 5);
+
+    setState((prev) => ({
+      ...prev,
+      balanceUsd: nextBal,
+      hubs: updatedHubs,
+      routes: updatedRoutes,
+      ownedHubIds: currentlyOwnedHubIds,
+      ownedRouteIds: Array.from(new Set([...prev.ownedRouteIds, ...newlyUnlockedRouteIds])),
+      availableContracts: [...prev.availableContracts, ...newContracts],
+      ledger: [
+        {
+          id: `led-hub-buy-${hubId}-${Date.now()}`,
+          simDay,
+          simTimeFormatted: `Day ${simDay}`,
+          type: 'depot_upgrade',
+          description: `Acquired commercial logistics concession: ${hub.name}`,
+          amountUsd: -hub.purchasePriceUsd,
+          runningBalanceUsd: nextBal,
+        },
+        ...prev.ledger,
+      ],
+      notifications: deduplicateNotifications([
+        {
+          id: `notif-hub-buy-${hubId}-${Date.now()}`,
+          simTimeFormatted: `Day ${simDay}`,
+          title: '⭐ New Hub Concession Acquired',
+          message: `${hub.name} terminal acquired! ${newlyUnlockedRouteIds.length} trade corridors opened with new freight consignments.`,
+          type: 'finance',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ]),
+    }));
+
+    return true;
+  };
+
+  const buyRouteLicense = (routeId: string): boolean => {
+    const route = state.routes.find((r) => r.id === routeId);
+    if (!route) return false;
+    if (route.isUnlocked) {
+      notifyUser('Corridor Active', `${route.name} is already licensed in your active corridor network.`, 'delivery');
+      return true;
+    }
+
+    const originHub = state.hubs.find((h) => h.id === route.originHubId);
+    const destHub = state.hubs.find((h) => h.id === route.destinationHubId);
+
+    if (!originHub?.isUnlocked || !destHub?.isUnlocked) {
+      notifyUser(
+        'Terminal Concession Required',
+        `Prerequisite unfulfilled: You must own concessions for both ${originHub?.name || 'Origin'} and ${destHub?.name || 'Destination'} before operating this corridor.`,
+        'finance'
+      );
+      return false;
+    }
+
+    if (state.playerRank < route.requiredRank) {
+      notifyUser(
+        'Rank Restriction',
+        `Requires Rank ${route.requiredRank} to license this commercial freight corridor. Current rank: Rank ${state.playerRank}.`,
+        'finance'
+      );
+      return false;
+    }
+
+    if (state.balanceUsd < route.licenseFeeUsd) {
+      notifyUser(
+        'Insufficient Capital',
+        `Insufficient capital to purchase corridor operating license ($${route.licenseFeeUsd.toLocaleString()}).`,
+        'finance'
+      );
+      return false;
+    }
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd - route.licenseFeeUsd;
+
+    // Unlock both forward and reverse corridor
+    const updatedRoutes = state.routes.map((r) => {
+      if (
+        r.id === routeId ||
+        (r.originHubId === route.destinationHubId && r.destinationHubId === route.originHubId)
+      ) {
+        return { ...r, isUnlocked: true };
+      }
+      return r;
+    });
+
+    const newlyActiveRoutes = updatedRoutes.filter(
+      (r) =>
+        (r.originHubId === route.originHubId && r.destinationHubId === route.destinationHubId) ||
+        (r.originHubId === route.destinationHubId && r.destinationHubId === route.originHubId)
+    );
+
+    const freshLaneContracts = generateContractsForRoutes(newlyActiveRoutes, state.hubs, 4);
+
+    setState((prev) => ({
+      ...prev,
+      balanceUsd: nextBal,
+      routes: updatedRoutes,
+      ownedRouteIds: Array.from(new Set([...prev.ownedRouteIds, route.id, ...newlyActiveRoutes.map((r) => r.id)])),
+      availableContracts: [...prev.availableContracts, ...freshLaneContracts],
+      ledger: [
+        {
+          id: `led-route-buy-${routeId}-${Date.now()}`,
+          simDay,
+          simTimeFormatted: `Day ${simDay}`,
+          type: 'depot_upgrade',
+          description: `Acquired operating license for ${route.name}`,
+          amountUsd: -route.licenseFeeUsd,
+          runningBalanceUsd: nextBal,
+        },
+        ...prev.ledger,
+      ],
+      notifications: deduplicateNotifications([
+        {
+          id: `notif-route-buy-${routeId}-${Date.now()}`,
+          simTimeFormatted: `Day ${simDay}`,
+          title: 'Corridor Licensed',
+          message: `${route.name} (${route.distanceKm} km) is now open for scheduled freight dispatches.`,
+          type: 'delivery',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ]),
+    }));
+
+    return true;
+  };
+
+  const buySpokeLocationRoute = (hubId: string, spokeLocationId: string): boolean => {
+    const hub = state.hubs.find((h) => h.id === hubId);
+    const spoke = state.hubs.find((h) => h.id === spokeLocationId);
+    if (!hub || !spoke) return false;
+
+    if (!hub.isUnlocked) {
+      notifyUser('Terminal Locked', `Your base hub (${hub.name}) must be unlocked first.`, 'finance');
+      return false;
+    }
+
+    const connectionKey = `${hubId}:${spokeLocationId}`;
+    if (state.ownedSpokeConnections && state.ownedSpokeConnections.includes(connectionKey)) {
+      notifyUser('Already Connected', `${spoke.name} is already connected and purchased for ${hub.name}.`, 'delivery');
+      return true;
+    }
+
+    const cost = spoke.purchasePriceUsd || 18000;
+    if (state.balanceUsd < cost) {
+      notifyUser('Insufficient Treasury', `Corridor purchase costs $${cost.toLocaleString()}, but treasury has $${state.balanceUsd.toLocaleString()}.`, 'finance');
+      return false;
+    }
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd - cost;
+
+    const existingRoute = state.routes.find(
+      (r) =>
+        (r.originHubId === hubId && r.destinationHubId === spokeLocationId) ||
+        (r.originHubId === spokeLocationId && r.destinationHubId === hubId)
+    );
+
+    let updatedRoutes = state.routes;
+    if (existingRoute) {
+      updatedRoutes = state.routes.map((r) => (r.id === existingRoute.id ? { ...r, isUnlocked: true } : r));
+    } else {
+      const dx = hub.coord.x - spoke.coord.x;
+      const dy = hub.coord.y - spoke.coord.y;
+      const dist = Math.max(150, Math.round(Math.sqrt(dx * dx + dy * dy) * 3.2));
+      const newRoute: RouteCorridor = {
+        id: `route-${hub.code.toLowerCase()}-${spoke.code.toLowerCase()}-${Date.now()}`,
+        originHubId: hubId,
+        destinationHubId: spokeLocationId,
+        name: `${hub.name.split(' ')[0]} - ${spoke.name.split(' ')[0]} Corridor`,
+        distanceKm: dist,
+        roadType: 'Interstate Highway',
+        baseSpeedLimitKmh: 105,
+        avgElevationGradePct: 1.0,
+        maxGradePct: 5.0,
+        tollCostUsd: 25,
+        waypoints: [
+          { name: hub.name, coord: hub.coord, elevationMeters: 50 },
+          { name: spoke.name, coord: spoke.coord, elevationMeters: 40 },
+        ],
+        hazardRisk: 0.12,
+        isUnlocked: true,
+        licenseFeeUsd: cost,
+        requiredRank: 1,
+        trafficRateScore: spoke.trafficDemandScore,
+      };
+      updatedRoutes = [...state.routes, newRoute];
+    }
+
+    const allUnlockedRoutes = updatedRoutes.filter((r) => r.isUnlocked);
+    const newContracts = generateContractsForRoutes(allUnlockedRoutes, state.hubs, 4);
+
+    setState((prev) => ({
+      ...prev,
+      balanceUsd: nextBal,
+      routes: updatedRoutes,
+      ownedSpokeConnections: [...(prev.ownedSpokeConnections || []), connectionKey],
+      availableContracts: [...newContracts, ...prev.availableContracts].slice(0, 35),
+      ledger: [
+        {
+          id: `led-spoke-${connectionKey}-${Date.now()}`,
+          simDay,
+          simTimeFormatted: `Day ${simDay}`,
+          type: 'equipment_purchase',
+          description: `Acquired delivery route & terminal rights: ${spoke.name} connected to ${hub.name}`,
+          amountUsd: -cost,
+          runningBalanceUsd: nextBal,
+        },
+        ...prev.ledger,
+      ],
+      notifications: [
+        {
+          id: `notif-spoke-${Date.now()}`,
+          simTimeFormatted: `Day ${simDay}`,
+          title: 'Delivery Route Acquired',
+          message: `${spoke.name} successfully connected to ${hub.name}. New freight contracts available on this route.`,
+          type: 'delivery',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ],
+    }));
+
+    notifyUser('Route Connected', `${spoke.name} is now connected to ${hub.name} terminal network.`, 'delivery');
+    return true;
+  };
+
+  const claimAchievementReward = (achievementId: string, cashReward: number, xpReward: number): boolean => {
+    if (state.claimedAchievementIds && state.claimedAchievementIds.includes(achievementId)) {
+      return false;
+    }
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd + cashReward;
+    const nextXp = state.playerXp + xpReward;
+
+    setState((prev) => ({
+      ...prev,
+      balanceUsd: nextBal,
+      playerXp: nextXp,
+      claimedAchievementIds: [...(prev.claimedAchievementIds || []), achievementId],
+      ledger: [
+        {
+          id: `led-ach-${achievementId}-${Date.now()}`,
+          simDay,
+          simTimeFormatted: `Day ${simDay}`,
+          type: 'freight_revenue',
+          description: `Achievement milestone reward: $${cashReward.toLocaleString()} & ${xpReward} XP`,
+          amountUsd: cashReward,
+          runningBalanceUsd: nextBal,
+        },
+        ...prev.ledger,
+      ],
+      notifications: [
+        {
+          id: `notif-ach-${Date.now()}`,
+          simTimeFormatted: `Day ${simDay}`,
+          title: 'Achievement Reward Claimed',
+          message: `Successfully claimed reward! Received $${cashReward.toLocaleString()} and ${xpReward} XP.`,
+          type: 'delivery',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ],
+    }));
+
+    notifyUser('Reward Claimed', `Awarded $${cashReward.toLocaleString()} and ${xpReward} XP!`, 'delivery');
+    return true;
+  };
+
+  const ferryTruck = (truckId: string, destinationHubId: string): boolean => {
+    const truck = state.trucks.find((t) => t.id === truckId);
+    if (!truck || truck.status !== 'idle') {
+      notifyUser('Repositioning Notice', 'Only idle trucks stationed in a terminal yard can be repositioned.', 'maintenance');
+      return false;
+    }
+
+    if (truck.currentHubId === destinationHubId) {
+      notifyUser('Repositioning Notice', 'Truck is already stationed at this terminal.', 'delivery');
+      return true;
+    }
+
+    const destHub = state.hubs.find((h) => h.id === destinationHubId);
+    if (!destHub || !destHub.isUnlocked) {
+      notifyUser('Terminal Locked', 'Repositioning destination must be an unlocked terminal in your network.', 'finance');
+      return false;
+    }
+
+    const curHub = state.hubs.find((h) => h.id === truck.currentHubId);
+    const ferryCost = 650;
+
+    if (state.balanceUsd < ferryCost) {
+      notifyUser('Insufficient Treasury', `Insufficient funds for deadhead ferry driver & fuel fee ($${ferryCost}).`, 'finance');
+      return false;
+    }
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd - ferryCost;
+
+    setState((prev) => ({
+      ...prev,
+      balanceUsd: nextBal,
+      trucks: prev.trucks.map((t) => (t.id === truckId ? { ...t, currentHubId: destinationHubId } : t)),
+      trailers: prev.trailers.map((tr) => (tr.assignedTruckId === truckId ? { ...tr, currentHubId: destinationHubId } : tr)),
+      drivers: prev.drivers.map((d) => (d.assignedTruckId === truckId ? { ...d, currentHubId: destinationHubId } : d)),
+      ledger: [
+        {
+          id: `led-ferry-${truckId}-${Date.now()}`,
+          simDay,
+          simTimeFormatted: `Day ${simDay}`,
+          type: 'toll_expense',
+          description: `Deadhead repositioning fee: ${truck.plate} from ${curHub?.name.split(' ')[0] || 'Origin'} to ${destHub.name.split(' ')[0]}`,
+          amountUsd: -ferryCost,
+          runningBalanceUsd: nextBal,
+        },
+        ...prev.ledger,
+      ],
+      notifications: deduplicateNotifications([
+        {
+          id: `notif-ferry-${truckId}-${Date.now()}`,
+          simTimeFormatted: `Day ${simDay}`,
+          title: 'Truck Repositioned',
+          message: `${truck.plate} successfully ferried to ${destHub.name} yard and is ready for dispatch.`,
+          type: 'delivery',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ]),
+    }));
+
+    return true;
+  };
+
+  const connectRouteBetweenHubs = (hubAId: string, hubBId: string): boolean => {
+    if (hubAId === hubBId) {
+      notifyUser('Routing Notice', 'Origin and destination hubs must be distinct.', 'maintenance');
+      return false;
+    }
+    const hubA = state.hubs.find((h) => h.id === hubAId);
+    const hubB = state.hubs.find((h) => h.id === hubBId);
+    if (!hubA || !hubB) return false;
+
+    if (!hubA.isUnlocked || !hubB.isUnlocked) {
+      notifyUser(
+        'Terminal Concession Required',
+        `Both terminals (${hubA.name} and ${hubB.name}) must be unlocked in your network before connecting a route between them.`,
+        'finance'
+      );
+      return false;
+    }
+
+    // Check if route already exists in state
+    const existingRoute = state.routes.find(
+      (r) =>
+        (r.originHubId === hubAId && r.destinationHubId === hubBId) ||
+        (r.originHubId === hubBId && r.destinationHubId === hubAId)
+    );
+
+    if (existingRoute) {
+      return buyRouteLicense(existingRoute.id);
+    }
+
+    // Dynamically calculate corridor properties if no static route exists
+    const dx = hubA.coord.x - hubB.coord.x;
+    const dy = hubA.coord.y - hubB.coord.y;
+    const estDistance = Math.max(300, Math.round(Math.sqrt(dx * dx + dy * dy) * 3.5));
+    const licenseFeeUsd = Math.round(estDistance * 18);
+    const requiredRank = Math.min(5, Math.max(1, Math.floor(estDistance / 700) + 1));
+
+    if (state.playerRank < requiredRank) {
+      notifyUser(
+        'Rank Restriction',
+        `Connecting corridor between ${hubA.code} and ${hubB.code} requires Rank ${requiredRank}. Current: Rank ${state.playerRank} (${state.rankTitle}).`,
+        'finance'
+      );
+      return false;
+    }
+
+    if (state.balanceUsd < licenseFeeUsd) {
+      notifyUser(
+        'Insufficient Treasury',
+        `Capital required: $${licenseFeeUsd.toLocaleString()}, but company treasury has $${state.balanceUsd.toLocaleString()}.`,
+        'finance'
+      );
+      return false;
+    }
+
+    const forwardRouteId = `route-${hubA.code.toLowerCase()}-${hubB.code.toLowerCase()}`;
+    const reverseRouteId = `route-${hubB.code.toLowerCase()}-${hubA.code.toLowerCase()}`;
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd - licenseFeeUsd;
+
+    const waypointsForward = [
+      { name: hubA.name, coord: hubA.coord, elevationMeters: 50 },
+      { name: `${hubA.name} / ${hubB.name} Midpoint`, coord: { x: (hubA.coord.x + hubB.coord.x) / 2, y: (hubA.coord.y + hubB.coord.y) / 2 }, elevationMeters: 100 },
+      { name: hubB.name, coord: hubB.coord, elevationMeters: 50 },
+    ];
+    const waypointsReverse = [
+      { name: hubB.name, coord: hubB.coord, elevationMeters: 50 },
+      { name: `${hubB.name} / ${hubA.name} Midpoint`, coord: { x: (hubB.coord.x + hubA.coord.x) / 2, y: (hubB.coord.y + hubA.coord.y) / 2 }, elevationMeters: 100 },
+      { name: hubA.name, coord: hubA.coord, elevationMeters: 50 },
+    ];
+
+    const newForwardRoute: RouteCorridor = {
+      id: forwardRouteId,
+      originHubId: hubAId,
+      destinationHubId: hubBId,
+      name: `${hubA.name.split(' ')[0]} - ${hubB.name.split(' ')[0]} Commercial Connector`,
+      distanceKm: estDistance,
+      roadType: 'Interstate Highway',
+      baseSpeedLimitKmh: hubA.region === 'Europe' ? 90 : 105,
+      avgElevationGradePct: 1.2,
+      maxGradePct: 4.5,
+      tollCostUsd: Math.round(estDistance * 0.08),
+      waypoints: waypointsForward,
+      hazardRisk: 0.15,
+      isUnlocked: true,
+      licenseFeeUsd,
+      requiredRank,
+      trafficRateScore: Math.round((hubA.trafficDemandScore + hubB.trafficDemandScore) / 2),
+    };
+
+    const newReverseRoute: RouteCorridor = {
+      id: reverseRouteId,
+      originHubId: hubBId,
+      destinationHubId: hubAId,
+      name: `${hubB.name.split(' ')[0]} - ${hubA.name.split(' ')[0]} Commercial Connector (Return)`,
+      distanceKm: estDistance,
+      roadType: 'Interstate Highway',
+      baseSpeedLimitKmh: hubA.region === 'Europe' ? 90 : 105,
+      avgElevationGradePct: -1.2,
+      maxGradePct: 4.5,
+      tollCostUsd: Math.round(estDistance * 0.08),
+      waypoints: waypointsReverse,
+      hazardRisk: 0.15,
+      isUnlocked: true,
+      licenseFeeUsd,
+      requiredRank,
+      trafficRateScore: Math.round((hubA.trafficDemandScore + hubB.trafficDemandScore) / 2),
+    };
+
+    const updatedRoutes = [...state.routes, newForwardRoute, newReverseRoute];
+    const newContracts = generateContractsForRoutes([newForwardRoute, newReverseRoute], state.hubs, 4);
+
+    setState((prev) => ({
+      ...prev,
+      balanceUsd: nextBal,
+      routes: updatedRoutes,
+      ownedRouteIds: Array.from(new Set([...prev.ownedRouteIds, forwardRouteId, reverseRouteId])),
+      availableContracts: [...prev.availableContracts, ...newContracts],
+      ledger: [
+        {
+          id: `led-route-custom-${Date.now()}`,
+          simDay,
+          simTimeFormatted: `Day ${simDay}`,
+          type: 'depot_upgrade',
+          description: `Commissioned custom corridor: ${hubA.name.split(' ')[0]} ⇄ ${hubB.name.split(' ')[0]}`,
+          amountUsd: -licenseFeeUsd,
+          runningBalanceUsd: nextBal,
+        },
+        ...prev.ledger,
+      ],
+      notifications: deduplicateNotifications([
+        {
+          id: `notif-custom-route-${Date.now()}`,
+          simTimeFormatted: `Day ${simDay}`,
+          title: 'New Commercial Route Connected',
+          message: `Corridor commissioned between ${hubA.name} and ${hubB.name} (${estDistance} km). Spot freight generated.`,
+          type: 'delivery',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ]),
+    }));
+
+    return true;
+  };
+
+  const restartOnboarding = () => {
+    setState((prev) => ({
+      ...prev,
+      hasCompletedOnboarding: false,
+      showGuide: false,
+    }));
+  };
+
   const dismissNotification = (id: string) => {
     setState((prev) => ({
       ...prev,
@@ -1566,10 +2430,73 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const resetGame = () => {
-    if (confirm('Are you sure you want to reset your fleet and company progress?')) {
+    try {
       localStorage.removeItem(STORAGE_KEY);
       setState(createInitialState());
+    } catch (e) {
+      console.error('Reset error', e);
     }
+  };
+
+  const refreshAvailableContracts = (paidByPlayer: boolean = false): boolean => {
+    const unlockedRoutes = state.routes.filter(
+      (r) => r.isUnlocked && state.hubs.find((h) => h.id === r.originHubId)?.region === state.selectedRegion
+    );
+
+    if (unlockedRoutes.length === 0) {
+      notifyUser('No Active Corridors', 'No trade corridors are currently unlocked in this region to generate freight contracts.', 'delivery');
+      return false;
+    }
+
+    const brokerFee = 1500;
+    if (paidByPlayer && state.balanceUsd < brokerFee) {
+      notifyUser('Insufficient Treasury', `Expedited dispatch board refresh requires $${brokerFee.toLocaleString()} in brokerage fees. Available: $${state.balanceUsd.toLocaleString()}`, 'finance');
+      return false;
+    }
+
+    const freshContracts = generateContractsForRoutes(unlockedRoutes, state.hubs, 10);
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = paidByPlayer ? state.balanceUsd - brokerFee : state.balanceUsd;
+
+    setState((prev) => {
+      const newLedger = paidByPlayer
+        ? [
+            {
+              id: `led-refresh-${Date.now()}`,
+              simDay,
+              simTimeFormatted: `Day ${simDay}`,
+              type: 'broker_fee' as const,
+              description: 'Expedited Commercial Freight Board Refresh Brokerage Fee',
+              amountUsd: -brokerFee,
+              runningBalanceUsd: nextBal,
+            },
+            ...prev.ledger,
+          ]
+        : prev.ledger;
+
+      return {
+        ...prev,
+        balanceUsd: nextBal,
+        availableContracts: freshContracts,
+        ledger: newLedger,
+        lastMarketRefreshSimTime: prev.simTimeMinutes,
+        notifications: deduplicateNotifications([
+          {
+            id: `notif-refresh-${Date.now()}`,
+            simTimeFormatted: `Day ${simDay}`,
+            title: 'Freight Exchange Board Refreshed',
+            message: paidByPlayer
+              ? `Expedited brokerage dispatch board refreshed with ${freshContracts.length} newly tendered commercial consignments ($${brokerFee.toLocaleString()} brokerage fee paid).`
+              : `Freight dispatch board replenished with ${freshContracts.length} available consignments.`,
+            type: 'delivery',
+            timestamp: Date.now(),
+          },
+          ...prev.notifications,
+        ]),
+      };
+    });
+
+    return true;
   };
 
   return (
@@ -1595,6 +2522,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         repayLoan,
         dismissNotification,
         resetGame,
+        completeOnboarding,
+        skipOnboarding,
+        setShowGuide,
+        buyHubConcession,
+        buyRouteLicense,
+        connectRouteBetweenHubs,
+        ferryTruck,
+        restartOnboarding,
+        refreshAvailableContracts,
+        buySpokeLocationRoute,
+        claimAchievementReward,
       }}
     >
       {children}

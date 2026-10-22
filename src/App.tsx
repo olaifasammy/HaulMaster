@@ -5,27 +5,37 @@ import { GlobalLogisticsMap } from './components/GlobalLogisticsMap';
 import { LiveOperations } from './components/LiveOperations';
 import { FleetManager } from './components/FleetManager';
 import { FreightMarket } from './components/FreightMarket';
+import { Marketplace } from './components/Marketplace';
 import { DriverRoster } from './components/DriverRoster';
 import { HubsManager } from './components/HubsManager';
 import { FinancialLedger } from './components/FinancialLedger';
 import { TruckInspectorModal } from './components/TruckInspectorModal';
 import { RouteDispatcherModal } from './components/RouteDispatcherModal';
+import { OnboardingWizard } from './components/OnboardingWizard';
+import { UserGuideWalkthrough } from './components/UserGuideWalkthrough';
+import { CompanyProfileModal } from './components/CompanyProfileModal';
 import {
   Activity,
   Truck,
   Package,
+  ShoppingBag,
   Users,
   MapPin,
   DollarSign,
   PlusCircle,
   RotateCcw,
+  Compass,
+  HelpCircle,
+  X,
+  Bell,
 } from 'lucide-react';
 
 const DashboardContent: React.FC = () => {
-  const { state, resetGame } = useGame();
+  const { state, resetGame, restartOnboarding, setShowGuide, dismissNotification } = useGame();
   const [currentTab, setCurrentTab] = useState<string>('operations');
   const [inspectedTruckId, setInspectedTruckId] = useState<string | null>(null);
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState<boolean>(false);
+  const [isCompanyProfileOpen, setIsCompanyProfileOpen] = useState<boolean>(false);
   const [preselectedContractId, setPreselectedContractId] = useState<string | undefined>(undefined);
 
   const handleOpenDispatch = (contractId?: string) => {
@@ -36,20 +46,49 @@ const DashboardContent: React.FC = () => {
   const mobileNavItems = [
     { id: 'operations', label: 'Ops', icon: Activity },
     { id: 'fleet', label: 'Fleet', icon: Truck },
-    { id: 'market', label: 'Market', icon: Package },
-    { id: 'drivers', label: 'Crew', icon: Users },
+    { id: 'freight', label: 'Jobs', icon: Package },
+    { id: 'market', label: 'Market', icon: ShoppingBag },
     { id: 'hubs', label: 'Hubs', icon: MapPin },
+    { id: 'drivers', label: 'Crew', icon: Users },
     { id: 'ledger', label: 'P&L', icon: DollarSign },
   ];
 
+  // Latest notification toast
+  const latestNotif = state.notifications[0];
+
   return (
-    <div className="min-h-screen bg-[#060a12] text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950 overflow-x-hidden w-full">
+    <div className="min-h-screen bg-[#060a12] text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950 overflow-x-hidden w-full relative">
       {/* Universal Responsive Top Bar */}
       <Navbar
         currentTab={currentTab}
         onSelectTab={setCurrentTab}
         onOpenDispatchModal={() => handleOpenDispatch()}
+        onOpenCompanyProfile={() => setIsCompanyProfileOpen(true)}
       />
+
+      {/* Floating System Notification Toast (Non-blocking replacement for window.alert) */}
+      {latestNotif && Date.now() - latestNotif.timestamp < 12000 && (
+        <div className="fixed top-16 right-4 z-40 max-w-sm w-full bg-slate-900/95 border border-amber-500/40 rounded-xl p-3.5 shadow-2xl backdrop-blur-md flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+          <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 shrink-0 mt-0.5">
+            <Bell className="w-4 h-4" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white truncate">{latestNotif.title}</span>
+              <span className="text-[10px] font-mono text-slate-500">{latestNotif.simTimeFormatted}</span>
+            </div>
+            <p className="text-[11px] text-slate-300 mt-0.5 leading-snug line-clamp-2">
+              {latestNotif.message}
+            </p>
+          </div>
+          <button
+            onClick={() => dismissNotification(latestNotif.id)}
+            className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Main Content Area - Mobile first container with safe bottom padding for nav bar */}
       <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 lg:pb-12 space-y-6 overflow-x-hidden">
@@ -85,9 +124,14 @@ const DashboardContent: React.FC = () => {
           <FleetManager onInspectTruck={(truckId) => setInspectedTruckId(truckId)} />
         )}
 
-        {/* Freight Market View */}
-        {currentTab === 'market' && (
+        {/* Freight Jobs View (Filtered strictly for user's owned routes & hubs) */}
+        {currentTab === 'freight' && (
           <FreightMarket onDispatchContract={(contractId) => handleOpenDispatch(contractId)} />
+        )}
+
+        {/* Real Marketplace View (Hub Concessions, Route Connections to selected hub, Dealership) */}
+        {currentTab === 'market' && (
+          <Marketplace />
         )}
 
         {/* Driver Crew & Tachograph View */}
@@ -105,7 +149,7 @@ const DashboardContent: React.FC = () => {
         <button
           onClick={() => handleOpenDispatch()}
           aria-label="New Freight Dispatch"
-          className="w-13 h-13 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 flex items-center justify-center shadow-2xl active:scale-95 transition-transform"
+          className="w-13 h-13 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 flex items-center justify-center shadow-2xl active:scale-95 transition-transform cursor-pointer"
         >
           <PlusCircle className="w-6 h-6" />
         </button>
@@ -114,7 +158,7 @@ const DashboardContent: React.FC = () => {
       {/* Fixed Mobile Bottom Tab Bar (375px - 1024px) */}
       <nav
         aria-label="Mobile Navigation"
-        className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 border-t border-slate-800/90 backdrop-blur-md lg:hidden h-16 px-2 flex items-center justify-around"
+        className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 border-t border-slate-800/90 backdrop-blur-md lg:hidden h-16 px-1 flex items-center justify-around"
       >
         {mobileNavItems.map((item) => {
           const Icon = item.icon;
@@ -123,7 +167,7 @@ const DashboardContent: React.FC = () => {
             <button
               key={item.id}
               onClick={() => setCurrentTab(item.id)}
-              className={`flex flex-col items-center justify-center min-w-[48px] min-h-[48px] py-1 transition-colors ${
+              className={`flex flex-col items-center justify-center min-w-[44px] min-h-[44px] py-1 transition-colors cursor-pointer ${
                 isActive ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -134,21 +178,41 @@ const DashboardContent: React.FC = () => {
         })}
       </nav>
 
-      {/* Desktop Footer (Hidden on mobile to save space) */}
+      {/* Desktop Footer */}
       <footer className="hidden lg:flex border-t border-slate-900 bg-slate-950/80 px-6 py-4 text-xs text-slate-500 items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="font-bold text-slate-400">HAULMASTER</span>
           <span>·</span>
           <span>High-Fidelity Global Freight Simulation Engine</span>
+          <span>·</span>
+          <span className="text-amber-400 font-mono">Rank {state.playerRank}: {state.rankTitle}</span>
         </div>
 
-        <button
-          onClick={resetGame}
-          className="flex items-center gap-1.5 text-slate-500 hover:text-rose-400 transition-colors"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>Reset Company Fleet</span>
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setShowGuide(true)}
+            className="flex items-center gap-1.5 text-slate-400 hover:text-amber-400 transition-colors cursor-pointer"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+            <span>Field Guide</span>
+          </button>
+
+          <button
+            onClick={restartOnboarding}
+            className="flex items-center gap-1.5 text-slate-400 hover:text-sky-400 transition-colors cursor-pointer"
+          >
+            <Compass className="w-3.5 h-3.5" />
+            <span>Setup Wizard</span>
+          </button>
+
+          <button
+            onClick={resetGame}
+            className="flex items-center gap-1.5 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Reset Company Fleet</span>
+          </button>
+        </div>
       </footer>
 
       {/* Full-screen / Bottom-sheet Modals */}
@@ -167,6 +231,20 @@ const DashboardContent: React.FC = () => {
             setPreselectedContractId(undefined);
           }}
         />
+      )}
+
+      {isCompanyProfileOpen && (
+        <CompanyProfileModal onClose={() => setIsCompanyProfileOpen(false)} />
+      )}
+
+      {/* New User Onboarding Setup Wizard (Automatic on new game, or via restart) */}
+      {!state.hasCompletedOnboarding && (
+        <OnboardingWizard />
+      )}
+
+      {/* Skippable Quick Operations Field Guide */}
+      {state.showGuide && (
+        <UserGuideWalkthrough />
       )}
     </div>
   );

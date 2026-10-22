@@ -5,12 +5,17 @@ export interface Coordinate {
   y: number;
 }
 
+export type LocationType = 'gateway_hub' | 'regional_hub' | 'spoke_terminal' | 'delivery_location';
+
 export interface Hub {
   id: string;
   name: string;
   code: string;
   country: string;
   region: GeoRegion;
+  locationType: LocationType;
+  isHub?: boolean; // True if full corporate hub with maintenance workshop & bulk fuel
+  connectedToHubId?: string; // Connected parent hub if this is a delivery location
   coord: Coordinate;
   fuelPricePerLiter: number; // dynamically fluctuates ($)
   bulkFuelStockLiters: number;
@@ -20,6 +25,13 @@ export interface Hub {
   bayCount: number;
   activeTruckIds: string[];
   storedCargoCount: number;
+  isUnlocked: boolean;
+  requiredRank: number;
+  rankTitle: string;
+  purchasePriceUsd: number;
+  trafficDemandScore: number; // 1-100
+  monthlyCargoVolume: string;
+  isPrimaryBase?: boolean;
 }
 
 export type WeatherType = 'Clear' | 'Overcast' | 'Rain' | 'Heavy Storm' | 'Snow' | 'Blizzard' | 'Heatwave';
@@ -55,6 +67,10 @@ export interface RouteCorridor {
   tollCostUsd: number;
   waypoints: RouteWaypoint[];
   hazardRisk: number; // 0.0 to 1.0 (mountain passes have higher risk)
+  isUnlocked: boolean;
+  licenseFeeUsd: number;
+  requiredRank: number;
+  trafficRateScore: number;
 }
 
 export interface DiagnosticCode {
@@ -94,7 +110,7 @@ export interface PowertrainSpecs {
   displacementLiters: number;
   cylinders: number;
   transmissionGears: number;
-  driveAxles: '4x2' | '6x4';
+  driveAxles: '4x2' | '6x2' | '6x4' | '8x4';
   curbWeightKg: number;
   maxPayloadKg: number;
   fuelTankCapacityLiters: number;
@@ -103,13 +119,13 @@ export interface PowertrainSpecs {
   frontalAreaM2: number;
 }
 
-export type TruckModelId = 'titan-540' | 'strada-460' | 'vanguard-600' | 'metro-320';
+export type TruckModelId = 'titan-540' | 'strada-460' | 'vanguard-600' | 'metro-320' | 'nordic-620' | 'colossus-750';
 
 export interface TruckModel {
   id: TruckModelId;
   name: string;
   manufacturer: string;
-  category: 'Heavy Haul' | 'Efficiency Long-Haul' | 'Flagship Highway' | 'Urban Distribution';
+  category: 'Heavy Haul' | 'Efficiency Long-Haul' | 'Flagship Highway' | 'Urban Distribution' | 'Severe Duty' | 'Extreme Heavy Haul';
   image: string;
   basePriceUsd: number;
   specs: PowertrainSpecs;
@@ -131,7 +147,7 @@ export interface TruckConfigOptions {
   financingMethod: FinancingMethod;
 }
 
-export type TrailerModelId = 'dry-van-53' | 'reefer-temp' | 'lowboy-heavy' | 'adr-chemical' | 'intermodal-chassis';
+export type TrailerModelId = 'dry-van-53' | 'reefer-temp' | 'lowboy-heavy' | 'adr-chemical' | 'intermodal-chassis' | 'modular-heavy-lowboy' | 'wind-blade-transporter';
 
 export interface TrailerModel {
   id: TrailerModelId;
@@ -230,6 +246,8 @@ export interface Driver {
   dailyDriveMinutes: number; // max 540 (9h) before 11h daily rest
   currentRestMinutesRemaining: number;
   stats: DriverStats;
+  cdlClass?: string;
+  endorsements?: string[];
 }
 
 export type CargoCategory = 'Dry Freight' | 'Refrigerated Food' | 'Heavy Machinery' | 'Hazardous Chemicals' | 'High-Value Tech';
@@ -288,7 +306,7 @@ export interface ActiveTrip {
   isStalledBreakdown: boolean;
 }
 
-export type TransactionType = 'freight_revenue' | 'fuel_expense' | 'maintenance_expense' | 'driver_wages' | 'toll_expense' | 'loan_repay' | 'loan_disbursement' | 'equipment_purchase' | 'depot_upgrade' | 'breakdown_recovery';
+export type TransactionType = 'freight_revenue' | 'fuel_expense' | 'maintenance_expense' | 'driver_wages' | 'toll_expense' | 'broker_fee' | 'loan_repay' | 'loan_disbursement' | 'equipment_purchase' | 'depot_upgrade' | 'breakdown_recovery';
 
 export interface LedgerEntry {
   id: string;
@@ -318,6 +336,17 @@ export interface GameEventNotification {
   timestamp: number;
 }
 
+export interface OnboardingConfig {
+  region: GeoRegion;
+  primaryHubId: string;
+  connectedLocationId?: string; // 1 delivery location connected to starting hub (high realism)
+  connectedHubIds?: string[];
+  companyName: string;
+  starterTruckModelId: TruckModelId;
+  starterTrailerModelId: TrailerModelId;
+  starterLivery: FleetLivery;
+}
+
 export interface GameState {
   companyName: string;
   balanceUsd: number;
@@ -338,4 +367,14 @@ export interface GameState {
   totalFuelBurnedLiters: number;
   totalKilometersDriven: number;
   ratingScore: number; // 0 - 5.0 rating
+  playerRank: number;
+  playerXp: number;
+  rankTitle: string;
+  ownedHubIds: string[];
+  ownedRouteIds: string[];
+  ownedSpokeConnections: string[]; // Array of 'hubId:spokeLocationId'
+  claimedAchievementIds: string[];
+  hasCompletedOnboarding: boolean;
+  showGuide: boolean;
+  lastMarketRefreshSimTime?: number;
 }
