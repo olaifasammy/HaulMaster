@@ -12,13 +12,47 @@ import {
   Check,
   Zap,
   RefreshCw,
+  ChevronDown,
+  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 export const DriverRoster: React.FC = () => {
   const { state, trainDriver, hireDriver, fireDriver } = useGame();
   const [showHireModal, setShowHireModal] = useState(false);
+  const [expandedDriverIds, setExpandedDriverIds] = useState<Record<string, boolean>>({});
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const pageSize = 6;
 
   const [candidatePool, setCandidatePool] = useState<any[]>([]);
+
+  const toggleDriverExpand = (driverId: string) => {
+    setExpandedDriverIds((prev) => ({
+      ...prev,
+      [driverId]: !prev[driverId],
+    }));
+  };
+
+  const totalPages = Math.ceil(state.drivers.length / pageSize) || 1;
+  const paginatedDrivers = state.drivers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const handleTrain = (driverId: string, type: 'mountain' | 'winter' | 'hazmat' | 'eco') => {
+    const costs = { mountain: 2800, winter: 3200, hazmat: 4500, eco: 1800 };
+    const names = { mountain: 'Mountain Master Certification', winter: 'Severe Winter Certification', hazmat: 'ADR Hazmat Certification', eco: 'Eco-Driving Academy' };
+    const cost = costs[type];
+    const name = names[type];
+    if (window.confirm(`Confirm training enrollment: Enroll driver in ${name} for $${cost.toLocaleString()}?`)) {
+      trainDriver(driverId, type);
+    }
+  };
+
+  const handleHire = (candidate: any) => {
+    if (window.confirm(`Confirm recruitment: Induct ${candidate.name} into company roster for $2,500 onboarding fee?`)) {
+      hireDriver(candidate);
+      setShowHireModal(false);
+    }
+  };
 
   const generateCandidates = () => {
     const firstNames = ['Marcus', 'Elena', 'Lucas', 'Sarah', 'Viktor', 'Hans', 'Chiara', 'Mateo', 'Darius', 'Sofia', 'Hiroshi', 'Kaito', 'Astrid', 'Bjorn', 'Guillaume', 'Camille', 'Javier', 'Carmen', 'Krzysztof', 'Zofia', 'Liam', 'Chloe', 'Oliver', 'Mia', 'Gabriel', 'Nadia'];
@@ -88,7 +122,7 @@ export const DriverRoster: React.FC = () => {
             <span>Driver Crew Roster & Tachograph Telemetry ({state.drivers.length} Drivers)</span>
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            Monitor digital tachograph hours of service, fatigue management, and advance professional credentials.
+            Monitor digital tachograph hours of service, fatigue management, and advance professional credentials. Click any driver card header to toggle details.
           </p>
         </div>
 
@@ -153,10 +187,7 @@ export const DriverRoster: React.FC = () => {
                 </div>
 
                 <button
-                  onClick={() => {
-                    hireDriver(candidate);
-                    setShowHireModal(false);
-                  }}
+                  onClick={() => handleHire(candidate)}
                   className="w-full py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-lg transition-colors"
                 >
                   Hire & Induct
@@ -169,7 +200,8 @@ export const DriverRoster: React.FC = () => {
 
       {/* Driver Roster Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {state.drivers.map((driver) => {
+        {paginatedDrivers.map((driver) => {
+          const isExpanded = !!expandedDriverIds[driver.id];
           const homeHub = state.hubs.find((h) => h.id === driver.homeHubId);
           const assignedTruck = state.trucks.find((t) => t.id === driver.assignedTruckId);
           const isDriving = driver.hosStatus === 'driving';
@@ -180,154 +212,208 @@ export const DriverRoster: React.FC = () => {
           return (
             <div
               key={driver.id}
-              className="p-5 bg-slate-900/80 border border-slate-800 rounded-xl space-y-4 hover:border-slate-700 transition-all shadow-lg"
+              className="p-5 bg-slate-900/80 border border-slate-800 rounded-xl space-y-4 hover:border-slate-700 transition-all shadow-lg flex flex-col justify-between"
             >
-              {/* Profile Header */}
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <img
-                    src={driver.avatar}
-                    alt={driver.name}
-                    className="w-12 h-12 rounded-full object-cover border border-slate-700"
-                  />
-                  <div>
-                    <h4 className="text-sm font-bold text-white">{driver.name}</h4>
-                    <p className="text-xs text-slate-400">
-                      {driver.experienceYears} Years Long-Haul Experience
-                    </p>
-                    <div className="text-[11px] text-amber-400 font-mono mt-0.5">
-                      ${driver.wagePerKmUsd}/km · ${driver.dailyRetainerUsd}/day retainer
+              <div>
+                {/* Profile Header / Toggle */}
+                <div
+                  onClick={() => toggleDriverExpand(driver.id)}
+                  className="flex items-start justify-between cursor-pointer select-none group"
+                >
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={driver.avatar}
+                      alt={driver.name}
+                      className="w-12 h-12 rounded-full object-cover border border-slate-700 shrink-0"
+                    />
+                    <div>
+                      <h4 className="text-sm font-bold text-white group-hover:text-amber-300 transition-colors flex items-center gap-2">
+                        <span>{driver.name}</span>
+                        {isExpanded ? (
+                          <ChevronUp className="w-4 h-4 text-amber-400 shrink-0" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                        )}
+                      </h4>
+                      <p className="text-xs text-slate-400">
+                        {driver.experienceYears} Years Experience
+                      </p>
+                      <div className="text-[11px] text-amber-400 font-mono mt-0.5">
+                        ${driver.wagePerKmUsd}/km · ${driver.dailyRetainerUsd}/day
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Status Indicator */}
+                  <div>
+                    {isDriving ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <Activity className="w-3 h-3 animate-pulse" />
+                        DRIVING
+                      </span>
+                    ) : isResting ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                        <Coffee className="w-3 h-3" />
+                        RESTING
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-400">
+                        OFF-DUTY
+                      </span>
+                    )}
                   </div>
                 </div>
 
-                {/* Status Indicator */}
-                <div>
-                  {isDriving ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      <Activity className="w-3 h-3 animate-pulse" />
-                      DRIVING
-                    </span>
-                  ) : isResting ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                      <Coffee className="w-3 h-3" />
-                      RESTING
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-400">
-                      OFF-DUTY
-                    </span>
-                  )}
-                </div>
-              </div>
+                {/* Compact summary when collapsed */}
+                {!isExpanded && (
+                  <div className="mt-3 pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs font-mono text-slate-400">
+                    <span>Eco: {driver.stats.ecoDrivingRating}/100</span>
+                    <span>Deliveries: {driver.stats.deliveriesCompleted}</span>
+                    <span className="text-amber-400 font-bold hover:underline">Expand details</span>
+                  </div>
+                )}
 
-              {/* Tachograph & Hours of Service (HOS) Gauge */}
-              <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-lg space-y-2">
-                <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-slate-400">Continuous Shift (Max 4.5h)</span>
-                  <span className="text-white font-bold tabular-nums">
-                    {Math.round(driver.continuousDriveMinutes)} / 270 min
-                  </span>
-                </div>
-                <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      driver.continuousDriveMinutes > 220 ? 'bg-rose-500' : 'bg-amber-400'
-                    }`}
-                    style={{ width: `${Math.min(100, (driver.continuousDriveMinutes / 270) * 100)}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-[11px] text-slate-500 font-mono">
-                  <span>{isDriving ? `${driveHoursLeft}h until required 45m break` : 'Tachograph reset'}</span>
-                  <span>Daily: {Math.round(driver.dailyDriveMinutes)}/540m</span>
-                </div>
-              </div>
+                {/* Expanded Details */}
+                {isExpanded && (
+                  <div className="space-y-4 mt-4 animate-fadeIn">
+                    {/* Tachograph & Hours of Service (HOS) Gauge */}
+                    <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-lg space-y-2">
+                      <div className="flex items-center justify-between text-xs font-mono">
+                        <span className="text-slate-400">Continuous Shift (Max 4.5h)</span>
+                        <span className="text-white font-bold tabular-nums">
+                          {Math.round(driver.continuousDriveMinutes)} / 270 min
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            driver.continuousDriveMinutes > 220 ? 'bg-rose-500' : 'bg-amber-400'
+                          }`}
+                          style={{ width: `${Math.min(100, (driver.continuousDriveMinutes / 270) * 100)}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[11px] text-slate-500 font-mono">
+                        <span>{isDriving ? `${driveHoursLeft}h until required 45m break` : 'Tachograph reset'}</span>
+                        <span>Daily: {Math.round(driver.dailyDriveMinutes)}/540m</span>
+                      </div>
+                    </div>
 
-              {/* Telemetry Ratings */}
-              <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono">
-                <div className="p-2 bg-slate-950/50 border border-slate-800/60 rounded-lg">
-                  <span className="text-[10px] text-slate-500 block uppercase">Eco Score</span>
-                  <span className="font-bold text-emerald-400 tabular-nums">
-                    {driver.stats.ecoDrivingRating}/100
-                  </span>
-                </div>
+                    {/* Telemetry Ratings */}
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono">
+                      <div className="p-2 bg-slate-950/50 border border-slate-800/60 rounded-lg">
+                        <span className="text-[10px] text-slate-500 block uppercase">Eco Score</span>
+                        <span className="font-bold text-emerald-400 tabular-nums">
+                          {driver.stats.ecoDrivingRating}/100
+                        </span>
+                      </div>
 
-                <div className="p-2 bg-slate-950/50 border border-slate-800/60 rounded-lg">
-                  <span className="text-[10px] text-slate-500 block uppercase">Mechanic</span>
-                  <span className="font-bold text-sky-400 tabular-nums">
-                    {driver.stats.mechanicalSympathy}/100
-                  </span>
-                </div>
+                      <div className="p-2 bg-slate-950/50 border border-slate-800/60 rounded-lg">
+                        <span className="text-[10px] text-slate-500 block uppercase">Mechanic</span>
+                        <span className="font-bold text-sky-400 tabular-nums">
+                          {driver.stats.mechanicalSympathy}/100
+                        </span>
+                      </div>
 
-                <div className="p-2 bg-slate-950/50 border border-slate-800/60 rounded-lg">
-                  <span className="text-[10px] text-slate-500 block uppercase">Deliveries</span>
-                  <span className="font-bold text-white tabular-nums">
-                    {driver.stats.deliveriesCompleted}
-                  </span>
-                </div>
-              </div>
+                      <div className="p-2 bg-slate-950/50 border border-slate-800/60 rounded-lg">
+                        <span className="text-[10px] text-slate-500 block uppercase">Deliveries</span>
+                        <span className="font-bold text-white tabular-nums">
+                          {driver.stats.deliveriesCompleted}
+                        </span>
+                      </div>
+                    </div>
 
-              {/* Certifications & Training Academy */}
-              <div className="pt-2 border-t border-slate-800/80 space-y-2">
-                <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
-                  <span>Authorized Certifications</span>
-                  <GraduationCap className="w-3.5 h-3.5 text-amber-400" />
-                </div>
+                    {/* Certifications & Training Academy */}
+                    <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                      <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+                        <span>Authorized Certifications</span>
+                        <GraduationCap className="w-3.5 h-3.5 text-amber-400" />
+                      </div>
 
-                <div className="flex flex-wrap gap-1.5">
-                  {driver.stats.mountainCert ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                      <Check className="w-3 h-3" /> Mountain Master
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => trainDriver(driver.id, 'mountain')}
-                      className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
-                    >
-                      + Mountain ($2,800)
-                    </button>
-                  )}
+                      <div className="flex flex-wrap gap-1.5">
+                        {driver.stats.mountainCert ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            <Check className="w-3 h-3" /> Mountain Master
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleTrain(driver.id, 'mountain')}
+                            className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                          >
+                            + Mountain ($2,800)
+                          </button>
+                        )}
 
-                  {driver.stats.winterCert ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                      <Check className="w-3 h-3" /> Severe Winter
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => trainDriver(driver.id, 'winter')}
-                      className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
-                    >
-                      + Winter ($3,200)
-                    </button>
-                  )}
+                        {driver.stats.winterCert ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                            <Check className="w-3 h-3" /> Severe Winter
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleTrain(driver.id, 'winter')}
+                            className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                          >
+                            + Winter ($3,200)
+                          </button>
+                        )}
 
-                  {driver.stats.hazmatCert ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                      <Check className="w-3 h-3" /> ADR Hazmat
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => trainDriver(driver.id, 'hazmat')}
-                      className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
-                    >
-                      + Hazmat ($4,500)
-                    </button>
-                  )}
+                        {driver.stats.hazmatCert ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                            <Check className="w-3 h-3" /> ADR Hazmat
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleTrain(driver.id, 'hazmat')}
+                            className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                          >
+                            + Hazmat ($4,500)
+                          </button>
+                        )}
 
-                  {driver.stats.ecoDrivingRating < 95 && (
-                    <button
-                      onClick={() => trainDriver(driver.id, 'eco')}
-                      className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 hover:bg-slate-700 text-emerald-400 transition-colors"
-                    >
-                      + Eco Academy ($1,800)
-                    </button>
-                  )}
-                </div>
+                        {driver.stats.ecoDrivingRating < 95 && (
+                          <button
+                            onClick={() => handleTrain(driver.id, 'eco')}
+                            className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 hover:bg-slate-700 text-emerald-400 transition-colors"
+                          >
+                            + Eco Academy ($1,800)
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-4 border-t border-slate-800 text-xs font-mono text-slate-400">
+          <div>
+            Showing {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, state.drivers.length)} of {state.drivers.length} drivers
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+              disabled={currentPage === 1}
+              className="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="px-3 py-1 bg-slate-900 border border-slate-800 rounded-lg text-white font-bold">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
