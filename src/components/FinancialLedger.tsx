@@ -17,6 +17,12 @@ export const FinancialLedger: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(15);
 
+  const handleTakeLoan = (amount: number, days: number) => {
+    if (window.confirm(`Confirm debt facility: Disburse $${amount.toLocaleString()} credit line with ${days}-day repayment terms (7% term interest)?`)) {
+      takeLoan(amount, days);
+    }
+  };
+
   const totalRevenue = state.ledger
     .filter((e) => e.amountUsd > 0 && e.type !== 'loan_disbursement')
     .reduce((acc, e) => acc + e.amountUsd, 0);
@@ -165,7 +171,7 @@ export const FinancialLedger: React.FC = () => {
             </div>
             <div className="text-xl font-mono font-bold text-white tabular-nums">$50,000</div>
             <button
-              onClick={() => takeLoan(50000, 30)}
+              onClick={() => handleTakeLoan(50000, 30)}
               className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs rounded-lg transition-colors min-h-[44px]"
             >
               Disburse $50,000
@@ -182,7 +188,7 @@ export const FinancialLedger: React.FC = () => {
             </div>
             <div className="text-xl font-mono font-bold text-white tabular-nums">$125,000</div>
             <button
-              onClick={() => takeLoan(125000, 60)}
+              onClick={() => handleTakeLoan(125000, 60)}
               className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs rounded-lg transition-colors min-h-[44px]"
             >
               Disburse $125,000
@@ -199,7 +205,7 @@ export const FinancialLedger: React.FC = () => {
             </div>
             <div className="text-xl font-mono font-bold text-white tabular-nums">$250,000</div>
             <button
-              onClick={() => takeLoan(250000, 90)}
+              onClick={() => handleTakeLoan(250000, 90)}
               className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs rounded-lg transition-colors min-h-[44px]"
             >
               Disburse $250,000

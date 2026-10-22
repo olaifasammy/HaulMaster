@@ -161,6 +161,56 @@ export const Marketplace: React.FC = () => {
     });
   };
 
+  const handleUnlockRegion = (region: GeoRegion, fee: number) => {
+    if (window.confirm(`Confirm intercontinental expansion: Unlock ${region} territory concession for $${fee.toLocaleString()}?`)) {
+      unlockRegion(region);
+    }
+  };
+
+  const handleBuyHub = (hubId: string, name: string, price: number) => {
+    if (window.confirm(`Confirm terminal concession: Purchase ${name} for $${price.toLocaleString()}?`)) {
+      buyHubConcession(hubId);
+    }
+  };
+
+  const handleBuySpoke = (hubId: string, spokeId: string, spokeName: string, price: number) => {
+    if (window.confirm(`Confirm delivery location acquisition: Purchase & connect ${spokeName} for $${price.toLocaleString()}?`)) {
+      buySpokeLocationRoute(hubId, spokeId);
+    }
+  };
+
+  const handleLicenseRoute = (routeId: string, routeName: string, fee: number) => {
+    if (window.confirm(`Confirm corridor licensing: Acquire operating rights for ${routeName} for $${fee.toLocaleString()}?`)) {
+      buyRouteLicense(routeId);
+    }
+  };
+
+  const handleConnectHubs = (originName: string, destName: string, fee: number) => {
+    if (window.confirm(`Confirm route connection: Connect ${originName} to ${destName} for $${fee.toLocaleString()}?`)) {
+      connectRouteBetweenHubs(originHub.id, destHub.id);
+    }
+  };
+
+  const handleBuyTruckConfirm = () => {
+    const cost = truckFinancing === 'cash' ? truckTotalCostWithTrailer : truckDownPayment;
+    const msg = truckFinancing === 'cash'
+      ? `Confirm equipment acquisition: Purchase custom truck configuration for $${cost.toLocaleString()} cash?`
+      : `Confirm commercial lease: Pay 20% down payment of $${cost.toLocaleString()} and commit to 60-day daily installments?`;
+    if (window.confirm(msg)) {
+      handleBuyTruck();
+    }
+  };
+
+  const handleBuyTrailerConfirm = () => {
+    const cost = trailerFinancing === 'cash' ? trailerTotalCost : trailerDownPayment;
+    const msg = trailerFinancing === 'cash'
+      ? `Confirm trailer purchase: Acquire trailer for $${cost.toLocaleString()} cash?`
+      : `Confirm trailer lease: Pay 20% down payment of $${cost.toLocaleString()} and commit to 60-day lease?`;
+    if (window.confirm(msg)) {
+      handleBuyTrailer();
+    }
+  };
+
   // Filtered Hubs (Strictly restricted to unlocked regions)
   const filteredHubs = state.hubs.filter((h) => {
     const unlockedRegions = state.unlockedRegions || ['North America'];
@@ -384,7 +434,7 @@ export const Marketplace: React.FC = () => {
                       </div>
                     ) : (
                       <button
-                        onClick={() => unlockRegion(region)}
+                        onClick={() => handleUnlockRegion(region, unlockPrice)}
                         disabled={!hasRank || !canAfford}
                         className={`w-full py-3 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
                           !hasRank
@@ -557,7 +607,7 @@ export const Marketplace: React.FC = () => {
                       </div>
                     ) : (
                       <button
-                        onClick={() => buyHubConcession(hub.id)}
+                        onClick={() => handleBuyHub(hub.id, hub.name, hub.purchasePriceUsd)}
                         disabled={!hasRank || !canAfford}
                         className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
                           !hasRank
@@ -837,7 +887,7 @@ export const Marketplace: React.FC = () => {
                             </div>
                           ) : (
                             <button
-                              onClick={() => defaultHubChoice && buySpokeLocationRoute(defaultHubChoice, spoke.id)}
+                              onClick={() => defaultHubChoice && handleBuySpoke(defaultHubChoice, spoke.id, spoke.name, spoke.purchasePriceUsd || 18000)}
                               disabled={!canAfford}
                               className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
                                 !canAfford
@@ -982,7 +1032,7 @@ export const Marketplace: React.FC = () => {
                         </div>
                       ) : !destHub.isUnlocked ? (
                         <button
-                          onClick={() => buyHubConcession(destHub.id)}
+                          onClick={() => handleBuyHub(destHub.id, destHub.name, destHub.purchasePriceUsd)}
                           className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold transition-all w-full sm:w-auto cursor-pointer"
                         >
                           <Building2 className="w-3.5 h-3.5" />
@@ -990,7 +1040,7 @@ export const Marketplace: React.FC = () => {
                         </button>
                       ) : (
                         <button
-                          onClick={() => connectRouteBetweenHubs(originHub.id, destHub.id)}
+                          onClick={() => handleConnectHubs(originHub.name, destHub.name, fee)}
                           disabled={!hasRank || !canAfford}
                           className={`flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-lg w-full sm:w-auto ${
                             !hasRank
@@ -1167,7 +1217,7 @@ export const Marketplace: React.FC = () => {
                       </div>
                     ) : (
                       <button
-                        onClick={() => buyRouteLicense(route.id)}
+                        onClick={() => handleLicenseRoute(route.id, route.name, route.licenseFeeUsd)}
                         disabled={!hasRank || !canAfford}
                         className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
                           !hasRank
@@ -1486,7 +1536,7 @@ export const Marketplace: React.FC = () => {
                   )}
 
                   <button
-                    onClick={handleBuyTruck}
+                    onClick={handleBuyTruckConfirm}
                     className="w-full py-3 px-4 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
                   >
                     <Truck className="w-4 h-4" />
@@ -1619,7 +1669,7 @@ export const Marketplace: React.FC = () => {
                   </div>
 
                   <button
-                    onClick={handleBuyTrailer}
+                    onClick={handleBuyTrailerConfirm}
                     className="w-full py-3 px-4 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
                   >
                     <Package className="w-4 h-4" />

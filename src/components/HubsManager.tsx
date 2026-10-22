@@ -19,6 +19,14 @@ export const HubsManager: React.FC<HubsManagerProps> = ({ onSelectHub }) => {
 
   const ownedHubs = state.hubs.filter((h) => h.isUnlocked);
 
+  const handleUpgrade = (hubId: string, type: 'workshop' | 'bulkFuel') => {
+    const cost = type === 'workshop' ? 35000 : 45000;
+    const name = type === 'workshop' ? 'Workshop Service Bay' : 'Bulk Fuel Tanker Storage';
+    if (window.confirm(`Confirm upgrade: Purchase ${name} expansion for $${cost.toLocaleString()}?`)) {
+      upgradeHub(hubId, type);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -109,7 +117,7 @@ export const HubsManager: React.FC<HubsManagerProps> = ({ onSelectHub }) => {
               {/* Terminal Upgrades */}
               <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
                 <button
-                  onClick={() => upgradeHub(hub.id, 'workshop')}
+                  onClick={() => handleUpgrade(hub.id, 'workshop')}
                   className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[11px] font-semibold transition-colors flex items-center justify-center gap-1"
                 >
                   <Wrench className="w-3 h-3 text-amber-400" />
@@ -117,7 +125,7 @@ export const HubsManager: React.FC<HubsManagerProps> = ({ onSelectHub }) => {
                 </button>
 
                 <button
-                  onClick={() => upgradeHub(hub.id, 'bulkFuel')}
+                  onClick={() => handleUpgrade(hub.id, 'bulkFuel')}
                   className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[11px] font-semibold transition-colors flex items-center justify-center gap-1"
                 >
                   <Fuel className="w-3 h-3 text-amber-400" />
