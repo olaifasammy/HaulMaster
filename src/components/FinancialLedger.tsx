@@ -2,14 +2,20 @@ import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import {
   DollarSign,
-  TrendingUp,
   Receipt,
   Landmark,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
 } from 'lucide-react';
 
 export const FinancialLedger: React.FC = () => {
   const { state, takeLoan, repayLoan } = useGame();
   const [filterType, setFilterType] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(15);
 
   const totalRevenue = state.ledger
     .filter((e) => e.amountUsd > 0 && e.type !== 'loan_disbursement')
@@ -36,11 +42,36 @@ export const FinancialLedger: React.FC = () => {
   const operatingMarginPct = totalRevenue > 0 ? Math.round((netOperatingProfit / totalRevenue) * 100) : 0;
 
   const filteredLedger = state.ledger.filter((entry) => {
-    if (filterType === 'all') return true;
-    if (filterType === 'revenue' && entry.amountUsd > 0) return true;
-    if (filterType === 'expense' && entry.amountUsd < 0) return true;
-    return entry.type === filterType;
+    // Type filter
+    if (filterType === 'revenue' && entry.amountUsd < 0) return false;
+    if (filterType === 'expense' && entry.amountUsd >= 0) return false;
+    if (filterType !== 'all' && filterType !== 'revenue' && filterType !== 'expense' && entry.type !== filterType) {
+      return false;
+    }
+    // Search query
+    if (searchQuery.trim() !== '') {
+      const q = searchQuery.toLowerCase();
+      const matchDesc = entry.description.toLowerCase().includes(q);
+      const matchType = entry.type.toLowerCase().includes(q);
+      const matchTime = entry.simTimeFormatted.toLowerCase().includes(q);
+      if (!matchDesc && !matchType && !matchTime) return false;
+    }
+    return true;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredLedger.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedLedger = filteredLedger.slice((safeCurrentPage - 1) * pageSize, safeCurrentPage * pageSize);
+
+  const handleFilterChange = (type: string) => {
+    setFilterType(type);
+    setCurrentPage(1);
+  };
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+    setCurrentPage(1);
+  };
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -206,60 +237,91 @@ export const FinancialLedger: React.FC = () => {
 
       {/* 3. Transaction Journal */}
       <div className="space-y-3 sm:space-y-4 pt-4 border-t border-slate-800">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 font-mono flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
             <Receipt className="w-4 h-4 text-sky-400" />
-            <span>Journal ({state.ledger.length})</span>
-          </h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 font-mono">
+              Transaction Journal ({filteredLedger.length} of {state.ledger.length})
+            </h3>
+          </div>
 
-          <div className="flex items-center gap-1 p-0.5 bg-slate-900 border border-slate-800 rounded-lg text-xs">
-            <button
-              onClick={() => setFilterType('all')}
-              className={`px-2 py-1 rounded min-h-[32px] flex items-center transition-colors ${filterType === 'all' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setFilterType('revenue')}
-              className={`px-2 py-1 rounded min-h-[32px] flex items-center transition-colors ${filterType === 'revenue' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
-            >
-              In
-            </button>
-            <button
-              onClick={() => setFilterType('expense')}
-              className={`px-2 py-1 rounded min-h-[32px] flex items-center transition-colors ${filterType === 'expense' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
-            >
-              Out
-            </button>
+          {/* Filters & Search Toolbar */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Search Input */}
+            <div className="relative flex-1 sm:w-48">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search journal..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                className="w-full pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-200 placeholder-slate-500 font-mono focus:outline-none focus:border-slate-700"
+              />
+            </div>
+
+            {/* Type Filter Dropdown / Buttons */}
+            <div className="flex items-center gap-1 p-0.5 bg-slate-900 border border-slate-800 rounded-lg text-xs">
+              <button
+                onClick={() => handleFilterChange('all')}
+                className={`px-2 py-1 rounded min-h-[32px] flex items-center transition-colors font-mono ${filterType === 'all' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400'}`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => handleFilterChange('revenue')}
+                className={`px-2 py-1 rounded min-h-[32px] flex items-center transition-colors font-mono ${filterType === 'revenue' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold' : 'text-slate-400'}`}
+              >
+                In
+              </button>
+              <button
+                onClick={() => handleFilterChange('expense')}
+                className={`px-2 py-1 rounded min-h-[32px] flex items-center transition-colors font-mono ${filterType === 'expense' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold' : 'text-slate-400'}`}
+              >
+                Out
+              </button>
+              <button
+                onClick={() => handleFilterChange('fuel_expense')}
+                className={`px-2 py-1 rounded min-h-[32px] flex items-center transition-colors font-mono ${filterType === 'fuel_expense' ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30 font-bold' : 'text-slate-400'}`}
+              >
+                Fuel
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Mobile Journal Cards */}
         <div className="sm:hidden space-y-2">
-          {filteredLedger.slice(0, 20).map((entry) => {
-            const isCredit = entry.amountUsd >= 0;
-            return (
-              <div key={entry.id} className="p-3 bg-slate-900/80 border border-slate-800 rounded-lg text-xs font-mono space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500 text-[10px]">{entry.simTimeFormatted}</span>
-                  <span className={`font-bold tabular-nums ${isCredit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {isCredit ? '+' : ''}${Math.round(entry.amountUsd).toLocaleString()}
-                  </span>
+          {paginatedLedger.length === 0 ? (
+            <div className="p-6 bg-slate-900/60 border border-slate-800 rounded-xl text-center text-xs text-slate-500 font-mono">
+              No matching ledger entries found.
+            </div>
+          ) : (
+            paginatedLedger.map((entry) => {
+              const isCredit = entry.amountUsd >= 0;
+              return (
+                <div key={entry.id} className="p-3 bg-slate-900/80 border border-slate-800 rounded-lg text-xs font-mono space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 text-[10px]">{entry.simTimeFormatted}</span>
+                    <span className={`font-bold tabular-nums ${isCredit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {isCredit ? '+' : ''}${Math.round(entry.amountUsd).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="text-slate-200 text-[11px] leading-snug">{entry.description}</div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-800/60">
+                    <span className="capitalize">{entry.type.replace('_', ' ')}</span>
+                    <span>Bal: ${Math.round(entry.runningBalanceUsd).toLocaleString()}</span>
+                  </div>
                 </div>
-                <div className="text-slate-200 text-[11px] leading-snug">{entry.description}</div>
-                <div className="text-[10px] text-slate-500 text-right">
-                  Bal: ${Math.round(entry.runningBalanceUsd).toLocaleString()}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
 
         {/* Desktop Journal Table */}
         <div className="hidden sm:block bg-slate-900/80 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-          <div className="overflow-x-auto max-h-[480px]">
+          <div className="overflow-x-auto">
             <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase text-slate-400 sticky top-0">
+              <thead className="bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase text-slate-400">
                 <tr>
                   <th className="py-2.5 px-4">Time</th>
                   <th className="py-2.5 px-4">Details</th>
@@ -269,32 +331,86 @@ export const FinancialLedger: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {filteredLedger.map((entry, index) => {
-                  const isCredit = entry.amountUsd >= 0;
-                  return (
-                    <tr key={`${entry.id || 'led'}-${index}`} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="py-2.5 px-4 text-slate-400 whitespace-nowrap">
-                        {entry.simTimeFormatted}
-                      </td>
-                      <td className="py-2.5 px-4 text-slate-200">
-                        {entry.description}
-                      </td>
-                      <td className="py-2.5 px-4 text-slate-500 capitalize">
-                        {entry.type.replace('_', ' ')}
-                      </td>
-                      <td className={`py-2.5 px-4 text-right font-bold tabular-nums whitespace-nowrap ${isCredit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {isCredit ? '+' : ''}${Math.round(entry.amountUsd).toLocaleString()}
-                      </td>
-                      <td className="py-2.5 px-4 text-right text-slate-400 tabular-nums whitespace-nowrap">
-                        ${Math.round(entry.runningBalanceUsd).toLocaleString()}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {paginatedLedger.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-slate-500">
+                      No matching ledger entries found.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedLedger.map((entry, index) => {
+                    const isCredit = entry.amountUsd >= 0;
+                    return (
+                      <tr key={`${entry.id || 'led'}-${index}`} className="hover:bg-slate-800/40 transition-colors">
+                        <td className="py-2.5 px-4 text-slate-400 whitespace-nowrap">
+                          {entry.simTimeFormatted}
+                        </td>
+                        <td className="py-2.5 px-4 text-slate-200">
+                          {entry.description}
+                        </td>
+                        <td className="py-2.5 px-4 text-slate-500 capitalize">
+                          {entry.type.replace('_', ' ')}
+                        </td>
+                        <td className={`py-2.5 px-4 text-right font-bold tabular-nums whitespace-nowrap ${isCredit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {isCredit ? '+' : ''}${Math.round(entry.amountUsd).toLocaleString()}
+                        </td>
+                        <td className="py-2.5 px-4 text-right text-slate-400 tabular-nums whitespace-nowrap">
+                          ${Math.round(entry.runningBalanceUsd).toLocaleString()}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
         </div>
+
+        {/* Pagination Bar */}
+        {filteredLedger.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-slate-900/90 border border-slate-800 rounded-xl text-xs font-mono">
+            <div className="flex items-center gap-2 text-slate-400">
+              <span>Showing {(safeCurrentPage - 1) * pageSize + 1} to {Math.min(filteredLedger.length, safeCurrentPage * pageSize)} of {filteredLedger.length} entries</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-300 focus:outline-none focus:border-slate-700"
+              >
+                <option value={10}>10 / page</option>
+                <option value={15}>15 / page</option>
+                <option value={25}>25 / page</option>
+                <option value={50}>50 / page</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safeCurrentPage === 1}
+                className="px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-slate-200 border border-slate-800 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition-colors min-h-[36px]"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Prev</span>
+              </button>
+
+              <span className="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 font-bold">
+                Page {safeCurrentPage} / {totalPages}
+              </span>
+
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safeCurrentPage === totalPages}
+                className="px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-slate-200 border border-slate-800 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition-colors min-h-[36px]"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
