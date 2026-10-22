@@ -368,26 +368,19 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
       <div className="absolute top-2.5 left-2.5 right-2.5 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
         {/* Region Selector */}
         <div className="flex items-center gap-1 p-1 bg-slate-900/95 border border-slate-800 rounded-lg backdrop-blur-md pointer-events-auto shadow-md">
-          <button
-            onClick={() => setSelectedRegion('North America')}
-            className={`px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-semibold rounded-md transition-colors whitespace-nowrap min-h-[32px] flex items-center ${
-              currentRegion === 'North America'
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            N. America
-          </button>
-          <button
-            onClick={() => setSelectedRegion('Europe')}
-            className={`px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-semibold rounded-md transition-colors whitespace-nowrap min-h-[32px] flex items-center ${
-              currentRegion === 'Europe'
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Europe
-          </button>
+          {(state.unlockedRegions || ['North America']).map((region) => (
+            <button
+              key={region}
+              onClick={() => setSelectedRegion(region)}
+              className={`px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-semibold rounded-md transition-colors whitespace-nowrap min-h-[32px] flex items-center ${
+                currentRegion === region
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {region === 'North America' ? 'N. America' : region}
+            </button>
+          ))}
         </div>
 
         {/* Weather Radar Toggle */}
@@ -432,20 +425,6 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
         onClick={handleCanvasClick}
         className="w-full h-auto cursor-crosshair block touch-manipulation"
       />
-
-      {!((state.unlockedRegions || ['North America']).includes(currentRegion)) && (
-        <div className="absolute inset-0 z-20 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center space-y-3">
-          <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400">
-            <Navigation className="w-8 h-8 animate-pulse" />
-          </div>
-          <h4 className="text-base font-bold text-white">
-            {currentRegion} Territory Locked
-          </h4>
-          <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
-            Intercontinental region access requires Rank 4 (Logistics Enterprise) and a $450,000 concession fee. Visit the Marketplace → Intercontinental Regions tab to unlock.
-          </p>
-        </div>
-      )}
     </div>
   );
 };
