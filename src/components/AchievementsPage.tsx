@@ -81,7 +81,7 @@ export const AchievementsPage: React.FC = () => {
       description: 'Successfully dispatch and complete freight deliveries across corridors.',
       icon: Package,
       currentValue: totalDeliveries,
-      tiers: generateInfiniteTiers(1, 5000, 200, 2.3),
+      tiers: generateInfiniteTiers(15, 5000, 200, 2.3),
     },
     {
       categoryId: 'distance',
@@ -89,7 +89,7 @@ export const AchievementsPage: React.FC = () => {
       description: 'Accumulate kilometers driven across highway freight corridors.',
       icon: Compass,
       currentValue: totalKm,
-      tiers: generateInfiniteTiers(2500, 8000, 300, 2.3),
+      tiers: generateInfiniteTiers(10000, 8000, 300, 2.3),
     },
     {
       categoryId: 'hubs',
@@ -97,7 +97,7 @@ export const AchievementsPage: React.FC = () => {
       description: 'Unlock and operate regional terminal hubs in your logistics empire.',
       icon: MapPin,
       currentValue: ownedHubsCount,
-      tiers: generateInfiniteTiers(2, 15000, 600, 1.6),
+      tiers: generateInfiniteTiers(4, 15000, 600, 1.8),
     },
     {
       categoryId: 'tonnage',
@@ -105,7 +105,7 @@ export const AchievementsPage: React.FC = () => {
       description: 'Deliver cumulative metric tons of high-capacity freight.',
       icon: Trophy,
       currentValue: cargoTons,
-      tiers: generateInfiniteTiers(25, 10000, 400, 2.3),
+      tiers: generateInfiniteTiers(250, 10000, 400, 2.3),
     },
     {
       categoryId: 'fleet',
@@ -113,7 +113,7 @@ export const AchievementsPage: React.FC = () => {
       description: 'Expand your enterprise commercial truck fleet.',
       icon: Truck,
       currentValue: truckCount,
-      tiers: generateInfiniteTiers(2, 12000, 500, 1.8),
+      tiers: generateInfiniteTiers(4, 12000, 500, 2.0),
     },
     {
       categoryId: 'crew',
@@ -121,7 +121,7 @@ export const AchievementsPage: React.FC = () => {
       description: 'Recruit and manage professional drivers in your crew.',
       icon: Users,
       currentValue: driverCount,
-      tiers: generateInfiniteTiers(2, 8000, 350, 1.8),
+      tiers: generateInfiniteTiers(4, 8000, 350, 2.0),
     },
     {
       categoryId: 'eco_fuel',
@@ -129,7 +129,7 @@ export const AchievementsPage: React.FC = () => {
       description: 'Burn diesel fuel across long-haul highway transit.',
       icon: Fuel,
       currentValue: fuelBurned,
-      tiers: generateInfiniteTiers(1000, 6000, 250, 2.3),
+      tiers: generateInfiniteTiers(10000, 6000, 250, 2.3),
     },
     {
       categoryId: 'maintenance',
@@ -137,7 +137,7 @@ export const AchievementsPage: React.FC = () => {
       description: 'Maintain and service commercial trucks at terminal maintenance bays.',
       icon: Wrench,
       currentValue: maintenanceCount,
-      tiers: generateInfiniteTiers(2, 7000, 300, 1.8),
+      tiers: generateInfiniteTiers(15, 7000, 300, 2.0),
     },
     {
       categoryId: 'specialized_cargo',
@@ -145,7 +145,7 @@ export const AchievementsPage: React.FC = () => {
       description: 'Transport high-value refrigerated, hazardous, and heavy industrial loads.',
       icon: ShieldAlert,
       currentValue: specializedCargoCount,
-      tiers: generateInfiniteTiers(2, 10000, 400, 2.3),
+      tiers: generateInfiniteTiers(10, 10000, 400, 2.3),
     },
     {
       categoryId: 'capital_wealth',
@@ -153,7 +153,7 @@ export const AchievementsPage: React.FC = () => {
       description: 'Accumulate corporate treasury capital and enterprise asset valuation.',
       icon: DollarSign,
       currentValue: estimatedNetWorth,
-      tiers: generateInfiniteTiers(250000, 20000, 1000, 2.5),
+      tiers: generateInfiniteTiers(750000, 20000, 1000, 2.5),
     },
     {
       categoryId: 'driver_certs',
@@ -161,7 +161,7 @@ export const AchievementsPage: React.FC = () => {
       description: 'Enroll crew drivers in advanced mountain, winter, and hazmat training.',
       icon: GraduationCap,
       currentValue: totalCertsCount,
-      tiers: generateInfiniteTiers(1, 8000, 350, 1.8),
+      tiers: generateInfiniteTiers(3, 8000, 350, 2.0),
     },
   ];
 
