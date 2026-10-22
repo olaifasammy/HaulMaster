@@ -145,6 +145,8 @@ export interface TruckConfigOptions {
   sleeperTier: SleeperTier;
   liveryColor: FleetLivery;
   financingMethod: FinancingMethod;
+  selectedTrailerModelId?: TrailerModelId | null;
+  hasTrailerAeroSkirts?: boolean;
 }
 
 export type TrailerModelId = 'dry-van-53' | 'reefer-temp' | 'lowboy-heavy' | 'adr-chemical' | 'intermodal-chassis' | 'modular-heavy-lowboy' | 'wind-blade-transporter';

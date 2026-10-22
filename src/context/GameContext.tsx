@@ -1174,7 +1174,33 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     else if (options.sleeperTier === 'standard_sleeper') extraCost += 3500;
     if (options.liveryColor !== 'obsidian_slate') extraCost += 1200;
 
-    const totalCost = model.basePriceUsd + extraCost;
+    let trailerCost = 0;
+    let newTrailer: TrailerInstance | null = null;
+    const truckId = `trk-${Date.now()}`;
+
+    if (options.selectedTrailerModelId) {
+      const trailerModel = TRAILER_MODELS.find((m) => m.id === options.selectedTrailerModelId);
+      if (trailerModel) {
+        const trailerAero = options.hasTrailerAeroSkirts ? 2200 : 0;
+        trailerCost = trailerModel.basePriceUsd + trailerAero;
+        newTrailer = {
+          id: `trl-${Date.now()}`,
+          modelId: options.selectedTrailerModelId,
+          serialNumber: `${options.selectedTrailerModelId.toUpperCase().slice(0, 3)}-${Math.floor(10000 + Math.random() * 90000)}`,
+          currentHubId: options.hubId,
+          status: 'idle',
+          odometerKm: 0,
+          hasAeroSkirts: options.hasTrailerAeroSkirts || false,
+          hasReeferUnit: false,
+          reeferFuelCurrentLiters: 0,
+          tireCompound: 'highway_eco',
+          assignedTruckId: truckId,
+          assignedTripId: null,
+        };
+      }
+    }
+
+    const totalCost = model.basePriceUsd + extraCost + trailerCost;
     const isLease = options.financingMethod === 'lease_60d';
     const cashRequired = isLease ? Math.round(totalCost * 0.20) : totalCost;
 
@@ -1185,7 +1211,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const newTruck: TruckInstance = {
-      id: `trk-${Date.now()}`,
+      id: truckId,
       modelId: options.modelId,
       vin: `1${options.modelId.toUpperCase().slice(0, 3)}${randomSuffix}K09${Math.floor(1000 + Math.random() * 9000)}`,
       plate: `TX-${randomSuffix}-FL`,
@@ -1204,7 +1230,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tireCompound: options.tireCompound,
       sleeperTier: options.sleeperTier,
       liveryColor: options.liveryColor,
-      assignedTrailerId: null,
+      assignedTrailerId: newTrailer ? newTrailer.id : null,
       serviceDueKm: 45000,
     };
 
@@ -1255,6 +1281,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...prev,
       balanceUsd: nextBal,
       trucks: [...prev.trucks, newTruck],
+      trailers: newTrailer ? [newTrailer, ...(prev.trailers || [])] : (prev.trailers || []),
       loans: newLoans,
       ledger: [...newLedgerItems, ...prev.ledger],
       notifications: deduplicateNotifications([

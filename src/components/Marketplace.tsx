@@ -97,9 +97,15 @@ export const Marketplace: React.FC = () => {
   const [trailerTireCompound, setTrailerTireCompound] = useState<'highway_eco' | 'all_weather' | 'severe_snow'>('highway_eco');
   const [trailerFinancing, setTrailerFinancing] = useState<FinancingMethod>('cash');
 
+  // Bundle Trailer State for Truck Dealership
+  const [bundleTrailer, setBundleTrailer] = useState<boolean>(false);
+  const [bundledTrailerModelId, setBundledTrailerModelId] = useState<TrailerModelId>('dry-van-53');
+  const [bundledTrailerHasAero, setBundledTrailerHasAero] = useState<boolean>(true);
+
   // Active models
   const selectedTruckModel = TRUCK_MODELS.find((m) => m.id === selectedTruckModelId) || TRUCK_MODELS[0];
   const selectedTrailerModel = TRAILER_MODELS.find((m) => m.id === selectedTrailerModelId) || TRAILER_MODELS[0];
+  const bundledTrailerModel = TRAILER_MODELS.find((m) => m.id === bundledTrailerModelId) || TRAILER_MODELS[0];
 
   // Pricing calculations
   const truckAeroCost = truckHasAero ? 4500 : 0;
@@ -109,8 +115,12 @@ export const Marketplace: React.FC = () => {
   const truckLiveryCost = truckLivery !== 'obsidian_slate' ? 1200 : 0;
   const truckTotalCost =
     selectedTruckModel.basePriceUsd + truckAeroCost + truckRetarderCost + truckTiresCost + truckSleeperCost + truckLiveryCost;
-  const truckDownPayment = Math.round(truckTotalCost * 0.2);
-  const truckFinancedAmount = truckTotalCost - truckDownPayment;
+
+  const bundledTrailerCost = bundleTrailer ? bundledTrailerModel.basePriceUsd + (bundledTrailerHasAero ? 2200 : 0) : 0;
+  const truckTotalCostWithTrailer = truckTotalCost + bundledTrailerCost;
+
+  const truckDownPayment = Math.round(truckTotalCostWithTrailer * 0.2);
+  const truckFinancedAmount = truckTotalCostWithTrailer - truckDownPayment;
   const truckTotalLeaseRepay = Math.round(truckFinancedAmount * 1.06);
   const truckDailyLease = Math.round(truckTotalLeaseRepay / 60);
 
@@ -135,6 +145,8 @@ export const Marketplace: React.FC = () => {
       sleeperTier: truckSleeperTier,
       liveryColor: truckLivery,
       financingMethod: truckFinancing,
+      selectedTrailerModelId: bundleTrailer ? bundledTrailerModelId : null,
+      hasTrailerAeroSkirts: bundledTrailerHasAero,
     });
   };
 
@@ -1371,6 +1383,60 @@ export const Marketplace: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Bundle Cargo Trailer */}
+                  <div className="space-y-2.5 pt-3 border-t border-slate-800/80">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-mono uppercase tracking-wider text-amber-400 font-bold flex items-center gap-1.5">
+                        <Package className="w-3.5 h-3.5" />
+                        <span>Bundle Cargo Trailer</span>
+                      </label>
+                      <button
+                        onClick={() => setBundleTrailer(!bundleTrailer)}
+                        className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-colors ${
+                          bundleTrailer ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-950 text-slate-400 border border-slate-800'
+                        }`}
+                      >
+                        {bundleTrailer ? 'Bundled (Active)' : 'Optional Add-on'}
+                      </button>
+                    </div>
+
+                    {bundleTrailer && (
+                      <div className="p-3 bg-slate-950/80 border border-amber-500/30 rounded-xl space-y-2.5">
+                        <div>
+                          <label className="text-[10px] font-mono uppercase text-slate-400 block mb-1">Select Trailer Model</label>
+                          <select
+                            value={bundledTrailerModelId}
+                            onChange={(e) => setBundledTrailerModelId(e.target.value as TrailerModelId)}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-white font-mono focus:outline-none focus:border-slate-700"
+                          >
+                            {TRAILER_MODELS.map((tm) => (
+                              <option key={tm.id} value={tm.id}>
+                                {tm.name} (${tm.basePriceUsd.toLocaleString()})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs font-mono">
+                          <span className="text-slate-400">Aero Skirts (+$2,200)</span>
+                          <button
+                            onClick={() => setBundledTrailerHasAero(!bundledTrailerHasAero)}
+                            className={`px-2.5 py-1 rounded text-xs font-bold ${
+                              bundledTrailerHasAero ? 'bg-amber-400 text-slate-950' : 'bg-slate-900 text-slate-400 border border-slate-800'
+                            }`}
+                          >
+                            {bundledTrailerHasAero ? 'Equipped' : 'None'}
+                          </button>
+                        </div>
+
+                        <div className="text-[11px] font-mono text-amber-400 pt-1 border-t border-slate-800 flex justify-between">
+                          <span>Trailer Cost:</span>
+                          <span className="font-bold">+${bundledTrailerCost.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Payment method */}
                   <div className="space-y-1.5 pt-2 border-t border-slate-800/80">
                     <label className="text-xs font-mono uppercase tracking-wider text-slate-400 font-bold block">
@@ -1408,7 +1474,7 @@ export const Marketplace: React.FC = () => {
                       {truckFinancing === 'cash' ? 'Total Cash Purchase' : 'Initial Down Payment (20%)'}
                     </span>
                     <span className="text-lg font-bold text-white tabular-nums">
-                      ${(truckFinancing === 'cash' ? truckTotalCost : truckDownPayment).toLocaleString()}
+                      ${(truckFinancing === 'cash' ? truckTotalCostWithTrailer : truckDownPayment).toLocaleString()}
                     </span>
                   </div>
 
