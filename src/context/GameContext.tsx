@@ -805,6 +805,34 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Deduplicate notifications strictly
           const uniqueNotifications = deduplicateNotifications([...newNotifications, ...prevState.notifications]);
 
+          // Automatically refuel parked trucks at hubs from hub bulk fuel stock
+          let finalHubs = [...prevState.hubs];
+          updatedTrucks = updatedTrucks.map((truck) => {
+            if (truck.status !== 'idle') return truck;
+            const hub = finalHubs.find((h) => h.id === truck.currentHubId);
+            if (!hub || hub.bulkFuelStockLiters <= 0) return truck;
+
+            const model = TRUCK_MODELS.find((m) => m.id === truck.modelId);
+            if (!model) return truck;
+
+            const capacity = model.specs.fuelTankCapacityLiters;
+            if (truck.fuelCurrentLiters >= capacity) return truck;
+
+            const needed = capacity - truck.fuelCurrentLiters;
+            const toTransfer = Math.min(needed, hub.bulkFuelStockLiters);
+
+            if (toTransfer > 0) {
+              finalHubs = finalHubs.map((h) =>
+                h.id === hub.id ? { ...h, bulkFuelStockLiters: Math.max(0, h.bulkFuelStockLiters - toTransfer) } : h
+              );
+              return {
+                ...truck,
+                fuelCurrentLiters: truck.fuelCurrentLiters + toTransfer,
+              };
+            }
+            return truck;
+          });
+
           return {
             ...prevState,
             balanceUsd: currentBalance,
@@ -813,6 +841,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             trucks: updatedTrucks,
             trailers: updatedTrailers,
             drivers: updatedDrivers,
+            hubs: finalHubs,
             loans: updatedLoans,
             ledger: [...newLedgerEntries, ...prevState.ledger].slice(0, 150),
             notifications: uniqueNotifications.slice(0, 40),
