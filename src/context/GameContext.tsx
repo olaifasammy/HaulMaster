@@ -31,6 +31,7 @@ import {
 } from '../constants/gameData';
 import { computePhysicsStep } from '../utils/physicsEngine';
 import { getLocalWeather } from '../utils/weatherEngine';
+import { ensureCorridorBetweenHubs, selfHealNetworkCorridors } from '../utils/routeUtils';
 
 const STORAGE_KEY = 'haulmaster_game_state_v2';
 
@@ -153,12 +154,19 @@ const createInitialState = (): GameState => {
     };
   });
 
-  // Configure initial routes: only corridor connecting primary base to the single connected destination is unlocked
-  const initialRoutes = INITIAL_ROUTES.map((route) => {
+  // Guarantee bidirectional corridors between primary base and connected destination
+  const { updatedRoutes: routesWithActiveCorridor } = ensureCorridorBetweenHubs(
+    INITIAL_ROUTES,
+    initialHubs,
+    primaryHubId,
+    connectedLocationId,
+    true
+  );
+
+  const initialRoutes = routesWithActiveCorridor.map((route) => {
     const isOwned =
-      activeHubIds.includes(route.originHubId) &&
-      activeHubIds.includes(route.destinationHubId) &&
-      (route.originHubId === primaryHubId || route.destinationHubId === primaryHubId);
+      (route.originHubId === primaryHubId && route.destinationHubId === connectedLocationId) ||
+      (route.originHubId === connectedLocationId && route.destinationHubId === primaryHubId);
     return {
       ...route,
       isUnlocked: isOwned,
@@ -282,6 +290,32 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (!parsed.trailers || parsed.trailers.length === 0) {
             parsed.trailers = INITIAL_TRAILERS;
           }
+
+          // Self-heal routes: Ensure unlocked hubs always have connected corridors
+          const healRes = selfHealNetworkCorridors(
+            parsed.routes && parsed.routes.length > 0 ? parsed.routes : INITIAL_ROUTES,
+            parsed.hubs,
+            parsed.selectedRegion
+          );
+          parsed.routes = healRes.updatedRoutes;
+          parsed.ownedRouteIds = healRes.unlockedRoutes.map((r: RouteCorridor) => r.id);
+
+          // If availableContracts is empty or less than 4 contracts remain, generate fresh contracts immediately
+          if (!parsed.availableContracts || parsed.availableContracts.length < 4) {
+            parsed.availableContracts = generateContractsForRoutes(healRes.unlockedRoutes, parsed.hubs, 8);
+          }
+
+          // Ensure trucks are stationed at an unlocked hub
+          const unlockedHubIds = parsed.hubs.filter((h: Hub) => h.isUnlocked).map((h: Hub) => h.id);
+          if (unlockedHubIds.length > 0 && parsed.trucks) {
+            parsed.trucks = parsed.trucks.map((trk: TruckInstance) => {
+              if (!unlockedHubIds.includes(trk.currentHubId)) {
+                return { ...trk, currentHubId: unlockedHubIds[0] };
+              }
+              return trk;
+            });
+          }
+
           return parsed;
         }
       }
@@ -402,19 +436,33 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
 
             // Restock fresh available contracts ONLY for unlocked routes in the active region!
-            const unlockedRoutes = prevState.routes.filter(
+            let unlockedRoutes = prevState.routes.filter(
               (r) => r.isUnlocked && prevState.hubs.find((h) => h.id === r.originHubId)?.region === prevState.selectedRegion
             );
+            let currentRoutes = prevState.routes;
+            if (unlockedRoutes.length === 0) {
+              const healRes = selfHealNetworkCorridors(prevState.routes, updatedHubs, prevState.selectedRegion);
+              currentRoutes = healRes.updatedRoutes;
+              unlockedRoutes = healRes.unlockedRoutes.filter(
+                (r) => updatedHubs.find((h) => h.id === r.originHubId)?.region === prevState.selectedRegion
+              );
+              if (unlockedRoutes.length === 0) {
+                unlockedRoutes = healRes.unlockedRoutes;
+              }
+            }
+
             if (prevState.availableContracts.length < 8 && unlockedRoutes.length > 0) {
-              const freshContracts = generateContractsForRoutes(unlockedRoutes, updatedHubs, 3);
+              const freshContracts = generateContractsForRoutes(unlockedRoutes, updatedHubs, 4);
               prevState = {
                 ...prevState,
+                routes: currentRoutes,
                 availableContracts: [...prevState.availableContracts, ...freshContracts],
                 hubs: updatedHubs,
               };
             } else {
               prevState = {
                 ...prevState,
+                routes: currentRoutes,
                 hubs: updatedHubs,
               };
             }
@@ -424,14 +472,27 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const lastRefreshTime = prevState.lastMarketRefreshSimTime || 0;
           const shouldAutoRefresh = (newSimMinutes - lastRefreshTime >= 180) || (prevState.availableContracts.length < 4);
           if (shouldAutoRefresh) {
-            const activeRegionRoutes = prevState.routes.filter(
+            let activeRegionRoutes = prevState.routes.filter(
               (r) => r.isUnlocked && prevState.hubs.find((h) => h.id === r.originHubId)?.region === prevState.selectedRegion
             );
+            let routesPool = prevState.routes;
+            if (activeRegionRoutes.length === 0) {
+              const healRes = selfHealNetworkCorridors(prevState.routes, prevState.hubs, prevState.selectedRegion);
+              routesPool = healRes.updatedRoutes;
+              activeRegionRoutes = healRes.unlockedRoutes.filter(
+                (r) => prevState.hubs.find((h) => h.id === r.originHubId)?.region === prevState.selectedRegion
+              );
+              if (activeRegionRoutes.length === 0) {
+                activeRegionRoutes = healRes.unlockedRoutes;
+              }
+            }
+
             if (activeRegionRoutes.length > 0) {
               const freshBids = generateContractsForRoutes(activeRegionRoutes, prevState.hubs, 4);
               const prunedExisting = prevState.availableContracts.slice(-4);
               prevState = {
                 ...prevState,
+                routes: routesPool,
                 availableContracts: [...prunedExisting, ...freshBids],
                 lastMarketRefreshSimTime: newSimMinutes,
               };
@@ -1742,11 +1803,20 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     });
 
-    const updatedRoutes = INITIAL_ROUTES.map((route) => {
+    // Guarantee bidirectional corridors exist between the chosen primary headquarters and connected location
+    const { updatedRoutes: routesWithActiveCorridor } = ensureCorridorBetweenHubs(
+      INITIAL_ROUTES,
+      updatedHubs,
+      primaryHubId,
+      connectedLocationId,
+      true
+    );
+
+    // Lock all other routes so strictly only the user's selected corridor is unlocked from day 1
+    const updatedRoutes = routesWithActiveCorridor.map((route) => {
       const isOwned =
-        activeHubIds.includes(route.originHubId) &&
-        activeHubIds.includes(route.destinationHubId) &&
-        (route.originHubId === primaryHubId || route.destinationHubId === primaryHubId);
+        (route.originHubId === primaryHubId && route.destinationHubId === connectedLocationId) ||
+        (route.originHubId === connectedLocationId && route.destinationHubId === primaryHubId);
       return {
         ...route,
         isUnlocked: isOwned,
@@ -1826,7 +1896,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const unlockedRouteList = updatedRoutes.filter((r) => r.isUnlocked);
-    const starterContracts = generateContractsForRoutes(unlockedRouteList, updatedHubs, 8);
+    const starterContracts = generateContractsForRoutes(unlockedRouteList, updatedHubs, 10);
 
     const primaryHub = updatedHubs.find((h) => h.id === primaryHubId);
     const connHub = updatedHubs.find((h) => h.id === connectedLocationId);
@@ -1839,6 +1909,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       routes: updatedRoutes,
       ownedHubIds: activeHubIds,
       ownedRouteIds: unlockedRouteList.map((r) => r.id),
+      ownedSpokeConnections: [`${primaryHubId}:${connectedLocationId}`],
       trucks: [starterTruck],
       trailers: [starterTrailer],
       drivers: [starterDriver],
@@ -1866,7 +1937,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: `notif-launch-${Date.now()}`,
           simTimeFormatted: 'Day 1 08:00',
           title: 'Carrier Network Mobilized',
-          message: `Network launched with headquarters at ${primaryHub?.name} connected to ${connHub?.name}. All other regional corridors are locked awaiting rank expansion.`,
+          message: `Network launched with headquarters at ${primaryHub?.name} connected to ${connHub?.name}. Commercial freight corridor unlocked with ${starterContracts.length} freight consignments available for immediate dispatch!`,
           type: 'delivery',
           timestamp: Date.now(),
         },
@@ -2439,12 +2510,25 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshAvailableContracts = (paidByPlayer: boolean = false): boolean => {
-    const unlockedRoutes = state.routes.filter(
+    let unlockedRoutes = state.routes.filter(
       (r) => r.isUnlocked && state.hubs.find((h) => h.id === r.originHubId)?.region === state.selectedRegion
     );
+    let updatedRoutesPool = state.routes;
+
+    // Self-heal if no corridors are unlocked in this region
+    if (unlockedRoutes.length === 0) {
+      const healRes = selfHealNetworkCorridors(state.routes, state.hubs, state.selectedRegion);
+      updatedRoutesPool = healRes.updatedRoutes;
+      unlockedRoutes = healRes.unlockedRoutes.filter(
+        (r) => state.hubs.find((h) => h.id === r.originHubId)?.region === state.selectedRegion
+      );
+      if (unlockedRoutes.length === 0) {
+        unlockedRoutes = healRes.unlockedRoutes;
+      }
+    }
 
     if (unlockedRoutes.length === 0) {
-      notifyUser('No Active Corridors', 'No trade corridors are currently unlocked in this region to generate freight contracts.', 'delivery');
+      notifyUser('No Active Corridors', 'No trade corridors are currently unlocked in this region. Please unlock or connect a corridor in the Marketplace.', 'delivery');
       return false;
     }
 
@@ -2477,6 +2561,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return {
         ...prev,
         balanceUsd: nextBal,
+        routes: updatedRoutesPool,
+        ownedRouteIds: Array.from(new Set([...prev.ownedRouteIds, ...unlockedRoutes.map((r) => r.id)])),
         availableContracts: freshContracts,
         ledger: newLedger,
         lastMarketRefreshSimTime: prev.simTimeMinutes,
