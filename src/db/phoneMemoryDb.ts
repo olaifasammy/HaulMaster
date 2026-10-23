@@ -78,6 +78,13 @@ export async function getPhoneDb(): Promise<IDBDatabase> {
  * Completely off the main thread — does NOT block rendering or game physics.
  */
 export async function saveToPhoneDb(state: GameState): Promise<void> {
+  // Always update localStorage synchronously so initial useState has immediate access
+  try {
+    localStorage.setItem('haulmaster_game_state_v4', JSON.stringify(state));
+  } catch {
+    // ignore
+  }
+
   try {
     const db = await getPhoneDb();
     return new Promise<void>((resolve, reject) => {
@@ -105,12 +112,7 @@ export async function saveToPhoneDb(state: GameState): Promise<void> {
       tx.onerror = () => reject(tx.error);
     });
   } catch (err) {
-    // Graceful fallback to localStorage if IndexedDB fails in restricted private mode
-    try {
-      localStorage.setItem('haulmaster_game_state_v4', JSON.stringify(state));
-    } catch {
-      // ignore
-    }
+    // Already backed up to localStorage above
   }
 }
 

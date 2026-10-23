@@ -517,14 +517,22 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     loadFromPhoneDb().then((dbState) => {
       if (!isMounted || !dbState) return;
-      setState((currentState) => {
-        const dbTime = dbState.lastRealTimeTimestamp || 0;
-        const currTime = currentState.lastRealTimeTimestamp || 0;
-        if (dbTime >= currTime && dbState.trucks && dbState.trucks.length > 0) {
+      if (dbState.trucks && dbState.trucks.length > 0) {
+        setState((currentState) => {
+          const now = Date.now();
+          const lastTime = dbState.lastRealTimeTimestamp || now;
+          const realElapsedMs = now - lastTime;
+          if (realElapsedMs > 300000 && dbState.activeTrips && dbState.activeTrips.length > 0) {
+            const realSeconds = Math.floor(realElapsedMs / 1000);
+            const simMinutesToAdd = Math.min(realSeconds * 2, 43200);
+            const updated = runOfflineCatchUp(dbState, simMinutesToAdd);
+            updated.lastRealTimeTimestamp = now;
+            return updated;
+          }
+          dbState.lastRealTimeTimestamp = now;
           return dbState;
-        }
-        return currentState;
-      });
+        });
+      }
     }).catch((err) => {
       console.warn('[PhoneDB] Background load err:', err);
     });
