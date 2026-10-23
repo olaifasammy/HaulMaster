@@ -32,6 +32,7 @@ import {
 import { computePhysicsStep } from '../utils/physicsEngine';
 import { getLocalWeather } from '../utils/weatherEngine';
 import { WorldCompanyRepository } from '../constants/worldCompanies';
+import { processAiFleetMaintenance } from '../services/aiMaintenanceService';
 import {
   saveToPhoneDb,
   loadFromPhoneDb,
@@ -170,6 +171,9 @@ interface GameContextType {
   ) => boolean;
   clearDTCs: (truckId: string) => void;
   activateAiDispatcher: (tier: '7d' | '1m' | 'auto', useGold?: boolean) => boolean;
+  activateAiFleetMaintenance: (tier: '7d' | '1m' | 'auto', useGold?: boolean) => boolean;
+  activateAiSuite: (options: { planTier: '7d' | '1m' | 'auto' | 'year'; includeMaintenance: boolean; useGold: boolean; autoRenew: boolean }) => boolean;
+  toggleAiFleetMaintenance: () => void;
   executeAiAutoDispatch: () => { dispatchedCount: number; message: string };
   dispatchRoadsideMechanic: (tripId: string, repairType: 'mobile' | 'heavy_tow') => { success: boolean; message: string };
 }
@@ -291,6 +295,9 @@ const createInitialState = (): GameState => {
     offlineProgress: null,
     aiDispatcherActive: false,
     aiSubscriptionExpiresSimMinutes: 0,
+    aiFleetMaintenanceActive: false,
+    aiFleetMaintenanceExpiresSimMinutes: 0,
+    aiAutoRenew: false,
   };
 };
 
@@ -759,9 +766,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return { ...h, fuelPricePerLiter: newPrice };
             });
 
-            // Restock fresh available contracts ONLY for unlocked routes in the active region!
+            // Restock fresh available contracts for unlocked routes across all unlocked regions simultaneously
+            const unlockedRegions = prevState.unlockedRegions || [];
             const unlockedRoutes = prevState.routes.filter(
-              (r) => r.isUnlocked && prevState.hubs.find((h) => h.id === r.originHubId)?.region === prevState.selectedRegion
+              (r) => {
+                if (!r.isUnlocked) return false;
+                const oHub = prevState.hubs.find(h => h.id === r.originHubId);
+                return oHub && oHub.isUnlocked && unlockedRegions.includes(oHub.region);
+              }
             );
             if (prevState.availableContracts.length < 8 && unlockedRoutes.length > 0) {
               const freshContracts = generateContractsForRoutes(unlockedRoutes, updatedHubs, 3);
@@ -782,8 +794,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const lastRefreshTime = prevState.lastMarketRefreshSimTime || 0;
           const shouldAutoRefresh = (newSimMinutes - lastRefreshTime >= 180) || (prevState.availableContracts.length < 4);
           if (shouldAutoRefresh) {
+            const unlockedRegions = prevState.unlockedRegions || [];
             const activeRegionRoutes = prevState.routes.filter(
-              (r) => r.isUnlocked && prevState.hubs.find((h) => h.id === r.originHubId)?.region === prevState.selectedRegion
+              (r) => {
+                if (!r.isUnlocked) return false;
+                const oHub = prevState.hubs.find(h => h.id === r.originHubId);
+                return oHub && oHub.isUnlocked && unlockedRegions.includes(oHub.region);
+              }
             );
             if (activeRegionRoutes.length > 0) {
               const freshBids = generateContractsForRoutes(activeRegionRoutes, prevState.hubs, 4);
@@ -1286,6 +1303,25 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               hosStatus: nextHos,
             };
           });
+
+          // Process AI Fleet Maintenance Add-on
+          const maintResult = processAiFleetMaintenance(
+            {
+              ...prevState,
+              balanceUsd: currentBalance,
+              trucks: updatedTrucks,
+              simTimeMinutes: newSimMinutes,
+            },
+            deltaSimMinutes
+          );
+          currentBalance = maintResult.updatedBalance;
+          updatedTrucks = maintResult.updatedTrucks;
+          if (maintResult.newLedgerEntries.length > 0) {
+            newLedgerEntries.push(...maintResult.newLedgerEntries);
+          }
+          if (maintResult.newNotifications.length > 0) {
+            uniqueNotifications.unshift(...maintResult.newNotifications);
+          }
 
           return {
             ...prevState,
@@ -3423,6 +3459,208 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
+  const activateAiSuite = (options: {
+    planTier: '7d' | '1m' | 'auto' | 'year';
+    includeMaintenance: boolean;
+    useGold: boolean;
+    autoRenew: boolean;
+  }): boolean => {
+    const plans = {
+      '7d': { days: 14, usd: 45000, gold: 40, label: '14-Day Express' },
+      '1m': { days: 60, usd: 165000, gold: 120, label: '2-Month Corporate' },
+      'auto': { days: 180, usd: 500000, gold: 350, label: '180-Day Enterprise' },
+      'year': { days: 365, usd: 950000, gold: 650, label: '365-Day Annual Enterprise' },
+    };
+    const maintPlans = {
+      '7d': { usd: 35000, gold: 35 },
+      '1m': { usd: 120000, gold: 100 },
+      'auto': { usd: 350000, gold: 280 },
+      'year': { usd: 650000, gold: 500 },
+    };
+
+    const plan = plans[options.planTier];
+    const maint = options.includeMaintenance ? maintPlans[options.planTier] : { usd: 0, gold: 0 };
+    const totalUsd = plan.usd + maint.usd;
+    const totalGold = plan.gold + maint.gold;
+
+    const currentState = stateRef.current;
+    const simDay = Math.floor(currentState.simTimeMinutes / 1440) + 1;
+    const timeFormatted = `Day ${simDay}`;
+
+    if (options.useGold) {
+      if (currentState.gold < totalGold) {
+        notifyUser('Insufficient Gold', `AI Suite (${plan.label}${options.includeMaintenance ? ' + Fleet Maintenance' : ''}) requires ${totalGold} Gold. You have ${currentState.gold}.`, 'finance');
+        return false;
+      }
+      setState((prev) => {
+        const baseTimeDisp = Math.max(prev.simTimeMinutes, prev.aiSubscriptionExpiresSimMinutes || 0);
+        const baseTimeMaint = Math.max(prev.simTimeMinutes, prev.aiFleetMaintenanceExpiresSimMinutes || 0);
+        const durationMins = plan.days * 1440;
+
+        const nextState = {
+          ...prev,
+          gold: prev.gold - totalGold,
+          aiDispatcherActive: true,
+          aiSubscriptionExpiresSimMinutes: baseTimeDisp + durationMins,
+          aiFleetMaintenanceActive: options.includeMaintenance ? true : prev.aiFleetMaintenanceActive,
+          aiFleetMaintenanceExpiresSimMinutes: options.includeMaintenance ? baseTimeMaint + durationMins : prev.aiFleetMaintenanceExpiresSimMinutes,
+          aiAutoRenew: options.autoRenew,
+          notifications: deduplicateNotifications([
+            {
+              id: `notif-ai-suite-${Date.now()}`,
+              simTimeFormatted: timeFormatted,
+              title: '🤖 AI Suite & Add-on Activated',
+              message: `Subscribed to ${plan.label}${options.includeMaintenance ? ' + Fleet Maintenance' : ''} (-${totalGold} Gold). Auto-renew: ${options.autoRenew ? 'ON' : 'OFF'}.`,
+              type: 'ai',
+              timestamp: Date.now(),
+            },
+            ...prev.notifications,
+          ]),
+        };
+        stateRef.current = nextState;
+        return nextState;
+      });
+      return true;
+    } else {
+      if (currentState.balanceUsd < totalUsd) {
+        notifyUser('Insufficient Treasury', `AI Suite costs $${totalUsd.toLocaleString()}. Available: $${currentState.balanceUsd.toLocaleString()}.`, 'finance');
+        return false;
+      }
+      const nextBal = currentState.balanceUsd - totalUsd;
+      setState((prev) => {
+        const baseTimeDisp = Math.max(prev.simTimeMinutes, prev.aiSubscriptionExpiresSimMinutes || 0);
+        const baseTimeMaint = Math.max(prev.simTimeMinutes, prev.aiFleetMaintenanceExpiresSimMinutes || 0);
+        const durationMins = plan.days * 1440;
+
+        const nextState = {
+          ...prev,
+          balanceUsd: nextBal,
+          aiDispatcherActive: true,
+          aiSubscriptionExpiresSimMinutes: baseTimeDisp + durationMins,
+          aiFleetMaintenanceActive: options.includeMaintenance ? true : prev.aiFleetMaintenanceActive,
+          aiFleetMaintenanceExpiresSimMinutes: options.includeMaintenance ? baseTimeMaint + durationMins : prev.aiFleetMaintenanceExpiresSimMinutes,
+          aiAutoRenew: options.autoRenew,
+          ledger: [
+            {
+              id: `led-ai-suite-${Date.now()}`,
+              simDay,
+              simTimeFormatted: timeFormatted,
+              type: 'broker_fee' as const,
+              description: `AI Suite Subscription (${plan.label}${options.includeMaintenance ? ' + Fleet Maintenance' : ''})`,
+              amountUsd: -totalUsd,
+              runningBalanceUsd: nextBal,
+            },
+            ...prev.ledger,
+          ],
+          notifications: deduplicateNotifications([
+            {
+              id: `notif-ai-suite-${Date.now()}`,
+              simTimeFormatted: timeFormatted,
+              title: '🤖 AI Suite & Add-on Activated',
+              message: `Subscribed to ${plan.label}${options.includeMaintenance ? ' + Fleet Maintenance' : ''} (-$${totalUsd.toLocaleString()}). Auto-renew: ${options.autoRenew ? 'ON' : 'OFF'}.`,
+              type: 'ai',
+              timestamp: Date.now(),
+            },
+            ...prev.notifications,
+          ]),
+        };
+        stateRef.current = nextState;
+        return nextState;
+      });
+      return true;
+    }
+  };
+
+  const activateAiFleetMaintenance = (tier: '7d' | '1m' | 'auto', useGold: boolean = false): boolean => {
+    const tierConfig = {
+      '7d': { days: 14, usd: 35000, gold: 35, label: '14-Day Maintenance Pass' },
+      '1m': { days: 60, usd: 120000, gold: 100, label: '2-Month Corporate Pass (60 Days)' },
+      'auto': { days: 180, usd: 350000, gold: 280, label: '180-Day Enterprise Pass (180 Days)' },
+    };
+
+    const cfg = tierConfig[tier] || tierConfig['1m'];
+    const currentState = stateRef.current;
+    const simDay = Math.floor(currentState.simTimeMinutes / 1440) + 1;
+
+    if (useGold) {
+      if (currentState.gold < cfg.gold) {
+        notifyUser('Insufficient Gold', `AI Fleet Maintenance (${cfg.label}) requires ${cfg.gold} Gold coins. You have ${currentState.gold}.`, 'finance');
+        return false;
+      }
+      setState((prev) => {
+        const baseTime = Math.max(prev.simTimeMinutes, prev.aiFleetMaintenanceExpiresSimMinutes || 0);
+        const nextState = {
+          ...prev,
+          gold: prev.gold - cfg.gold,
+          aiFleetMaintenanceActive: true,
+          aiFleetMaintenanceExpiresSimMinutes: baseTime + (cfg.days * 1440),
+          notifications: deduplicateNotifications([
+            {
+              id: `notif-ai-maint-sub-${Date.now()}`,
+              simTimeFormatted: `Day ${simDay}`,
+              title: 'AI Fleet Maintenance Add-on Activated',
+              message: `Subscribed to ${cfg.label} (-${cfg.gold} Gold). Autonomous fleet servicing active!`,
+              type: 'ai',
+              timestamp: Date.now(),
+            },
+            ...prev.notifications,
+          ]),
+        };
+        stateRef.current = nextState;
+        return nextState;
+      });
+      return true;
+    } else {
+      if (currentState.balanceUsd < cfg.usd) {
+        notifyUser('Insufficient Treasury', `AI Fleet Maintenance (${cfg.label}) costs $${cfg.usd.toLocaleString()}. Available: $${currentState.balanceUsd.toLocaleString()}.`, 'finance');
+        return false;
+      }
+      const nextBal = currentState.balanceUsd - cfg.usd;
+      setState((prev) => {
+        const baseTime = Math.max(prev.simTimeMinutes, prev.aiFleetMaintenanceExpiresSimMinutes || 0);
+        const nextState = {
+          ...prev,
+          balanceUsd: nextBal,
+          aiFleetMaintenanceActive: true,
+          aiFleetMaintenanceExpiresSimMinutes: baseTime + (cfg.days * 1440),
+          ledger: [
+            {
+              id: `led-ai-maint-sub-${Date.now()}`,
+              simDay,
+              simTimeFormatted: `Day ${simDay}`,
+              type: 'maintenance_expense' as const,
+              description: `AI Fleet Maintenance Add-on purchase (${cfg.label})`,
+              amountUsd: -cfg.usd,
+              runningBalanceUsd: nextBal,
+            },
+            ...prev.ledger,
+          ],
+          notifications: deduplicateNotifications([
+            {
+              id: `notif-ai-maint-sub-${Date.now()}`,
+              simTimeFormatted: `Day ${simDay}`,
+              title: 'AI Fleet Maintenance Add-on Activated',
+              message: `Subscribed to ${cfg.label} (-$${cfg.usd.toLocaleString()}). Autonomous fleet servicing active!`,
+              type: 'ai',
+              timestamp: Date.now(),
+            },
+            ...prev.notifications,
+          ]),
+        };
+        stateRef.current = nextState;
+        return nextState;
+      });
+      return true;
+    }
+  };
+
+  const toggleAiFleetMaintenance = () => {
+    setState(prev => ({
+      ...prev,
+      aiFleetMaintenanceActive: !prev.aiFleetMaintenanceActive,
+    }));
+  };
+
   const activateAiDispatcher = (tier: '7d' | '1m' | 'auto', useGold: boolean = false): boolean => {
     const tierConfig = {
       '7d': { days: 14, usd: 45000, gold: 40, label: '14-Day Express License' },
@@ -3542,18 +3780,24 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let updatedRoutes = [...routes];
     const newNotifications = [...currentState.notifications];
     const activeTrips = [...currentState.activeTrips];
+    let remainingContracts = [...contracts];
 
-    for (const contract of contracts) {
-      if (idleTrucks.length === 0 || readyDrivers.length === 0) break;
+    for (let i = 0; i < idleTrucks.length; i++) {
+      if (readyDrivers.length === 0 || remainingContracts.length === 0) break;
 
-      const truck = idleTrucks[0];
+      const truck = idleTrucks[i];
       const driver = readyDrivers[0];
       if (!truck || !driver) continue;
 
-      if (truck.currentHubId !== contract.originHubId) {
-        updatedTrucks = updatedTrucks.map(t => t.id === truck.id ? { ...t, currentHubId: contract.originHubId } : t);
-        truck.currentHubId = contract.originHubId;
+      // Strict regional & hub restriction: Truck must be stationed at the contract's origin hub
+      const matchingContractIdx = remainingContracts.findIndex(c => c.originHubId === truck.currentHubId);
+      if (matchingContractIdx === -1) {
+        // No local consignment starts at this truck's hub; skip so Munich trucks stay in Europe!
+        continue;
       }
+
+      const contract = remainingContracts[matchingContractIdx];
+      remainingContracts.splice(matchingContractIdx, 1);
 
       if (truck.fuelCurrentLiters < 100) {
         truck.fuelCurrentLiters = Math.max(truck.fuelCurrentLiters, 500);
@@ -3600,7 +3844,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let chosenTrailerId: string | null = null;
       const truckModel = TRUCK_MODELS.find(m => m.id === truck.modelId);
       if (!truckModel?.isRigid) {
-        let bestTr = updatedTrailers.find(tr => tr.status === 'idle' && tr.currentHubId === contract.originHubId) || updatedTrailers.find(tr => tr.status === 'idle');
+        let bestTr = updatedTrailers.find(tr => tr.status === 'idle' && tr.currentHubId === contract.originHubId) || updatedTrailers.find(tr => tr.status === 'idle' && hubs.find(h => h.id === tr.currentHubId)?.region === hubs.find(h => h.id === contract.originHubId)?.region);
         if (!bestTr) {
           const newTr: TrailerInstance = {
             id: `trl-ai-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -3619,7 +3863,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         if (bestTr) {
           chosenTrailerId = bestTr.id;
-          updatedTrailers = updatedTrailers.map(tr => tr.id === bestTr!.id ? { ...tr, status: 'en_route', assignedTruckId: truck.id } : tr);
+          updatedTrailers = updatedTrailers.map(tr => tr.id === bestTr!.id ? { ...tr, status: 'en_route', assignedTruckId: truck.id, currentHubId: contract.originHubId } : tr);
         }
       }
 
@@ -3676,13 +3920,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } : t);
 
       updatedDrivers = updatedDrivers.map(d => d.id === driver.id ? { ...d, hosStatus: 'driving', assignedTruckId: truck.id } : d);
-
-      idleTrucks.shift();
       readyDrivers.shift();
     }
 
     const dispatchedContractIds = new Set(activeTrips.map(t => t.contract.id));
-    const remainingContracts = contracts.filter(c => !dispatchedContractIds.has(c.id));
+    const remainingContractsAfterAi = remainingContracts;
 
     const nextState = {
       ...currentState,
@@ -3691,7 +3933,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       drivers: updatedDrivers,
       trailers: updatedTrailers,
       routes: updatedRoutes,
-      availableContracts: remainingContracts,
+      availableContracts: remainingContractsAfterAi,
       notifications: deduplicateNotifications([
         {
           id: `notif-ai-auto-${Date.now()}`,
@@ -3840,6 +4082,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         repairSubsystem,
         clearDTCs,
         activateAiDispatcher,
+        activateAiFleetMaintenance,
+        activateAiSuite,
+        toggleAiFleetMaintenance,
         executeAiAutoDispatch,
         dispatchRoadsideMechanic,
       }}

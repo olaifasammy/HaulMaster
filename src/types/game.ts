@@ -238,6 +238,7 @@ export interface TruckInstance {
   liveryColor: FleetLivery;
   assignedTrailerId: string | null;
   serviceDueKm: number;
+  maintenanceMinutesRemaining?: number;
 }
 
 export type HOSStatus = 'driving' | 'working' | 'resting' | 'off_duty';
@@ -417,6 +418,9 @@ export interface GameState {
   } | null;
   aiDispatcherActive: boolean;
   aiSubscriptionExpiresSimMinutes: number;
+  aiFleetMaintenanceActive: boolean;
+  aiFleetMaintenanceExpiresSimMinutes: number;
+  aiAutoRenew?: boolean;
 }
 
 export type MechanicalAssemblyCategory = 'engine' | 'transmission' | 'drivetrain' | 'brakes' | 'cooling' | 'suspension' | 'emissions' | 'exhaust' | 'tires';

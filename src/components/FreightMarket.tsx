@@ -21,6 +21,8 @@ export const FreightMarket: React.FC<FreightMarketProps> = ({ onDispatchContract
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const unlockedRegions = state.unlockedRegions || ['North America'];
+
   const categories: { id: string; label: string }[] = [
     { id: 'all', label: 'All Consignments' },
     { id: 'Heavy Machinery', label: 'Heavy Machinery' },
@@ -32,8 +34,8 @@ export const FreightMarket: React.FC<FreightMarketProps> = ({ onDispatchContract
 
   const filteredContracts = state.availableContracts.filter((c) => {
     const originHub = state.hubs.find((h) => h.id === c.originHubId);
-    const unlockedRegions = state.unlockedRegions || ['North America'];
-    if (originHub && !unlockedRegions.includes(originHub.region)) return false;
+    const unlockedRegions = state.unlockedRegions || [];
+    if (!originHub || !originHub.isUnlocked || !unlockedRegions.includes(originHub.region)) return false;
 
     if (selectedCategory !== 'all' && c.category !== selectedCategory) return false;
     return true;
