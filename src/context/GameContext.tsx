@@ -533,7 +533,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Only calculate offline progress if away for > 5 minutes (300,000 ms) and active trips exist
           if (realElapsedMs > 300000 && parsed.activeTrips && parsed.activeTrips.length > 0) {
             const realSeconds = Math.floor(realElapsedMs / 1000);
-            const simMinutesToAdd = Math.min(realSeconds * 2, 43200); // cap at max 30 sim days
+            const simMinutesToAdd = Math.min(realSeconds * 1, 43200); // cap at max 30 sim days
             const updated = runOfflineCatchUp(parsed, simMinutesToAdd);
             updated.lastRealTimeTimestamp = now;
             return updated;
@@ -589,7 +589,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const realElapsedMs = now - lastTime;
           if (realElapsedMs > 300000 && dbState.activeTrips && dbState.activeTrips.length > 0) {
             const realSeconds = Math.floor(realElapsedMs / 1000);
-            const simMinutesToAdd = Math.min(realSeconds * 2, 43200);
+            const simMinutesToAdd = Math.min(realSeconds * 1, 43200);
             const updated = runOfflineCatchUp(dbState, simMinutesToAdd);
             updated.lastRealTimeTimestamp = now;
             return updated;
@@ -673,7 +673,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setState((prevState) => {
           if (prevState.simSpeed === 0) return prevState;
 
-          const deltaSimMinutes = prevState.simSpeed * 2; // 2 sim minutes per second at 1x
+          const deltaSimMinutes = prevState.simSpeed * 1; // 1 sim minute per second at 1x
           const newSimMinutes = prevState.simTimeMinutes + deltaSimMinutes;
           const currentDay = Math.floor(newSimMinutes / 1440) + 1;
           const prevDay = Math.floor(prevState.simTimeMinutes / 1440) + 1;
