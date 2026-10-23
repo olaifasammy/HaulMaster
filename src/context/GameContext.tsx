@@ -141,6 +141,7 @@ interface GameContextType {
   buySpokeLocationRoute: (hubId: string, spokeLocationId: string) => boolean;
   claimAchievementReward: (achievementId: string, cashReward: number, xpReward: number, currentValue: number, targetValue: number) => boolean;
   unlockRegion: (region: GeoRegion) => boolean;
+  dismissOfflineProgress: () => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -256,6 +257,156 @@ const createInitialState = (): GameState => {
     hasCompletedOnboarding: false,
     showGuide: false,
     unlockedRegions: ['North America'],
+    lastRealTimeTimestamp: Date.now(),
+    offlineProgress: null,
+  };
+};
+
+const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameState => {
+  if (simMinutesToAdd <= 0 || prevState.activeTrips.length === 0) {
+    return { ...prevState, lastRealTimeTimestamp: Date.now() };
+  }
+
+  let currentBalance = prevState.balanceUsd;
+  let updatedCargoTons = prevState.totalCargoDeliveredTons;
+  let updatedFuelBurned = prevState.totalFuelBurnedLiters;
+  let updatedKmDriven = prevState.totalKilometersDriven;
+  let updatedPlayerXp = prevState.playerXp;
+  let updatedPlayerRank = prevState.playerRank;
+  let updatedRankTitle = prevState.rankTitle;
+  let updatedGold = prevState.gold;
+
+  let completedCount = 0;
+  let revenueEarned = 0;
+  let kmCovered = 0;
+
+  const updatedTrips: ActiveTrip[] = [];
+  const finishedTrips: ActiveTrip[] = [];
+
+  for (const trip of prevState.activeTrips) {
+    const tripRemainingMinutes = (trip.totalDistanceKm - trip.progressKm) / (trip.corridor.baseSpeedLimitKmh / 60);
+    if (simMinutesToAdd >= tripRemainingMinutes) {
+      const finalProgressKm = trip.totalDistanceKm;
+      const distanceDelta = finalProgressKm - trip.progressKm;
+      kmCovered += distanceDelta;
+      updatedKmDriven += distanceDelta;
+
+      const fuelBurned = distanceDelta * 0.35;
+      updatedFuelBurned += fuelBurned;
+
+      finishedTrips.push({
+        ...trip,
+        progressKm: finalProgressKm,
+        elapsedMinutes: trip.elapsedMinutes + tripRemainingMinutes,
+        fuelConsumedLiters: trip.fuelConsumedLiters + fuelBurned,
+      });
+    } else {
+      const speedKmh = trip.corridor.baseSpeedLimitKmh * 0.85;
+      const distanceDelta = (speedKmh / 60) * simMinutesToAdd;
+      kmCovered += distanceDelta;
+      updatedKmDriven += distanceDelta;
+
+      const fuelBurned = distanceDelta * 0.35;
+      updatedFuelBurned += fuelBurned;
+
+      updatedTrips.push({
+        ...trip,
+        progressKm: Math.min(trip.totalDistanceKm, trip.progressKm + distanceDelta),
+        elapsedMinutes: trip.elapsedMinutes + simMinutesToAdd,
+        fuelConsumedLiters: trip.fuelConsumedLiters + fuelBurned,
+      });
+    }
+  }
+
+  const updatedTrucks = [...prevState.trucks];
+  const updatedTrailers = [...prevState.trailers];
+  const updatedDrivers = [...prevState.drivers];
+
+  for (const finished of finishedTrips) {
+    completedCount++;
+    const destHub = prevState.hubs.find((h) => h.id === finished.contract.destinationHubId);
+    const isOnTime = finished.elapsedMinutes <= finished.contract.deadlineMinutes;
+    const grossPayout = finished.contract.payoutUsd + (isOnTime ? finished.contract.bonusOnTimeUsd : -finished.contract.penaltyLateUsd);
+    const finalRevenue = Math.max(0, grossPayout);
+    revenueEarned += finalRevenue;
+
+    const driverWage = finished.totalDistanceKm * (prevState.drivers.find((d) => d.id === finished.driverId)?.wagePerKmUsd || 0.45);
+    const tolls = finished.corridor.tollCostUsd;
+
+    currentBalance += finalRevenue - driverWage - tolls;
+    updatedCargoTons += finished.contract.weightTons;
+
+    const earnedXp = Math.round(finished.totalDistanceKm * 0.35 + finished.contract.weightTons * 12);
+    updatedPlayerXp += earnedXp;
+
+    for (const tier of RANK_TIERS) {
+      if (updatedPlayerXp >= tier.xpRequired && tier.rank > updatedPlayerRank) {
+        updatedPlayerRank = tier.rank;
+        updatedRankTitle = tier.title;
+        updatedGold += 5;
+      }
+    }
+
+    const truckIndex = updatedTrucks.findIndex((t) => t.id === finished.truckId);
+    if (truckIndex >= 0) {
+      updatedTrucks[truckIndex] = {
+        ...updatedTrucks[truckIndex],
+        status: 'idle',
+        currentHubId: finished.contract.destinationHubId,
+        odometerKm: updatedTrucks[truckIndex].odometerKm + finished.totalDistanceKm,
+        activeTripId: null,
+      };
+    }
+
+    if (finished.trailerId) {
+      const trailerIndex = updatedTrailers.findIndex((tr) => tr.id === finished.trailerId);
+      if (trailerIndex >= 0) {
+        updatedTrailers[trailerIndex] = {
+          ...updatedTrailers[trailerIndex],
+          status: 'idle',
+          currentHubId: finished.contract.destinationHubId,
+          odometerKm: updatedTrailers[trailerIndex].odometerKm + finished.totalDistanceKm,
+          assignedTripId: null,
+        };
+      }
+    }
+
+    const driverIndex = updatedDrivers.findIndex((d) => d.id === finished.driverId);
+    if (driverIndex >= 0) {
+      updatedDrivers[driverIndex] = {
+        ...updatedDrivers[driverIndex],
+        currentHubId: finished.contract.destinationHubId,
+        hosStatus: 'off_duty',
+      };
+    }
+  }
+
+  const hoursElapsed = Number((simMinutesToAdd / 60).toFixed(1));
+  const progressReport = completedCount > 0 || kmCovered > 30 ? {
+    hoursElapsed,
+    completedContracts: completedCount,
+    revenueEarned,
+    kmCovered: Math.round(kmCovered),
+    visible: true,
+  } : null;
+
+  return {
+    ...prevState,
+    balanceUsd: currentBalance,
+    simTimeMinutes: prevState.simTimeMinutes + simMinutesToAdd,
+    activeTrips: updatedTrips,
+    trucks: updatedTrucks,
+    trailers: updatedTrailers,
+    drivers: updatedDrivers,
+    totalCargoDeliveredTons: updatedCargoTons,
+    totalFuelBurnedLiters: updatedFuelBurned,
+    totalKilometersDriven: updatedKmDriven,
+    playerRank: updatedPlayerRank,
+    playerXp: updatedPlayerXp,
+    rankTitle: updatedRankTitle,
+    gold: updatedGold,
+    lastRealTimeTimestamp: Date.now(),
+    offlineProgress: progressReport,
   };
 };
 
@@ -268,11 +419,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const parsed = JSON.parse(saved);
         if (parsed && parsed.trucks && parsed.hubs) {
           if (parsed.gold === undefined) parsed.gold = 15;
-          // Strictly deduplicate and ensure unique keys for any restored notifications
           parsed.notifications = deduplicateNotifications(parsed.notifications || []);
           if (!parsed.trailers || parsed.trailers.length === 0) {
             parsed.trailers = INITIAL_TRAILERS;
           }
+
+          const now = Date.now();
+          const lastTime = parsed.lastRealTimeTimestamp || now;
+          const realElapsedMs = now - lastTime;
+          if (realElapsedMs > 8000 && parsed.simSpeed === 1) {
+            const realSeconds = Math.floor(realElapsedMs / 1000);
+            const simMinutesToAdd = realSeconds * 2;
+            return runOfflineCatchUp(parsed, simMinutesToAdd);
+          }
+
+          parsed.lastRealTimeTimestamp = now;
           return parsed;
         }
       }
@@ -2687,6 +2848,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   };
 
+  const dismissOfflineProgress = () => {
+    setState((prev) => ({
+      ...prev,
+      offlineProgress: null,
+    }));
+  };
+
   const resetGame = () => {
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -2793,6 +2961,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         buySpokeLocationRoute,
         claimAchievementReward,
         unlockRegion,
+        dismissOfflineProgress,
       }}
     >
       {children}

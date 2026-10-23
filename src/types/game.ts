@@ -387,4 +387,11 @@ export interface GameState {
   showGuide: boolean;
   lastMarketRefreshSimTime?: number;
   unlockedRegions: GeoRegion[];
-}
+  lastRealTimeTimestamp?: number;
+  offlineProgress?: {
+    hoursElapsed: number;
+    completedContracts: number;
+    revenueEarned: number;
+    kmCovered: number;
+    visible: boolean;
+  } | null;

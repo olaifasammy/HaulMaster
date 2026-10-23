@@ -16,6 +16,7 @@ import { RouteDispatcherModal } from './components/RouteDispatcherModal';
 import { OnboardingWizard } from './components/OnboardingWizard';
 import { UserGuideWalkthrough } from './components/UserGuideWalkthrough';
 import { CompanyProfileModal } from './components/CompanyProfileModal';
+import { OfflineProgressModal } from './components/OfflineProgressModal';
 import {
   Activity,
   Truck,
@@ -224,6 +225,9 @@ const DashboardContent: React.FC = () => {
       {state.showGuide && (
         <UserGuideWalkthrough />
       )}
+
+      {/* Offline Fleet Progress Report Modal */}
+      <OfflineProgressModal />
     </div>
   );
 };
