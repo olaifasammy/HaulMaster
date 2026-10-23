@@ -351,6 +351,10 @@ const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameS
   const updatedTrucks = [...prevState.trucks];
   const updatedTrailers = [...prevState.trailers];
   const updatedDrivers = [...prevState.drivers];
+  const newLedgerEntries: LedgerEntry[] = [];
+  const newNotifications: GameEventNotification[] = [];
+  const simDay = Math.floor(prevState.simTimeMinutes / 1440) + 1;
+  const timeFormatted = `Day ${simDay}`;
 
   for (const finished of finishedTrips) {
     completedCount++;
@@ -374,8 +378,57 @@ const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameS
         updatedPlayerRank = tier.rank;
         updatedRankTitle = tier.title;
         updatedGold += 5;
+        newNotifications.push({
+          id: `notif-rank-off-${tier.rank}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          simTimeFormatted: timeFormatted,
+          title: `🪙 PROMOTED: ${tier.title.toUpperCase()} (Rank ${tier.rank})`,
+          message: `Carrier reputation elevated to Rank ${tier.rank} (${tier.title}). Earned +5 Gold!`,
+          type: 'delivery',
+          timestamp: Date.now(),
+        });
       }
     }
+
+    newLedgerEntries.push({
+      id: `led-off-deliv-${finished.id}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      simDay,
+      simTimeFormatted: timeFormatted,
+      type: 'freight_revenue',
+      description: `Delivered (Offline): ${finished.contract.title} (${finished.contract.weightTons}t) to ${destHub?.name || 'Destination'} [+${earnedXp} XP]`,
+      amountUsd: finalRevenue,
+      runningBalanceUsd: currentBalance,
+    });
+
+    newLedgerEntries.push({
+      id: `led-off-wage-${finished.id}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      simDay,
+      simTimeFormatted: timeFormatted,
+      type: 'driver_wages',
+      description: `Driver mileage payout (${Math.round(finished.totalDistanceKm)} km)`,
+      amountUsd: -Math.round(driverWage),
+      runningBalanceUsd: currentBalance,
+    });
+
+    if (tolls > 0) {
+      newLedgerEntries.push({
+        id: `led-off-toll-${finished.id}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        simDay,
+        simTimeFormatted: timeFormatted,
+        type: 'toll_expense',
+        description: `Corridor electronic highway tolls`,
+        amountUsd: -tolls,
+        runningBalanceUsd: currentBalance,
+      });
+    }
+
+    newNotifications.push({
+      id: `notif-off-deliv-${finished.id}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      simTimeFormatted: timeFormatted,
+      title: 'Freight Consignment Delivered (Offline)',
+      message: `Cargo arrived at ${destHub?.name}. Net payment: $${finalRevenue.toLocaleString()}.`,
+      type: 'delivery',
+      timestamp: Date.now(),
+    });
 
     const truckIndex = updatedTrucks.findIndex((t) => t.id === finished.truckId);
     if (truckIndex >= 0) {
@@ -446,6 +499,8 @@ const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameS
     trucks: updatedTrucks,
     trailers: updatedTrailers,
     drivers: updatedDrivers,
+    ledger: [...newLedgerEntries, ...prevState.ledger].slice(0, 150),
+    notifications: deduplicateNotifications([...newNotifications, ...prevState.notifications]).slice(0, 40),
     totalCargoDeliveredTons: updatedCargoTons,
     totalFuelBurnedLiters: updatedFuelBurned,
     totalKilometersDriven: updatedKmDriven,
