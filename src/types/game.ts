@@ -121,12 +121,30 @@ export interface PowertrainSpecs {
   frontalAreaM2: number;
 }
 
-export type TruckModelId = 'titan-540' | 'strada-460' | 'vanguard-600' | 'metro-320' | 'nordic-620' | 'colossus-750';
+export type TruckModelId =
+  | 'titan-540'
+  | 'strada-460'
+  | 'vanguard-600'
+  | 'metro-320'
+  | 'nordic-620'
+  | 'colossus-750'
+  | 'mercedes-sprinter-519'
+  | 'mercedes-actros-1863'
+  | 'scania-770s-v8'
+  | 'scania-r500-super'
+  | 'man-tgx-18640'
+  | 'man-tgm-18320'
+  | 'peterbilt-389-classic'
+  | 'freightliner-cascadia'
+  | 'isuzu-giga-520'
+  | 'hino-700-profia';
 
 export interface TruckModel {
   id: TruckModelId;
   name: string;
   manufacturer: string;
+  brand?: 'Mercedes-Benz' | 'Scania' | 'MAN' | 'Peterbilt' | 'Freightliner' | 'Isuzu' | 'Hino' | 'MetroFreight' | 'Strada' | 'Titan' | 'Vanguard' | 'Nordic';
+  origin?: 'Europe' | 'North America' | 'Asia';
   category: 'Heavy Haul' | 'Efficiency Long-Haul' | 'Flagship Highway' | 'Urban Distribution' | 'Severe Duty' | 'Extreme Heavy Haul';
   image: string;
   basePriceUsd: number;
@@ -395,3 +413,22 @@ export interface GameState {
     kmCovered: number;
     visible: boolean;
   } | null;
+  aiDispatcherActive: boolean;
+  aiSubscriptionExpiresSimMinutes: number;
+}
+
+export type MechanicalAssemblyCategory = 'engine' | 'transmission' | 'drivetrain' | 'brakes' | 'cooling' | 'suspension' | 'emissions' | 'exhaust' | 'tires';
+export type PartQualityTier = 'OEM Standard' | 'Heavy-Duty Reinforced' | 'High-Performance Ceramic';
+
+export interface RealisticTruckPart {
+  id: string;
+  name: string;
+  assembly: MechanicalAssemblyCategory;
+  conditionPct: number;
+  basePriceUsd: number;
+  laborUsd: number;
+  metricLabel: string;
+  wearCause: string;
+  isCritical: boolean;
+}
+

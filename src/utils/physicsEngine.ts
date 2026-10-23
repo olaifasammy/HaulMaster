@@ -198,35 +198,36 @@ export function computePhysicsStep(params: StepPhysicsParams): StepPhysicsResult
   const brakeTempCelsius = Math.min(650, brakeTemp);
 
   // 10. Subsystem Degradation & Wear Math
-  // Normal highway driving wears ~0.00008% per km. Severe mountain climbs or overheating accelerates it.
+  // Realistic heavy transport wear: mileage, steep grades, thermal overheating, and heavy braking degrade components
   const mechanicalSympathyFactor = 1.0 - (driverStats.mechanicalSympathy - 75) * 0.004;
   const thermalStress = oilTempCelsius > 115 ? 3.0 : 1.0;
-  const gradeStress = Math.abs(gradePct) > 4.5 ? 2.2 : 1.0;
+  const gradeStress = Math.abs(gradePct) > 4.5 ? 2.5 : 1.0;
   const wearMultiplier = mechanicalSympathyFactor * thermalStress * gradeStress;
 
-  const baseWearPerKm = 0.00035 * wearMultiplier;
+  // Realistic commercial rate: ~3-5% component degradation per 1,000km under heavy freight
+  const baseWearPerKm = 0.0035 * wearMultiplier;
   const updatedSubsystems: SubsystemHealth = {
     ...subsystems,
-    engineBlock: Math.max(0, subsystems.engineBlock - distanceCoveredKm * baseWearPerKm * (engineLoadPct > 85 ? 1.5 : 1.0)),
-    turbocharger: Math.max(0, subsystems.turbocharger - distanceCoveredKm * baseWearPerKm * (turboBoostBar > 1.8 ? 1.6 : 1.0)),
-    transmission: Math.max(0, subsystems.transmission - distanceCoveredKm * baseWearPerKm * 0.9),
-    clutchPlate: Math.max(0, subsystems.clutchPlate - (speedKmh < 30 ? 0.001 : baseWearPerKm * 0.5)),
-    brakePads: Math.max(0, subsystems.brakePads - (brakeTempCelsius > 250 ? distanceCoveredKm * baseWearPerKm * 4.0 : distanceCoveredKm * baseWearPerKm)),
-    brakeRotors: Math.max(0, subsystems.brakeRotors - distanceCoveredKm * baseWearPerKm * 0.6),
-    coolingSystem: Math.max(0, subsystems.coolingSystem - distanceCoveredKm * baseWearPerKm * 0.7),
-    suspensionDampers: Math.max(0, subsystems.suspensionDampers - distanceCoveredKm * baseWearPerKm * (weather.type === 'Snow' || weather.type === 'Blizzard' ? 2.0 : 1.1)),
-    exhaustAftertreatment: Math.max(0, subsystems.exhaustAftertreatment - distanceCoveredKm * baseWearPerKm * 1.2),
+    engineBlock: Math.max(0, subsystems.engineBlock - distanceCoveredKm * baseWearPerKm * (engineLoadPct > 85 ? 1.4 : 0.8)),
+    turbocharger: Math.max(0, subsystems.turbocharger - distanceCoveredKm * baseWearPerKm * (turboBoostBar > 1.8 ? 1.6 : 0.9)),
+    transmission: Math.max(0, subsystems.transmission - distanceCoveredKm * baseWearPerKm * 0.85),
+    clutchPlate: Math.max(0, subsystems.clutchPlate - (speedKmh < 30 ? 0.005 : baseWearPerKm * 0.6)),
+    brakePads: Math.max(0, subsystems.brakePads - (brakeTempCelsius > 250 ? distanceCoveredKm * baseWearPerKm * 3.5 : distanceCoveredKm * baseWearPerKm * 1.2)),
+    brakeRotors: Math.max(0, subsystems.brakeRotors - distanceCoveredKm * baseWearPerKm * 0.8),
+    coolingSystem: Math.max(0, subsystems.coolingSystem - distanceCoveredKm * baseWearPerKm * 0.75),
+    suspensionDampers: Math.max(0, subsystems.suspensionDampers - distanceCoveredKm * baseWearPerKm * (weather.type === 'Snow' || weather.type === 'Blizzard' ? 2.2 : 1.0)),
+    exhaustAftertreatment: Math.max(0, subsystems.exhaustAftertreatment - distanceCoveredKm * baseWearPerKm * 1.1),
     steerTires: {
       ...subsystems.steerTires,
-      wearPercentage: Math.max(0, subsystems.steerTires.wearPercentage - distanceCoveredKm * 0.0006),
-      treadDepthMm: Math.max(1.0, Number((subsystems.steerTires.treadDepthMm - distanceCoveredKm * 0.0001).toFixed(2))),
+      wearPercentage: Math.max(0, subsystems.steerTires.wearPercentage - distanceCoveredKm * 0.005),
+      treadDepthMm: Math.max(1.0, Number((subsystems.steerTires.treadDepthMm - distanceCoveredKm * 0.0009).toFixed(2))),
       temperatureCelsius: Math.round(20 + speedKmh * 0.3 + ambientTemp * 0.5),
       pressurePsi: Math.round(subsystems.steerTires.recommendedPsi + (ambientTemp - 20) * 0.25),
     },
     driveTiresAxle1: {
       ...subsystems.driveTiresAxle1,
-      wearPercentage: Math.max(0, subsystems.driveTiresAxle1.wearPercentage - distanceCoveredKm * 0.0007),
-      treadDepthMm: Math.max(1.0, Number((subsystems.driveTiresAxle1.treadDepthMm - distanceCoveredKm * 0.00012).toFixed(2))),
+      wearPercentage: Math.max(0, subsystems.driveTiresAxle1.wearPercentage - distanceCoveredKm * 0.0055),
+      treadDepthMm: Math.max(1.0, Number((subsystems.driveTiresAxle1.treadDepthMm - distanceCoveredKm * 0.001).toFixed(2))),
       temperatureCelsius: Math.round(22 + speedKmh * 0.35 + ambientTemp * 0.5),
       pressurePsi: Math.round(subsystems.driveTiresAxle1.recommendedPsi + (ambientTemp - 20) * 0.25),
     },

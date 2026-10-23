@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 export const FinancialLedger: React.FC<{ onOpenLoansPage: () => void }> = ({ onOpenLoansPage }) => {
-  const { state, repayLoan } = useGame();
+  const { state, repayLoan, takeLoan } = useGame();
   const [filterType, setFilterType] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);

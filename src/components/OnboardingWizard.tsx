@@ -373,34 +373,43 @@ export const OnboardingWizard: React.FC = () => {
                     Included Free ($0) · Buy Heavy Tractors at Dealership Later
                   </span>
                 </div>
-                <div className="grid grid-cols-1 gap-3 max-w-md">
-                  {TRUCK_MODELS.filter((truck) => truck.id === 'metro-320').map((truck) => (
-                    <div
-                      key={truck.id}
-                      className="p-4 rounded-xl border-2 bg-amber-500/10 border-amber-500 text-white flex items-center gap-4 relative"
-                    >
-                      <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-emerald-500 text-slate-950 font-bold text-[9px] rounded font-mono uppercase tracking-wide">
-                        Default Starter
-                      </div>
-                      <div className="w-28 h-20 rounded-lg overflow-hidden bg-slate-900 border border-slate-800/80 shrink-0">
-                        <img
-                          src={truck.image}
-                          alt={truck.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="min-w-0">
-                        <span className="text-[10px] font-mono text-amber-400 font-bold block">
-                          {truck.category}
-                        </span>
-                        <h5 className="text-sm font-bold text-white leading-snug truncate">{truck.name}</h5>
-                        <div className="flex items-center gap-3 text-[11px] font-mono text-slate-300 mt-1">
-                          <span>{truck.specs.horsepower} HP</span>
-                          <span className="text-emerald-400 font-bold">{truck.specs.maxPayloadKg / 1000}t Payload</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {TRUCK_MODELS.filter((truck) => truck.id === 'metro-320' || truck.id === 'mercedes-sprinter-519').map((truck) => {
+                    const isSelected = starterTruckId === truck.id;
+                    return (
+                      <div
+                        key={truck.id}
+                        onClick={() => setStarterTruckId(truck.id)}
+                        className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer flex items-center gap-3.5 relative ${
+                          isSelected
+                            ? 'bg-amber-500/10 border-amber-500 text-white ring-1 ring-amber-500/30 shadow-lg'
+                            : 'bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-300'
+                        }`}
+                      >
+                        <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-emerald-500 text-slate-950 font-bold text-[9px] rounded font-mono uppercase tracking-wide">
+                          {truck.id === 'mercedes-sprinter-519' ? 'Agile Van' : 'Medium Rigid'}
+                        </div>
+                        <div className="w-24 h-20 rounded-lg overflow-hidden bg-slate-900 border border-slate-800/80 shrink-0">
+                          <img
+                            src={truck.image}
+                            alt={truck.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-mono text-amber-400 font-bold block truncate">
+                            {truck.manufacturer}
+                          </span>
+                          <h5 className="text-xs sm:text-sm font-bold text-white leading-snug truncate">{truck.name}</h5>
+                          <div className="flex items-center gap-2.5 text-[10px] font-mono text-slate-300 mt-1">
+                            <span>{truck.specs.horsepower} HP</span>
+                            <span className="text-emerald-400 font-bold">≤{truck.specs.maxPayloadKg / 1000}t</span>
+                            <span className="text-slate-400">{truck.specs.fuelTankCapacityLiters}L</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 

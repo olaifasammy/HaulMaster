@@ -32,6 +32,12 @@ import {
 import { computePhysicsStep } from '../utils/physicsEngine';
 import { getLocalWeather } from '../utils/weatherEngine';
 import { WorldCompanyRepository } from '../constants/worldCompanies';
+import {
+  saveToPhoneDb,
+  loadFromPhoneDb,
+  clearPhoneDb,
+  requestPersistentStorage,
+} from '../db/phoneMemoryDb';
 
 const STORAGE_KEY = 'haulmaster_game_state_v4';
 
@@ -142,6 +148,18 @@ interface GameContextType {
   claimAchievementReward: (achievementId: string, cashReward: number, xpReward: number, currentValue: number, targetValue: number) => boolean;
   unlockRegion: (region: GeoRegion) => boolean;
   dismissOfflineProgress: () => void;
+  notifyUser: (title: string, message: string, type?: GameEventNotification['type']) => void;
+  flushToDb: () => Promise<void>;
+  restoreState: (importedState: GameState) => void;
+  lastSavedTimestamp: number | null;
+  isDbSaving: boolean;
+  repairSubsystem: (
+    truckId: string,
+    componentKey: 'engine' | 'turbo' | 'transmission' | 'clutch' | 'brakes' | 'cooling' | 'suspension' | 'emissions' | 'steerTires' | 'driveTires'
+  ) => boolean;
+  clearDTCs: (truckId: string) => void;
+  activateAiDispatcher: (tier: '7d' | '1m' | 'auto', useGold?: boolean) => boolean;
+  executeAiAutoDispatch: () => { dispatchedCount: number; message: string };
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -259,6 +277,8 @@ const createInitialState = (): GameState => {
     unlockedRegions: ['North America'],
     lastRealTimeTimestamp: Date.now(),
     offlineProgress: null,
+    aiDispatcherActive: false,
+    aiSubscriptionExpiresSimMinutes: 0,
   };
 };
 
@@ -349,12 +369,30 @@ const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameS
 
     const truckIndex = updatedTrucks.findIndex((t) => t.id === finished.truckId);
     if (truckIndex >= 0) {
+      const prevSub = updatedTrucks[truckIndex].subsystems;
+      const wearDelta = finished.totalDistanceKm * 0.0035;
       updatedTrucks[truckIndex] = {
         ...updatedTrucks[truckIndex],
         status: 'idle',
         currentHubId: finished.contract.destinationHubId,
         odometerKm: updatedTrucks[truckIndex].odometerKm + finished.totalDistanceKm,
         activeTripId: null,
+        subsystems: {
+          ...prevSub,
+          engineBlock: Math.max(0, prevSub.engineBlock - wearDelta * 0.9),
+          brakePads: Math.max(0, prevSub.brakePads - wearDelta * 1.3),
+          turbocharger: Math.max(0, prevSub.turbocharger - wearDelta * 1.0),
+          steerTires: {
+            ...prevSub.steerTires,
+            wearPercentage: Math.max(0, prevSub.steerTires.wearPercentage - wearDelta * 1.4),
+            treadDepthMm: Math.max(1.0, Number((prevSub.steerTires.treadDepthMm - finished.totalDistanceKm * 0.0009).toFixed(2))),
+          },
+          driveTiresAxle1: {
+            ...prevSub.driveTiresAxle1,
+            wearPercentage: Math.max(0, prevSub.driveTiresAxle1.wearPercentage - wearDelta * 1.5),
+            treadDepthMm: Math.max(1.0, Number((prevSub.driveTiresAxle1.treadDepthMm - finished.totalDistanceKm * 0.001).toFixed(2))),
+          },
+        },
       };
     }
 
@@ -427,10 +465,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const now = Date.now();
           const lastTime = parsed.lastRealTimeTimestamp || now;
           const realElapsedMs = now - lastTime;
-          if (realElapsedMs > 8000 && parsed.simSpeed === 1) {
+          // Only calculate offline progress if away for > 5 minutes (300,000 ms) and active trips exist
+          if (realElapsedMs > 300000 && parsed.activeTrips && parsed.activeTrips.length > 0) {
             const realSeconds = Math.floor(realElapsedMs / 1000);
-            const simMinutesToAdd = realSeconds * 2;
-            return runOfflineCatchUp(parsed, simMinutesToAdd);
+            const simMinutesToAdd = Math.min(realSeconds * 2, 43200); // cap at max 30 sim days
+            const updated = runOfflineCatchUp(parsed, simMinutesToAdd);
+            updated.lastRealTimeTimestamp = now;
+            return updated;
           }
 
           parsed.lastRealTimeTimestamp = now;
@@ -465,14 +506,87 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   };
 
-  // Persist state to localStorage
+  const [lastSavedTimestamp, setLastSavedTimestamp] = useState<number | null>(Date.now());
+  const [isDbSaving, setIsDbSaving] = useState<boolean>(false);
+  const isDirtyRef = useRef<boolean>(false);
+
+  // Asynchronously initialize from Phone Memory DB (IndexedDB)
   useEffect(() => {
+    let isMounted = true;
+    requestPersistentStorage().catch(() => {});
+
+    loadFromPhoneDb().then((dbState) => {
+      if (!isMounted || !dbState) return;
+      setState((currentState) => {
+        const dbTime = dbState.lastRealTimeTimestamp || 0;
+        const currTime = currentState.lastRealTimeTimestamp || 0;
+        if (dbTime >= currTime && dbState.trucks && dbState.trucks.length > 0) {
+          return dbState;
+        }
+        return currentState;
+      });
+    }).catch((err) => {
+      console.warn('[PhoneDB] Background load err:', err);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Flush state to phone memory DB asynchronously without blocking main thread
+  const flushToDb = async () => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (e) {
-      console.warn('Failed to save game state:', e);
+      setIsDbSaving(true);
+      const snapshot = stateRef.current;
+      await saveToPhoneDb(snapshot);
+      isDirtyRef.current = false;
+      setLastSavedTimestamp(Date.now());
+    } catch (err) {
+      console.warn('[PhoneDB] Save error:', err);
+    } finally {
+      setIsDbSaving(false);
     }
+  };
+
+  // Mark dirty whenever state changes
+  useEffect(() => {
+    isDirtyRef.current = true;
   }, [state]);
+
+  // Debounced auto-save: flushes to Phone Memory DB every 5 seconds (decoupled from the 1s tick!)
+  useEffect(() => {
+    const saveTimer = setInterval(() => {
+      if (isDirtyRef.current) {
+        flushToDb();
+      }
+    }, 5000);
+
+    // Save immediately if user closes or navigates away
+    const handleBeforeUnload = () => {
+      if (isDirtyRef.current) {
+        saveToPhoneDb(stateRef.current);
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      clearInterval(saveTimer);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
+
+  const restoreState = (importedState: GameState) => {
+    if (!importedState || !importedState.trucks) {
+      notifyUser('Import Failed', 'The supplied backup file is missing required fleet data.', 'maintenance');
+      return;
+    }
+    setState(importedState);
+    saveToPhoneDb(importedState).then(() => {
+      setLastSavedTimestamp(Date.now());
+      notifyUser('Database Restored', 'Game state successfully restored into Phone Memory DB.', 'delivery');
+    });
+  };
 
   // Main Simulation Loop
   useEffect(() => {
@@ -1254,6 +1368,152 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ]),
       };
     });
+  };
+
+  const clearDTCs = (truckId: string) => {
+    setState((prev) => ({
+      ...prev,
+      trucks: prev.trucks.map((t) => (t.id === truckId ? { ...t, activeDTCs: [] } : t)),
+    }));
+    notifyUser('ECU Diagnostics Reset', 'All stored OBD-II Diagnostic Trouble Codes cleared from truck memory.', 'maintenance');
+  };
+
+  const repairSubsystem = (
+    truckId: string,
+    componentKey: 'engine' | 'turbo' | 'transmission' | 'clutch' | 'brakes' | 'cooling' | 'suspension' | 'emissions' | 'steerTires' | 'driveTires'
+  ): boolean => {
+    const truck = state.trucks.find((t) => t.id === truckId);
+    if (!truck) return false;
+    if (truck.status === 'en_route') {
+      notifyUser('Vehicle In Transit', 'Truck is currently en-route on a commercial haul. Repairs must be scheduled at a terminal bay.', 'maintenance');
+      return false;
+    }
+
+    const costs: Record<string, { cost: number; title: string }> = {
+      engine: { cost: 1200, title: 'Engine Cylinders & Head Recondition' },
+      turbo: { cost: 1650, title: 'Turbocharger VGT Actuator Replacement' },
+      transmission: { cost: 1400, title: 'Transmission Synchronizer Service' },
+      clutch: { cost: 950, title: 'Heavy Clutch Plate Replacement' },
+      brakes: { cost: 850, title: 'Ceramic Brake Pads & Rotor Resurfacing' },
+      cooling: { cost: 650, title: 'Radiator Flush & Water Pump Replacement' },
+      suspension: { cost: 950, title: 'Pneumatic Air Suspension Bellows' },
+      emissions: { cost: 1100, title: 'DPF Soot Burn & SCR Catalyst Regeneration' },
+      steerTires: { cost: 1100, title: 'Steer Axle Commercial Tire Set (16mm)' },
+      driveTires: { cost: 1500, title: 'Drive Axle Dual Tire Set (16mm)' },
+    };
+
+    const target = costs[componentKey];
+    if (!target) return false;
+
+    // Apply hub workshop discount if applicable
+    const hub = state.hubs.find((h) => h.id === truck.currentHubId);
+    let finalCost = target.cost;
+    if (hub?.workshopLevel === 2) finalCost = Math.round(target.cost * 0.9);
+    if (hub?.workshopLevel === 3) finalCost = Math.round(target.cost * 0.8);
+
+    if (state.balanceUsd < finalCost) {
+      notifyUser('Insufficient Treasury', `Repair requires $${finalCost.toLocaleString()}, but company balance is $${state.balanceUsd.toLocaleString()}.`, 'finance');
+      return false;
+    }
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd - finalCost;
+
+    setState((prev) => {
+      const currentTruck = prev.trucks.find((t) => t.id === truckId);
+      if (!currentTruck) return prev;
+
+      const sub = { ...currentTruck.subsystems };
+      switch (componentKey) {
+        case 'engine':
+          sub.engineBlock = 100;
+          break;
+        case 'turbo':
+          sub.turbocharger = 100;
+          break;
+        case 'transmission':
+          sub.transmission = 100;
+          break;
+        case 'clutch':
+          sub.clutchPlate = 100;
+          break;
+        case 'brakes':
+          sub.brakePads = 100;
+          sub.brakeRotors = 100;
+          break;
+        case 'cooling':
+          sub.coolingSystem = 100;
+          break;
+        case 'suspension':
+          sub.suspensionDampers = 100;
+          break;
+        case 'emissions':
+          sub.exhaustAftertreatment = 100;
+          break;
+        case 'steerTires':
+          sub.steerTires = {
+            ...sub.steerTires,
+            wearPercentage: 100,
+            treadDepthMm: 16.0,
+            pressurePsi: 110,
+          };
+          break;
+        case 'driveTires':
+          sub.driveTiresAxle1 = {
+            ...sub.driveTiresAxle1,
+            wearPercentage: 100,
+            treadDepthMm: 16.0,
+            pressurePsi: 105,
+          };
+          break;
+      }
+
+      const updatedDTCs = currentTruck.activeDTCs.filter((dtc) => {
+        if (componentKey === 'turbo' && dtc.code === 'P0299') return false;
+        if (componentKey === 'brakes' && (dtc.code === 'C1095' || dtc.code === 'B0882')) return false;
+        if (componentKey === 'steerTires' && dtc.code === 'T0411') return false;
+        return true;
+      });
+
+      return {
+        ...prev,
+        balanceUsd: nextBal,
+        trucks: prev.trucks.map((t) =>
+          t.id === truckId
+            ? {
+                ...t,
+                subsystems: sub,
+                activeDTCs: updatedDTCs,
+              }
+            : t
+        ),
+        ledger: [
+          {
+            id: `led-rep-${Date.now()}`,
+            simDay,
+            simTimeFormatted: `Day ${simDay}`,
+            type: 'maintenance_expense',
+            description: `${target.title} for ${currentTruck.plate}`,
+            amountUsd: -finalCost,
+            runningBalanceUsd: nextBal,
+          },
+          ...prev.ledger,
+        ],
+        notifications: deduplicateNotifications([
+          {
+            id: `notif-rep-${Date.now()}`,
+            simTimeFormatted: `Day ${simDay}`,
+            title: 'Subsystem Repaired',
+            message: `${target.title} completed for ${currentTruck.plate} ($${finalCost.toLocaleString()}).`,
+            type: 'maintenance',
+            timestamp: Date.now(),
+          },
+          ...prev.notifications,
+        ]),
+      };
+    });
+
+    return true;
   };
 
   const buyTruck = (modelId: TruckModelId, hubId: string, aeroPackage: boolean): boolean => {
@@ -2100,7 +2360,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ownedRouteIds: unlockedRouteList.map((r) => r.id),
       ownedSpokeConnections: initialSpokeConnections,
       trucks: [starterTruck],
-      trailers: [starterTrailer],
+      trailers: initialTrailers,
       drivers: [starterDriver],
       availableContracts: starterContracts,
       balanceUsd: 135000,
@@ -2852,11 +3112,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setState((prev) => ({
       ...prev,
       offlineProgress: null,
+      lastRealTimeTimestamp: Date.now(),
     }));
   };
 
   const resetGame = () => {
     try {
+      clearPhoneDb();
       localStorage.removeItem(STORAGE_KEY);
       setState(createInitialState());
     } catch (e) {
@@ -2925,6 +3187,269 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
+  const activateAiDispatcher = (tier: '7d' | '1m' | 'auto', useGold: boolean = false): boolean => {
+    const tierConfig = {
+      '7d': { days: 7, usd: 45000, gold: 40, label: '7-Day Express License' },
+      '1m': { days: 30, usd: 165000, gold: 120, label: '1-Month Corporate License' },
+      'auto': { days: 90, usd: 500000, gold: 350, label: 'Monthly Auto-Renewal Enterprise Tier (90 Days)' },
+    };
+
+    const cfg = tierConfig[tier] || tierConfig['1m'];
+    const currentState = stateRef.current;
+    const simDay = Math.floor(currentState.simTimeMinutes / 1440) + 1;
+
+    if (useGold) {
+      if (currentState.gold < cfg.gold) {
+        notifyUser('Insufficient Gold', `AI Dispatcher (${cfg.label}) requires ${cfg.gold} Gold coins. You have ${currentState.gold}.`, 'finance');
+        return false;
+      }
+      setState((prev) => {
+        const baseTime = Math.max(prev.simTimeMinutes, prev.aiSubscriptionExpiresSimMinutes);
+        const nextState = {
+          ...prev,
+          gold: prev.gold - cfg.gold,
+          aiDispatcherActive: true,
+          aiSubscriptionExpiresSimMinutes: baseTime + (cfg.days * 1440),
+          notifications: deduplicateNotifications([
+            {
+              id: `notif-ai-sub-${Date.now()}`,
+              simTimeFormatted: `Day ${simDay}`,
+              title: 'Neural AI Dispatcher License Extended',
+              message: `Subscribed to ${cfg.label} (-${cfg.gold} Gold). Autonomous dispatching extended!`,
+              type: 'delivery',
+              timestamp: Date.now(),
+            },
+            ...prev.notifications,
+          ]),
+        };
+        stateRef.current = nextState;
+        return nextState;
+      });
+      return true;
+    } else {
+      if (currentState.balanceUsd < cfg.usd) {
+        notifyUser('Insufficient Treasury', `AI Dispatcher (${cfg.label}) costs $${cfg.usd.toLocaleString()}. Available treasury: $${currentState.balanceUsd.toLocaleString()}.`, 'finance');
+        return false;
+      }
+      const nextBal = currentState.balanceUsd - cfg.usd;
+      setState((prev) => {
+        const baseTime = Math.max(prev.simTimeMinutes, prev.aiSubscriptionExpiresSimMinutes);
+        const nextState = {
+          ...prev,
+          balanceUsd: nextBal,
+          aiDispatcherActive: true,
+          aiSubscriptionExpiresSimMinutes: baseTime + (cfg.days * 1440),
+          ledger: [
+            {
+              id: `led-ai-sub-${Date.now()}`,
+              simDay,
+              simTimeFormatted: `Day ${simDay}`,
+              type: 'broker_fee' as const,
+              description: `Neural AI Dispatcher license purchase (${cfg.label})`,
+              amountUsd: -cfg.usd,
+              runningBalanceUsd: nextBal,
+            },
+            ...prev.ledger,
+          ],
+          notifications: deduplicateNotifications([
+            {
+              id: `notif-ai-sub-${Date.now()}`,
+              simTimeFormatted: `Day ${simDay}`,
+              title: 'Neural AI Dispatcher License Extended',
+              message: `Subscribed to ${cfg.label} (-$${cfg.usd.toLocaleString()}). Autonomous dispatching extended!`,
+              type: 'delivery',
+              timestamp: Date.now(),
+            },
+            ...prev.notifications,
+          ]),
+        };
+        stateRef.current = nextState;
+        return nextState;
+      });
+      return true;
+    }
+  };
+
+  const executeAiAutoDispatch = (): { dispatchedCount: number; message: string } => {
+    const currentState = stateRef.current;
+    const isSubActive = currentState.aiDispatcherActive && currentState.simTimeMinutes < currentState.aiSubscriptionExpiresSimMinutes;
+    if (!isSubActive) {
+      return { dispatchedCount: 0, message: 'AI Dispatcher subscription is inactive or expired. Activate subscription in the AI Hub.' };
+    }
+
+    let dispatchedCount = 0;
+    const contracts = [...currentState.availableContracts];
+    let idleTrucks = [...currentState.trucks.filter(t => t.status === 'idle')];
+    let readyDrivers = [...currentState.drivers.filter(d => d.hosStatus !== 'driving' && d.hosStatus !== 'resting')];
+    const trailers = [...(currentState.trailers || [])];
+    const routes = [...currentState.routes];
+
+    if (idleTrucks.length === 0) {
+      return { dispatchedCount: 0, message: 'No idle trucks available for dispatch. Acquire or wait for trucks to return to terminals.' };
+    }
+    if (readyDrivers.length === 0) {
+      return { dispatchedCount: 0, message: 'No rested drivers available. Hire or wait for crew members to finish rest.' };
+    }
+
+    let updatedRoutes = [...routes];
+    let updatedHubs = [...currentState.hubs];
+    let updatedTrucks = [...currentState.trucks];
+    let updatedDrivers = [...currentState.drivers];
+    const newNotifications = [...currentState.notifications];
+    const activeTrips = [...currentState.activeTrips];
+
+    for (const contract of contracts) {
+      if (idleTrucks.length === 0 || readyDrivers.length === 0) break;
+
+      let truckIdx = idleTrucks.findIndex(t => t.currentHubId === contract.originHubId);
+      if (truckIdx === -1) {
+        truckIdx = 0;
+      }
+      const truck = idleTrucks[truckIdx];
+
+      if (truck.fuelCurrentLiters < 100) {
+        truck.fuelCurrentLiters = 400;
+      }
+
+      if (truck.currentHubId !== contract.originHubId) {
+        updatedTrucks = updatedTrucks.map(t => t.id === truck.id ? { ...t, currentHubId: contract.originHubId } : t);
+        truck.currentHubId = contract.originHubId;
+      }
+
+      const driverIdx = 0;
+      const driver = readyDrivers[driverIdx];
+      if (!driver) continue;
+
+      let route = updatedRoutes.find(r => r.originHubId === contract.originHubId && r.destinationHubId === contract.destinationHubId);
+      if (!route) {
+        const oHub = updatedHubs.find(h => h.id === contract.originHubId);
+        const dHub = updatedHubs.find(h => h.id === contract.destinationHubId);
+        if (oHub && dHub) {
+          route = {
+            id: `ai-route-${oHub.code}-${dHub.code}-${Date.now()}`,
+            originHubId: oHub.id,
+            destinationHubId: dHub.id,
+            name: `${oHub.name.split(' ')[0]} - ${dHub.name.split(' ')[0]} AI Corridor`,
+            distanceKm: 850,
+            roadType: 'Interstate Highway',
+            baseSpeedLimitKmh: 105,
+            avgElevationGradePct: 1.0,
+            maxGradePct: 4.0,
+            tollCostUsd: 45,
+            waypoints: [
+              { name: oHub.name, coord: oHub.coord, elevationMeters: 50 },
+              { name: dHub.name, coord: dHub.coord, elevationMeters: 50 },
+            ],
+            hazardRisk: 0.1,
+            isUnlocked: true,
+            licenseFeeUsd: 0,
+            requiredRank: 1,
+            trafficRateScore: 80,
+          };
+          updatedRoutes.push(route);
+        } else {
+          continue;
+        }
+      } else if (!route.isUnlocked) {
+        updatedRoutes = updatedRoutes.map(r => r.id === route!.id ? { ...r, isUnlocked: true } : r);
+        route = { ...route, isUnlocked: true };
+      }
+
+      let chosenTrailerId: string | undefined = undefined;
+      const truckModel = TRUCK_MODELS.find(m => m.id === truck.modelId);
+      if (!truckModel?.isRigid) {
+        const eligibleTrs = trailers.filter(tr => tr.status === 'idle');
+        const bestTr = eligibleTrs[0];
+        if (bestTr) {
+          chosenTrailerId = bestTr.id;
+        }
+      }
+
+      const simDay = Math.floor(currentState.simTimeMinutes / 1440) + 1;
+      const hours = Math.floor((currentState.simTimeMinutes % 1440) / 60);
+      const mins = currentState.simTimeMinutes % 60;
+      const timeFormatted = `Day ${simDay} ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+
+      const newTrip: ActiveTrip = {
+        id: `trip-ai-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        contract,
+        corridor: route,
+        truckId: truck.id,
+        driverId: driver.id,
+        trailerId: chosenTrailerId || null,
+        progressKm: 0,
+        totalDistanceKm: route.distanceKm,
+        elapsedMinutes: 0,
+        departureTimeSimMinutes: currentState.simTimeMinutes,
+        fuelConsumedLiters: 0,
+        telemetry: {
+          currentSpeedKmh: 85,
+          currentGear: 10,
+          engineRpm: 1400,
+          instantFuelRateL100km: 32,
+          instantFuelRateLitersPerHour: 28,
+          engineLoadPct: 65,
+          turboBoostBar: 1.2,
+          oilTempCelsius: 92,
+          oilPressureBar: 4.5,
+          coolantTempCelsius: 88,
+          brakeTempCelsius: 120,
+          retarderActive: false,
+          retarderLevel: 0,
+          currentInclinePct: 0,
+          currentWindSpeedKmh: 10,
+          currentHeadwindComponentKmh: 0,
+          weatherState: getLocalWeather(oHub ? oHub.coord : { x: 500, y: 500 }, 50, currentState.simTimeMinutes),
+        },
+        eventLogs: [`[${timeFormatted}] AI Autonomous Dispatch authorized consignment: ${contract.title}`],
+        isRestingNow: false,
+        isStalledBreakdown: false,
+      };
+
+      activeTrips.push(newTrip);
+      dispatchedCount++;
+
+      updatedTrucks = updatedTrucks.map(t => t.id === truck.id ? { ...t, status: 'en_route', activeTripId: newTrip.id, fuelCurrentLiters: Math.max(50, t.fuelCurrentLiters - 20) } : t);
+      updatedDrivers = updatedDrivers.map(d => d.id === driver.id ? { ...d, hosStatus: 'driving' } : d);
+
+      idleTrucks.splice(truckIdx, 1);
+      readyDrivers.splice(driverIdx, 1);
+    }
+
+    const dispatchedContractIds = new Set(activeTrips.map(t => t.contract.id));
+    const remainingContracts = contracts.filter(c => !dispatchedContractIds.has(c.id));
+
+    const nextState = {
+      ...currentState,
+      activeTrips,
+      trucks: updatedTrucks,
+      drivers: updatedDrivers,
+      routes: updatedRoutes,
+      availableContracts: remainingContracts,
+      notifications: deduplicateNotifications([
+        {
+          id: `notif-ai-auto-${Date.now()}`,
+          simTimeFormatted: `Day ${Math.floor(currentState.simTimeMinutes / 1440) + 1}`,
+          title: '🤖 AI Autonomous Dispatch Executed',
+          message: `Neural AI Dispatcher successfully dispatched ${dispatchedCount} truck(s) to available freight routes.`,
+          type: 'delivery',
+          timestamp: Date.now(),
+        },
+        ...newNotifications,
+      ]),
+    };
+
+    setState(nextState);
+    stateRef.current = nextState;
+
+    return {
+      dispatchedCount,
+      message: dispatchedCount > 0
+        ? `Successfully auto-dispatched ${dispatchedCount} truck(s) to available jobs!`
+        : `No matching idle trucks or ready drivers available for dispatch.`,
+    };
+  };
+
   return (
     <GameContext.Provider
       value={{
@@ -2962,6 +3487,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         claimAchievementReward,
         unlockRegion,
         dismissOfflineProgress,
+        notifyUser,
+        flushToDb,
+        restoreState,
+        lastSavedTimestamp,
+        isDbSaving,
+        repairSubsystem,
+        clearDTCs,
+        activateAiDispatcher,
+        executeAiAutoDispatch,
       }}
     >
       {children}

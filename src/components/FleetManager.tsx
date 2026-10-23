@@ -16,9 +16,10 @@ import {
 
 interface FleetManagerProps {
   onInspectTruck: (truckId: string) => void;
+  onOpenWorkshop?: (truckId: string) => void;
 }
 
-export const FleetManager: React.FC<FleetManagerProps> = ({ onInspectTruck }) => {
+export const FleetManager: React.FC<FleetManagerProps> = ({ onInspectTruck, onOpenWorkshop }) => {
   const { state, sellTruck, sellTrailer, ferryTruck } = useGame();
 
   // List of unlocked hubs owned by player
@@ -267,11 +268,21 @@ export const FleetManager: React.FC<FleetManagerProps> = ({ onInspectTruck }) =>
                               {/* Dedicated Truck Telemetry Link / Button */}
                               <button
                                 onClick={() => onInspectTruck(truck.id)}
-                                className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-lg transition-colors shadow flex items-center gap-1.5"
+                                className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-lg transition-colors shadow flex items-center gap-1.5 cursor-pointer"
                               >
                                 <Activity className="w-3.5 h-3.5" />
                                 <span>Truck Telemetry & Diagnostics</span>
                               </button>
+
+                              {onOpenWorkshop && (
+                                <button
+                                  onClick={() => onOpenWorkshop(truck.id)}
+                                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 font-semibold text-xs rounded-lg transition-colors border border-amber-500/30 flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <Wrench className="w-3.5 h-3.5" />
+                                  <span>Workshop Repair</span>
+                                </button>
+                              )}
 
                               {!isEnRoute && ownedHubs.length > 1 && (
                                 isFerrying ? (

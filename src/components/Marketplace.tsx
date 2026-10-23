@@ -63,6 +63,7 @@ export const Marketplace: React.FC = () => {
   const [connectHubDestId, setConnectHubDestId] = useState<string>(
     availableDestHubs[0]?.id || ''
   );
+  const destHub = state.hubs.find((h) => h.id === connectHubDestId) || availableDestHubs[0];
 
   // Delivery Locations (Spoke Terminals) State
   const [selectedHubPerLocation, setSelectedHubPerLocation] = useState<Record<string, string>>({});
@@ -90,6 +91,7 @@ export const Marketplace: React.FC = () => {
   const [truckSleeperTier, setTruckSleeperTier] = useState<SleeperTier>('standard_sleeper');
   const [truckLivery, setTruckLivery] = useState<FleetLivery>('obsidian_slate');
   const [truckFinancing, setTruckFinancing] = useState<FinancingMethod>('cash');
+  const [truckBrandFilter, setTruckBrandFilter] = useState<'all' | 'Mercedes-Benz' | 'Scania' | 'MAN' | 'American' | 'Asian' | 'Rigid'>('all');
 
   // Trailer State
   const [selectedTrailerModelId, setSelectedTrailerModelId] = useState<TrailerModelId>('dry-van-53');
@@ -1375,8 +1377,42 @@ export const Marketplace: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Models Showcase */}
               <div className="lg:col-span-2 space-y-4">
+                {/* Brand & Origin Filters */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                  {[
+                    { id: 'all', label: `All Trucks (${TRUCK_MODELS.length})` },
+                    { id: 'Mercedes-Benz', label: 'Mercedes-Benz' },
+                    { id: 'Scania', label: 'Scania' },
+                    { id: 'MAN', label: 'MAN' },
+                    { id: 'American', label: 'American' },
+                    { id: 'Asian', label: 'Asian' },
+                    { id: 'Rigid', label: 'Rigid & Sprinter' },
+                  ].map((filterTab) => (
+                    <button
+                      key={filterTab.id}
+                      onClick={() => setTruckBrandFilter(filterTab.id as any)}
+                      className={`px-3 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap text-xs ${
+                        truckBrandFilter === filterTab.id
+                          ? 'bg-amber-400 text-slate-950 font-bold shadow-md'
+                          : 'bg-slate-900/90 text-slate-400 hover:text-white border border-slate-800'
+                      }`}
+                    >
+                      {filterTab.label}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {TRUCK_MODELS.map((truck) => {
+                  {TRUCK_MODELS.filter((truck) => {
+                    if (truckBrandFilter === 'all') return true;
+                    if (truckBrandFilter === 'Mercedes-Benz') return truck.brand === 'Mercedes-Benz';
+                    if (truckBrandFilter === 'Scania') return truck.brand === 'Scania';
+                    if (truckBrandFilter === 'MAN') return truck.brand === 'MAN';
+                    if (truckBrandFilter === 'American') return truck.origin === 'North America' || truck.brand === 'Peterbilt' || truck.brand === 'Freightliner';
+                    if (truckBrandFilter === 'Asian') return truck.origin === 'Asia' || truck.brand === 'Isuzu' || truck.brand === 'Hino';
+                    if (truckBrandFilter === 'Rigid') return truck.isRigid;
+                    return true;
+                  }).map((truck) => {
                     const isSelected = selectedTruckModelId === truck.id;
                     return (
                       <div
@@ -1384,25 +1420,33 @@ export const Marketplace: React.FC = () => {
                         onClick={() => setSelectedTruckModelId(truck.id)}
                         className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
                           isSelected
-                            ? 'bg-amber-500/10 border-amber-500 text-white shadow-lg shadow-amber-500/5'
+                            ? 'bg-amber-500/10 border-amber-500 text-white shadow-lg shadow-amber-500/5 ring-1 ring-amber-500/30'
                             : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 text-slate-300'
                         }`}
                       >
-                        <div className="h-40 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 relative">
+                        <div className="h-44 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 relative">
                           <img
                             src={truck.image}
                             alt={truck.name}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
                           />
-                          <span className="absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-950/90 text-amber-400 border border-slate-800">
+                          <span className="absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-950/90 text-amber-400 border border-slate-800 shadow">
                             ${truck.basePriceUsd.toLocaleString()}
                           </span>
+                          {truck.isRigid && (
+                            <span className="absolute top-2 left-2 px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-400 text-slate-950 uppercase shadow">
+                              {truck.id === 'mercedes-sprinter-519' ? '★ Rigid Competitor' : 'Rigid Unit'}
+                            </span>
+                          )}
                         </div>
 
                         <div>
-                          <span className="text-[10px] font-mono text-amber-400 uppercase font-bold">
-                            {truck.category}
-                          </span>
+                          <div className="flex items-center justify-between text-[10px] font-mono font-bold">
+                            <span className="text-amber-400 uppercase">
+                              {truck.brand ? `${truck.brand} · ${truck.origin || 'Euro'}` : truck.category}
+                            </span>
+                            <span className="text-slate-400">{truck.specs.driveAxles} · {truck.specs.transmissionGears} Spd</span>
+                          </div>
                           <h4 className="text-sm font-bold text-white mt-0.5">{truck.name}</h4>
                           <p className="text-xs text-slate-400 line-clamp-2 mt-1">{truck.description}</p>
                         </div>

@@ -1,15 +1,24 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { PlusCircle, Fuel, HelpCircle, Award, Globe, Bell, Plus, LogOut, Cpu, Coins } from 'lucide-react';
+import { PlusCircle, Fuel, HelpCircle, Award, Globe, Bell, Plus, LogOut, Brain, Coins, Database } from 'lucide-react';
 
 interface NavbarProps {
   currentTab: string;
   onSelectTab: (tab: string) => void;
   onOpenDispatchModal: () => void;
   onOpenCompanyProfile: () => void;
+  onOpenDatabaseModal: () => void;
+  onOpenAiDispatcher: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenDispatchModal, onOpenCompanyProfile }) => {
+export const Navbar: React.FC<NavbarProps> = ({
+  currentTab,
+  onSelectTab,
+  onOpenDispatchModal,
+  onOpenCompanyProfile,
+  onOpenDatabaseModal,
+  onOpenAiDispatcher,
+}) => {
   const { state, setSimSpeed, setShowGuide, restartOnboarding } = useGame();
   const [aiActive, setAiActive] = useState(true);
 
@@ -27,6 +36,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
   const navLinks = [
     { id: 'operations', label: 'Operations' },
     { id: 'fleet', label: 'Fleet' },
+    { id: 'repair', label: 'Workshop' },
     { id: 'freight', label: 'Freight Jobs' },
     { id: 'market', label: 'Marketplace' },
     { id: 'hubs', label: 'Hubs' },
@@ -129,17 +139,24 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
             </div>
           </div>
 
-          {/* AI Dispatcher Toggle */}
+          {/* Database & Phone Memory Manager */}
           <button
-            onClick={() => setAiActive(!aiActive)}
-            className={`p-1.5 rounded-lg border transition-all duration-300 relative cursor-pointer ${
-              aiActive
-                ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40 shadow-[0_0_10px_rgba(34,211,238,0.2)]'
-                : 'bg-slate-800 text-slate-500 border-slate-700/60'
-            }`}
-            title={aiActive ? 'AI Dispatcher: Active' : 'AI Dispatcher: Idle'}
+            onClick={onOpenDatabaseModal}
+            className="p-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm shadow-cyan-500/10"
+            title="Database & Phone Memory Manager (PostgreSQL + Internal Storage)"
           >
-            <Cpu className="w-4 h-4" />
+            <Database className="w-4 h-4" />
+            <span className="hidden sm:inline text-[11px] font-mono font-semibold">DB</span>
+          </button>
+
+          {/* AI Dispatcher Intelligence Hub */}
+          <button
+            onClick={onOpenAiDispatcher}
+            className="p-1.5 rounded-lg border transition-all duration-300 relative cursor-pointer bg-cyan-500/20 text-cyan-400 border-cyan-500/40 shadow-[0_0_10px_rgba(34,211,238,0.2)] hover:bg-cyan-500/30 flex items-center gap-1.5 px-2"
+            title="Open Neural AI Dispatcher Core"
+          >
+            <Brain className="w-4 h-4 animate-pulse" />
+            <span className="hidden sm:inline text-[11px] font-mono font-semibold">AI</span>
           </button>
 
           {/* Guide / Field Manual */}

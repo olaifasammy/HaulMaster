@@ -17,6 +17,9 @@ import { OnboardingWizard } from './components/OnboardingWizard';
 import { UserGuideWalkthrough } from './components/UserGuideWalkthrough';
 import { CompanyProfileModal } from './components/CompanyProfileModal';
 import { OfflineProgressModal } from './components/OfflineProgressModal';
+import { DatabaseManagerModal } from './components/DatabaseManagerModal';
+import { AiDispatcherModal } from './components/AiDispatcherModal';
+import { RepairWorkshopPage } from './components/RepairWorkshopPage';
 import {
   Activity,
   Truck,
@@ -32,14 +35,18 @@ import {
   X,
   Bell,
   Trophy,
+  Wrench,
 } from 'lucide-react';
 
 const DashboardContent: React.FC = () => {
   const { state, resetGame, restartOnboarding, setShowGuide, dismissNotification } = useGame();
   const [currentTab, setCurrentTab] = useState<string>('operations');
   const [inspectedTruckId, setInspectedTruckId] = useState<string | null>(null);
+  const [workshopTruckId, setWorkshopTruckId] = useState<string | null>(null);
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState<boolean>(false);
   const [isCompanyProfileOpen, setIsCompanyProfileOpen] = useState<boolean>(false);
+  const [isDbModalOpen, setIsDbModalOpen] = useState<boolean>(false);
+  const [isAiDispatcherOpen, setIsAiDispatcherOpen] = useState<boolean>(false);
   const [preselectedContractId, setPreselectedContractId] = useState<string | undefined>(undefined);
 
   const handleOpenDispatch = (contractId?: string) => {
@@ -68,6 +75,8 @@ const DashboardContent: React.FC = () => {
         onSelectTab={setCurrentTab}
         onOpenDispatchModal={() => handleOpenDispatch()}
         onOpenCompanyProfile={() => setIsCompanyProfileOpen(true)}
+        onOpenDatabaseModal={() => setIsDbModalOpen(true)}
+        onOpenAiDispatcher={() => setIsAiDispatcherOpen(true)}
       />
 
       {/* Floating System Notification Toast (Non-blocking replacement for window.alert) */}
@@ -125,7 +134,21 @@ const DashboardContent: React.FC = () => {
 
         {/* Fleet & Commercial Dealership View */}
         {currentTab === 'fleet' && (
-          <FleetManager onInspectTruck={(truckId) => setInspectedTruckId(truckId)} />
+          <FleetManager
+            onInspectTruck={(truckId) => setInspectedTruckId(truckId)}
+            onOpenWorkshop={(truckId) => {
+              setWorkshopTruckId(truckId);
+              setCurrentTab('repair');
+            }}
+          />
+        )}
+
+        {/* Fleet Workshop & Subsystem Repair Bay View */}
+        {currentTab === 'repair' && (
+          <RepairWorkshopPage
+            initialTruckId={workshopTruckId}
+            onInspectTruck={(truckId) => setInspectedTruckId(truckId)}
+          />
         )}
 
         {/* Freight Jobs View (Filtered strictly for user's owned routes & hubs) */}
@@ -193,6 +216,11 @@ const DashboardContent: React.FC = () => {
         <TruckInspectorModal
           truckId={inspectedTruckId}
           onClose={() => setInspectedTruckId(null)}
+          onOpenWorkshop={(truckId) => {
+            setWorkshopTruckId(truckId);
+            setInspectedTruckId(null);
+            setCurrentTab('repair');
+          }}
         />
       )}
 
@@ -213,6 +241,20 @@ const DashboardContent: React.FC = () => {
             setIsCompanyProfileOpen(false);
             setCurrentTab('achievements');
           }}
+        />
+      )}
+
+      {/* Database & Storage Manager Modal */}
+      <DatabaseManagerModal
+        isOpen={isDbModalOpen}
+        onClose={() => setIsDbModalOpen(false)}
+      />
+
+      {/* AI Dispatcher Intelligence Hub Modal */}
+      {isAiDispatcherOpen && (
+        <AiDispatcherModal
+          onClose={() => setIsAiDispatcherOpen(false)}
+          onOpenDispatch={(contractId) => handleOpenDispatch(contractId)}
         />
       )}
 
