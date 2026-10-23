@@ -311,14 +311,19 @@ export interface RankTier {
 }
 
 export const RANK_TIERS: RankTier[] = [
-  { rank: 1, title: 'Novice Carrier', xpRequired: 0, perks: 'Starter hub operations & 2 regional freight corridors' },
-  { rank: 2, title: 'Regional Carrier', xpRequired: 1000, perks: 'Unlocks Tier 2 regional distribution depots & mountain pass routes' },
-  { rank: 3, title: 'Interstate Fleet', xpRequired: 3000, perks: 'Unlocks high-demand inland intermodal yards & refrigerated freight' },
-  { rank: 4, title: 'Logistics Enterprise', xpRequired: 7000, perks: 'Unlocks coastal gateway terminals & ADR hazmat corridors' },
-  { rank: 5, title: 'Continental Mogul', xpRequired: 15000, perks: 'Mega intercontinental seaport hubs & oversized cargo permits' },
+  { rank: 1, title: 'Novice Carrier', xpRequired: 0, perks: 'Starter hub operations & initial regional freight corridors' },
+  { rank: 2, title: 'Regional Carrier', xpRequired: 1200, perks: 'Unlocks Tier 2 regional distribution depots & mountain pass routes (+5 Gold)' },
+  { rank: 3, title: 'Interstate Fleet', xpRequired: 3500, perks: 'Unlocks high-demand inland intermodal yards & refrigerated freight (+5 Gold)' },
+  { rank: 4, title: 'Logistics Enterprise', xpRequired: 8000, perks: 'Unlocks advanced regional terminals & hazardous material permits (+5 Gold)' },
+  { rank: 5, title: 'Continental Mogul', xpRequired: 16000, perks: 'Unlocks coastal gateway seaports & major intermodal hubs (+5 Gold)' },
+  { rank: 6, title: 'Global Freight Titan', xpRequired: 30000, perks: 'Unlocks major eastern seaboard hubs & heavy industrial terminals (+5 Gold)' },
+  { rank: 7, title: 'Transoceanic Carrier', xpRequired: 55000, perks: 'Unlocks international mega-hubs & oversized modular transport (+5 Gold)' },
+  { rank: 8, title: 'Syndicate Logistics Lead', xpRequired: 95000, perks: 'Unlocks elite corporate terminals & heavy ballast corridors (+5 Gold)' },
+  { rank: 9, title: 'Supreme Sovereign Hauler', xpRequired: 150000, perks: 'Unlocks apex continental gateway hubs & ultra-heavy fleets (+5 Gold)' },
+  { rank: 10, title: 'Omnipresent Logistics Emperor', xpRequired: 250000, perks: 'Unlocks all global trade corridors & supreme fleet supremacy (+5 Gold)' },
 ];
 
-export const INITIAL_HUBS: Hub[] = [
+const RAW_INITIAL_HUBS: Hub[] = [
   // --- North America Locations (20 Total: Hubs & Spoke/Delivery Terminals) ---
   {
     id: 'hub-seattle',
@@ -837,7 +842,22 @@ export const INITIAL_HUBS: Hub[] = [
   { id: 'spoke-prague', name: 'Prague Bohemian Terminal', code: 'PRG', country: 'Czech Republic', region: 'Europe', locationType: 'spoke_terminal', isHub: false, coord: { x: 795, y: 220 }, fuelPricePerLiter: 1.68, bulkFuelStockLiters: 9500, bulkFuelCapacityLiters: 29000, hasBulkFuelDepot: false, workshopLevel: 1, bayCount: 1, activeTruckIds: [], storedCargoCount: 3, isUnlocked: false, requiredRank: 1, rankTitle: 'Rank 1: Novice Carrier', purchasePriceUsd: 26000, trafficDemandScore: 80, monthlyCargoVolume: '2.2M tons' },
 ];
 
-export const INITIAL_ROUTES: RouteCorridor[] = [
+export const INITIAL_HUBS: Hub[] = RAW_INITIAL_HUBS.map(h => {
+  if (h.id === 'hub-denver' || h.id === 'hub-munich') {
+    return { ...h, requiredRank: 1, goldCost: 0, rankTitle: 'Rank 1: Novice Carrier' };
+  }
+  if (['hub-seattle', 'hub-la', 'hub-rotterdam', 'hub-hamburg'].includes(h.id)) {
+    return { ...h, requiredRank: 5, goldCost: 25, rankTitle: 'Rank 5: Continental Mogul' };
+  }
+  if (['hub-chicago', 'hub-nyc', 'hub-paris', 'hub-london'].includes(h.id)) {
+    return { ...h, requiredRank: 7, goldCost: 35, rankTitle: 'Rank 7: Transoceanic Carrier' };
+  }
+  const rank = h.locationType === 'gateway_hub' ? 4 : h.purchasePriceUsd > 350000 ? 3 : 2;
+  const gold = Math.round(rank * 5);
+  return { ...h, requiredRank: rank, goldCost: gold, rankTitle: `Rank ${rank}` };
+});
+
+const RAW_INITIAL_ROUTES: RouteCorridor[] = [
   // --- North America Corridors ---
   {
     id: 'route-sea-lax',
@@ -1554,6 +1574,12 @@ export const INITIAL_ROUTES: RouteCorridor[] = [
     trafficRateScore: 86,
   },
 ];
+
+export const INITIAL_ROUTES: RouteCorridor[] = RAW_INITIAL_ROUTES.map(r => {
+  const reqRank = Math.min(8, Math.max(1, Math.floor(r.distanceKm / 450)));
+  const gold = Math.max(1, Math.round(reqRank * 3));
+  return { ...r, requiredRank: reqRank, goldCost: gold };
+});
 
 export const createPristineSubsystems = (): SubsystemHealth => ({
   engineBlock: 98,

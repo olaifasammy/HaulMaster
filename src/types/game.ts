@@ -29,6 +29,7 @@ export interface Hub {
   requiredRank: number;
   rankTitle: string;
   purchasePriceUsd: number;
+  goldCost?: number;
   trafficDemandScore: number; // 1-100
   monthlyCargoVolume: string;
   isPrimaryBase?: boolean;
@@ -69,6 +70,7 @@ export interface RouteCorridor {
   hazardRisk: number; // 0.0 to 1.0 (mountain passes have higher risk)
   isUnlocked: boolean;
   licenseFeeUsd: number;
+  goldCost?: number;
   requiredRank: number;
   trafficRateScore: number;
 }
@@ -355,6 +357,7 @@ export interface OnboardingConfig {
 export interface GameState {
   companyName: string;
   balanceUsd: number;
+  gold: number;
   simTimeMinutes: number; // 0 = Day 1, 00:00
   simSpeed: 0 | 1 | 5 | 15;
   selectedRegion: GeoRegion;

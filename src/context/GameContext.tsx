@@ -2564,10 +2564,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     }
 
+    const goldFee = Math.max(2, Math.round(estDistance / 500));
+    if (state.gold < goldFee) {
+      notifyUser(
+        'Insufficient Gold Reserves',
+        `Connecting corridor requires ${goldFee} Gold. Enterprise currently holds ${state.gold} Gold.`,
+        'finance'
+      );
+      return false;
+    }
+
     const forwardRouteId = `route-${hubA.code.toLowerCase()}-${hubB.code.toLowerCase()}`;
     const reverseRouteId = `route-${hubB.code.toLowerCase()}-${hubA.code.toLowerCase()}`;
     const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
     const nextBal = state.balanceUsd - licenseFeeUsd;
+    const nextGold = state.gold - goldFee;
 
     const waypointsForward = [
       { name: hubA.name, coord: hubA.coord, elevationMeters: 50 },
@@ -2595,6 +2606,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       hazardRisk: 0.15,
       isUnlocked: true,
       licenseFeeUsd,
+      goldCost: goldFee,
       requiredRank,
       trafficRateScore: Math.round((hubA.trafficDemandScore + hubB.trafficDemandScore) / 2),
     };
@@ -2614,6 +2626,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       hazardRisk: 0.15,
       isUnlocked: true,
       licenseFeeUsd,
+      goldCost: goldFee,
       requiredRank,
       trafficRateScore: Math.round((hubA.trafficDemandScore + hubB.trafficDemandScore) / 2),
     };
@@ -2624,6 +2637,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setState((prev) => ({
       ...prev,
       balanceUsd: nextBal,
+      gold: nextGold,
       routes: updatedRoutes,
       ownedRouteIds: Array.from(new Set([...prev.ownedRouteIds, forwardRouteId, reverseRouteId])),
       availableContracts: [...prev.availableContracts, ...newContracts],
