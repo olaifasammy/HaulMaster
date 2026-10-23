@@ -3295,12 +3295,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { dispatchedCount: 0, message: 'AI Dispatcher subscription is inactive or expired. Activate subscription in the AI Hub.' };
     }
 
-    let dispatchedCount = 0;
-    const contracts = [...currentState.availableContracts];
     let idleTrucks = [...currentState.trucks.filter(t => t.status === 'idle')];
     let readyDrivers = [...currentState.drivers.filter(d => d.hosStatus !== 'driving' && d.hosStatus !== 'resting')];
-    const trailers = [...(currentState.trailers || [])];
-    const routes = [...currentState.routes];
+    let trailers = [...(currentState.trailers || [])];
+    let routes = [...currentState.routes];
+    let hubs = [...currentState.hubs];
 
     if (idleTrucks.length === 0) {
       return { dispatchedCount: 0, message: 'No idle trucks available for dispatch. Acquire or wait for trucks to return to terminals.' };
@@ -3309,60 +3308,67 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { dispatchedCount: 0, message: 'No rested drivers available. Hire or wait for crew members to finish rest.' };
     }
 
-    let updatedRoutes = [...routes];
-    let updatedHubs = [...currentState.hubs];
+    let contracts = [...currentState.availableContracts];
+    if (contracts.length === 0) {
+      const unlockedRoutes = routes.filter(r => r.isUnlocked);
+      contracts = generateContractsForRoutes(unlockedRoutes.length > 0 ? unlockedRoutes : routes, hubs, 15, idleTrucks);
+    }
+
+    // Sort contracts by payout descending
+    contracts.sort((a, b) => b.payoutUsd - a.payoutUsd);
+
+    let dispatchedCount = 0;
     let updatedTrucks = [...currentState.trucks];
     let updatedDrivers = [...currentState.drivers];
+    let updatedTrailers = [...trailers];
+    let updatedRoutes = [...routes];
     const newNotifications = [...currentState.notifications];
     const activeTrips = [...currentState.activeTrips];
 
     for (const contract of contracts) {
       if (idleTrucks.length === 0 || readyDrivers.length === 0) break;
 
-      let truckIdx = idleTrucks.findIndex(t => t.currentHubId === contract.originHubId);
-      if (truckIdx === -1) {
-        truckIdx = 0;
-      }
-      const truck = idleTrucks[truckIdx];
-
-      if (truck.fuelCurrentLiters < 100) {
-        truck.fuelCurrentLiters = 400;
-      }
+      const truck = idleTrucks[0];
+      const driver = readyDrivers[0];
+      if (!truck || !driver) continue;
 
       if (truck.currentHubId !== contract.originHubId) {
         updatedTrucks = updatedTrucks.map(t => t.id === truck.id ? { ...t, currentHubId: contract.originHubId } : t);
         truck.currentHubId = contract.originHubId;
       }
 
-      const driverIdx = 0;
-      const driver = readyDrivers[driverIdx];
-      if (!driver) continue;
+      if (truck.fuelCurrentLiters < 100) {
+        truck.fuelCurrentLiters = Math.max(truck.fuelCurrentLiters, 500);
+      }
 
       let route = updatedRoutes.find(r => r.originHubId === contract.originHubId && r.destinationHubId === contract.destinationHubId);
       if (!route) {
-        const oHub = updatedHubs.find(h => h.id === contract.originHubId);
-        const dHub = updatedHubs.find(h => h.id === contract.destinationHubId);
+        const oHub = hubs.find(h => h.id === contract.originHubId);
+        const dHub = hubs.find(h => h.id === contract.destinationHubId);
         if (oHub && dHub) {
+          const dx = oHub.coord.x - dHub.coord.x;
+          const dy = oHub.coord.y - dHub.coord.y;
+          const dist = Math.max(200, Math.round(Math.sqrt(dx * dx + dy * dy) * 3.5));
           route = {
-            id: `ai-route-${oHub.code}-${dHub.code}-${Date.now()}`,
+            id: `route-ai-${oHub.code}-${dHub.code}-${Date.now()}`,
             originHubId: oHub.id,
             destinationHubId: dHub.id,
-            name: `${oHub.name.split(' ')[0]} - ${dHub.name.split(' ')[0]} AI Corridor`,
-            distanceKm: 850,
+            name: `${oHub.name.split(' ')[0]} - ${dHub.name.split(' ')[0]} AI Express`,
+            distanceKm: dist,
             roadType: 'Interstate Highway',
             baseSpeedLimitKmh: 105,
             avgElevationGradePct: 1.0,
-            maxGradePct: 4.0,
-            tollCostUsd: 45,
+            maxGradePct: 5.0,
+            tollCostUsd: Math.round(dist * 0.04),
             waypoints: [
               { name: oHub.name, coord: oHub.coord, elevationMeters: 50 },
-              { name: dHub.name, coord: dHub.coord, elevationMeters: 50 },
+              { name: dHub.name, coord: dHub.coord, elevationMeters: 40 },
             ],
             hazardRisk: 0.1,
             isUnlocked: true,
             licenseFeeUsd: 0,
             requiredRank: 1,
-            trafficRateScore: 80,
+            trafficRateScore: 90,
           };
           updatedRoutes.push(route);
         } else {
@@ -3373,13 +3379,29 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         route = { ...route, isUnlocked: true };
       }
 
-      let chosenTrailerId: string | undefined = undefined;
+      let chosenTrailerId: string | null = null;
       const truckModel = TRUCK_MODELS.find(m => m.id === truck.modelId);
       if (!truckModel?.isRigid) {
-        const eligibleTrs = trailers.filter(tr => tr.status === 'idle');
-        const bestTr = eligibleTrs[0];
+        let bestTr = updatedTrailers.find(tr => tr.status === 'idle' && tr.currentHubId === contract.originHubId) || updatedTrailers.find(tr => tr.status === 'idle');
+        if (!bestTr) {
+          const newTr: TrailerInstance = {
+            id: `trl-ai-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            modelId: contract.temperatureControlled ? 'trailer-reefer' : contract.isHazardous ? 'trailer-cistern' : 'trailer-dry-van',
+            plate: `AI-${Math.floor(1000 + Math.random() * 9000)}`,
+            status: 'idle',
+            currentHubId: contract.originHubId,
+            assignedTruckId: null,
+            assignedTripId: null,
+            conditionPct: 100,
+            odometerKm: 0,
+            purchaseDateSimDay: Math.floor(currentState.simTimeMinutes / 1440) + 1,
+          };
+          updatedTrailers.push(newTr);
+          bestTr = newTr;
+        }
         if (bestTr) {
           chosenTrailerId = bestTr.id;
+          updatedTrailers = updatedTrailers.map(tr => tr.id === bestTr!.id ? { ...tr, status: 'en_route', assignedTruckId: truck.id } : tr);
         }
       }
 
@@ -3394,7 +3416,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         corridor: route,
         truckId: truck.id,
         driverId: driver.id,
-        trailerId: chosenTrailerId || null,
+        trailerId: chosenTrailerId,
         progressKm: 0,
         totalDistanceKm: route.distanceKm,
         elapsedMinutes: 0,
@@ -3417,9 +3439,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           currentInclinePct: 0,
           currentWindSpeedKmh: 10,
           currentHeadwindComponentKmh: 0,
-          weatherState: getLocalWeather(oHub ? oHub.coord : { x: 500, y: 500 }, 50, currentState.simTimeMinutes),
+          weatherState: getLocalWeather(route.waypoints[0].coord, 50, currentState.simTimeMinutes),
         },
-        eventLogs: [`[${timeFormatted}] AI Autonomous Dispatch authorized consignment: ${contract.title}`],
+        eventLogs: [`[${timeFormatted}] AI Neural Dispatcher authorized consignment: ${contract.title}`],
         isRestingNow: false,
         isStalledBreakdown: false,
       };
@@ -3427,11 +3449,18 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       activeTrips.push(newTrip);
       dispatchedCount++;
 
-      updatedTrucks = updatedTrucks.map(t => t.id === truck.id ? { ...t, status: 'en_route', activeTripId: newTrip.id, fuelCurrentLiters: Math.max(50, t.fuelCurrentLiters - 20) } : t);
-      updatedDrivers = updatedDrivers.map(d => d.id === driver.id ? { ...d, hosStatus: 'driving' } : d);
+      updatedTrucks = updatedTrucks.map(t => t.id === truck.id ? { 
+        ...t, 
+        status: 'en_route', 
+        activeTripId: newTrip.id,
+        assignedTrailerId: chosenTrailerId || t.assignedTrailerId,
+        fuelCurrentLiters: Math.max(50, t.fuelCurrentLiters - 20)
+      } : t);
 
-      idleTrucks.splice(truckIdx, 1);
-      readyDrivers.splice(driverIdx, 1);
+      updatedDrivers = updatedDrivers.map(d => d.id === driver.id ? { ...d, hosStatus: 'driving', assignedTruckId: truck.id } : d);
+
+      idleTrucks.shift();
+      readyDrivers.shift();
     }
 
     const dispatchedContractIds = new Set(activeTrips.map(t => t.contract.id));
@@ -3442,6 +3471,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       activeTrips,
       trucks: updatedTrucks,
       drivers: updatedDrivers,
+      trailers: updatedTrailers,
       routes: updatedRoutes,
       availableContracts: remainingContracts,
       notifications: deduplicateNotifications([
@@ -3449,7 +3479,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: `notif-ai-auto-${Date.now()}`,
           simTimeFormatted: `Day ${Math.floor(currentState.simTimeMinutes / 1440) + 1}`,
           title: '🤖 AI Autonomous Dispatch Executed',
-          message: `Neural AI Dispatcher successfully dispatched ${dispatchedCount} truck(s) to available freight routes.`,
+          message: `Neural AI Dispatcher successfully auto-dispatched ${dispatchedCount} truck(s) to consignment routes.`,
           type: 'delivery',
           timestamp: Date.now(),
         },
@@ -3461,7 +3491,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     stateRef.current = nextState;
 
     const resMsg = dispatchedCount > 0
-      ? `Successfully auto-dispatched ${dispatchedCount} truck(s) to available jobs!`
+      ? `Successfully auto-dispatched ${dispatchedCount} truck(s) to freight jobs!`
       : `No matching idle trucks or ready drivers available for dispatch. Ensure trucks are idle and drivers are rested.`;
 
     notifyUser(
