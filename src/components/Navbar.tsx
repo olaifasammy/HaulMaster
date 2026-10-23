@@ -58,45 +58,45 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="max-w-7xl mx-auto px-3 sm:px-6 flex items-center justify-between h-14 gap-2">
         
         {/* Zone 1: Circular Level Progress & Company Info */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
           <button
             onClick={onOpenCompanyProfile}
             title="Open Enterprise Profile & Management"
-            className="flex items-center gap-2.5 text-white font-bold tracking-tight text-left min-h-[44px] cursor-pointer hover:opacity-90 transition-opacity group"
+            className="flex items-center gap-2 text-white font-bold tracking-tight text-left min-h-[44px] cursor-pointer hover:opacity-90 transition-opacity group min-w-0"
           >
-            <div className="relative w-9 h-9 flex items-center justify-center flex-shrink-0">
-              <svg className="absolute inset-0 w-9 h-9 -rotate-90">
+            <div className="relative w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center flex-shrink-0">
+              <svg className="absolute inset-0 w-8 h-8 sm:w-9 sm:h-9 -rotate-90">
                 <circle
-                  cx="18"
-                  cy="18"
-                  r="14"
-                  className="stroke-slate-800 fill-none"
+                  cx="16"
+                  cy="16"
+                  r="12"
+                  className="stroke-slate-800 fill-none sm:cx-[18] sm:cy-[18] sm:r-[14]"
                   strokeWidth="2.5"
                 />
                 <circle
-                  cx="18"
-                  cy="18"
-                  r="14"
-                  className="stroke-amber-500 fill-none transition-all duration-1000 ease-out"
+                  cx="16"
+                  cy="16"
+                  r="12"
+                  className="stroke-amber-500 fill-none transition-all duration-1000 ease-out sm:cx-[18] sm:cy-[18] sm:r-[14]"
                   strokeWidth="2.5"
                   strokeDasharray={2 * Math.PI * 14}
                   strokeDashoffset={(2 * Math.PI * 14) * (1 - expPercent / 100)}
                   strokeLinecap="round"
                 />
               </svg>
-              <div className="w-5 h-5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center font-bold text-xs relative z-10">
-                <Fuel className="w-3 h-3" />
+              <div className="w-4 h-4 sm:w-5 sm:h-5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center font-bold text-[10px] sm:text-xs relative z-10">
+                <Fuel className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
               </div>
             </div>
 
             <div className="min-w-0">
-              <div className="text-xs font-extrabold text-white tracking-tight leading-none truncate max-w-[120px] sm:max-w-[180px]">
+              <div className="text-[11px] sm:text-xs font-extrabold text-white tracking-tight leading-none truncate max-w-[90px] xs:max-w-[120px] sm:max-w-[180px]">
                 {state.companyName}
               </div>
-              <div className="flex items-center space-x-1.5 text-[10px] text-amber-400 font-semibold mt-1 truncate">
-                <span>Rank {currentLevel}</span>
-                <span>•</span>
-                <span className="font-mono font-bold text-amber-300">{state.rankTitle}</span>
+              <div className="flex items-center space-x-1 text-[9px] sm:text-[10px] text-amber-400 font-semibold mt-1 truncate">
+                <span>Rk {currentLevel}</span>
+                <span className="hidden xs:inline">•</span>
+                <span className="font-mono font-bold text-amber-300 truncate max-w-[70px] xs:max-w-[110px]">{state.rankTitle}</span>
               </div>
             </div>
           </button>
@@ -120,21 +120,21 @@ export const Navbar: React.FC<NavbarProps> = ({
         </nav>
 
         {/* Zone 3: Financial Balances & Action Buttons */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           
           {/* Capital & Gold Reserves */}
-          <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1">
+          <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1">
             <div className="flex flex-col items-end">
-              <span className="text-[9px] uppercase font-mono tracking-wider text-slate-500 hidden sm:block">Treasury</span>
-              <span className="text-xs font-mono font-bold text-emerald-400 tabular-nums">
+              <span className="text-[8px] sm:text-[9px] uppercase font-mono tracking-wider text-slate-500 hidden sm:block">Treasury</span>
+              <span className="text-[11px] sm:text-xs font-mono font-bold text-emerald-400 tabular-nums">
                 ${state.balanceUsd.toLocaleString()}
               </span>
             </div>
-            <div className="w-[1px] h-6 bg-slate-800 hidden sm:block" />
+            <div className="w-[1px] h-5 sm:h-6 bg-slate-800" />
             <div className="flex flex-col items-end">
-              <span className="text-[9px] uppercase font-mono tracking-wider text-amber-500 hidden sm:block">Gold</span>
-              <span className="text-xs font-mono font-bold text-amber-400 tabular-nums flex items-center gap-1">
-                <Coins className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="text-[8px] sm:text-[9px] uppercase font-mono tracking-wider text-amber-500 hidden sm:block">Gold</span>
+              <span className="text-[11px] sm:text-xs font-mono font-bold text-amber-400 tabular-nums flex items-center gap-0.5 sm:gap-1">
+                <Coins className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400 shrink-0" />
                 <span>{state.gold.toLocaleString()}</span>
               </span>
             </div>
@@ -143,25 +143,25 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Database & Phone Memory Manager */}
           <button
             onClick={onOpenDatabaseModal}
-            className="p-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm shadow-cyan-500/10"
-            title="Database & Phone Memory Manager (PostgreSQL + Internal Storage)"
+            className="p-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-all flex items-center gap-1 cursor-pointer shadow-sm shadow-cyan-500/10 min-h-[36px]"
+            title="Database & Phone Memory Manager"
           >
-            <Database className="w-4 h-4" />
-            <span className="hidden sm:inline text-[11px] font-mono font-semibold">DB</span>
+            <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="hidden md:inline text-[11px] font-mono font-semibold">DB</span>
           </button>
 
           {/* AI Dispatcher Intelligence Hub */}
           <button
             onClick={() => onSelectTab('ai')}
-            className={`p-1.5 rounded-lg border transition-all duration-300 relative cursor-pointer flex items-center gap-1.5 px-2 ${
+            className={`p-1.5 rounded-lg border transition-all duration-300 relative cursor-pointer flex items-center gap-1 px-2 min-h-[36px] ${
               currentTab === 'ai'
                 ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow-[0_0_15px_rgba(34,211,238,0.4)]'
                 : 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40 shadow-[0_0_10px_rgba(34,211,238,0.2)] hover:bg-cyan-500/30'
             }`}
             title="Open Neural AI Dispatcher Core"
           >
-            <Brain className="w-4 h-4 animate-pulse" />
-            <span className="hidden sm:inline text-[11px] font-mono font-semibold">AI</span>
+            <Brain className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-pulse" />
+            <span className="hidden md:inline text-[11px] font-mono font-semibold">AI</span>
           </button>
 
           {/* Guide / Field Manual */}
