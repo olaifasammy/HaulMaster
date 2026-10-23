@@ -122,18 +122,18 @@ export const AiDispatcherModal: React.FC<AiDispatcherModalProps> = ({ onClose, o
               Corporate Subscription Tiers & Pricing
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {/* Tier 1: 7 Days */}
+              {/* Tier 1: 14 Days */}
               <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl flex flex-col justify-between space-y-3">
                 <div>
-                  <div className="text-xs font-bold text-white">7-Day Express</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">Weekly trial license</div>
+                  <div className="text-xs font-bold text-white">14-Day Express</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">Bi-weekly license</div>
                   <div className="text-sm font-mono font-bold text-emerald-400 mt-2">$45,000 USD</div>
                   <div className="text-[10px] font-mono text-amber-400">or 40 Gold</div>
                 </div>
                 <div className="space-y-1.5">
                   <button
                     disabled={purchasingKey !== null}
-                    onClick={() => handlePurchase('7d', false, '7-Day Express License', '$45,000')}
+                    onClick={() => handlePurchase('7d', false, '14-Day Express License', '$45,000')}
                     className="w-full py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer border border-slate-700 flex items-center justify-center gap-1.5"
                   >
                     {purchasingKey === '7d-usd' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -141,30 +141,30 @@ export const AiDispatcherModal: React.FC<AiDispatcherModalProps> = ({ onClose, o
                   </button>
                   <button
                     disabled={purchasingKey !== null}
-                    onClick={() => handlePurchase('7d', true, '7-Day Express License (Gold)', '40 Gold')}
+                    onClick={() => handlePurchase('7d', true, '14-Day Express License (Gold)', '40 Gold')}
                     className="w-full py-1.5 bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-50 text-amber-300 font-semibold text-[11px] rounded-lg transition-colors cursor-pointer border border-amber-500/30 flex items-center justify-center gap-1.5"
                   >
-                    {purchasingKey === '7d-gold' && <Loader2 className="w-3 h-3 animate-spin" />}
+                    {purchasingKey === '7d-gold' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                     <span>{purchasingKey === '7d-gold' ? 'Processing...' : 'Buy (40 Gold)'}</span>
                   </button>
                 </div>
               </div>
 
-              {/* Tier 2: 1 Month */}
+              {/* Tier 2: 2 Months (60 Days) */}
               <div className="p-4 bg-slate-950 border border-amber-500/40 rounded-xl flex flex-col justify-between space-y-3 relative overflow-hidden">
                 <div className="absolute top-0 right-0 bg-amber-500 text-slate-950 text-[9px] font-black uppercase px-2 py-0.5 rounded-bl">
                   Popular
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-white">1-Month Corporate</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">30 simulation days</div>
+                  <div className="text-xs font-bold text-white">2-Month Corporate</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">60 simulation days</div>
                   <div className="text-sm font-mono font-bold text-emerald-400 mt-2">$165,000 USD</div>
                   <div className="text-[10px] font-mono text-amber-400">or 120 Gold</div>
                 </div>
                 <div className="space-y-1.5">
                   <button
                     disabled={purchasingKey !== null}
-                    onClick={() => handlePurchase('1m', false, '1-Month Corporate License', '$165,000')}
+                    onClick={() => handlePurchase('1m', false, '2-Month Corporate License', '$165,000')}
                     className="w-full py-2 bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-lg transition-colors cursor-pointer shadow-md flex items-center justify-center gap-1.5"
                   >
                     {purchasingKey === '1m-usd' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -172,30 +172,30 @@ export const AiDispatcherModal: React.FC<AiDispatcherModalProps> = ({ onClose, o
                   </button>
                   <button
                     disabled={purchasingKey !== null}
-                    onClick={() => handlePurchase('1m', true, '1-Month Corporate License (Gold)', '120 Gold')}
+                    onClick={() => handlePurchase('1m', true, '2-Month Corporate License (Gold)', '120 Gold')}
                     className="w-full py-1.5 bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-50 text-amber-300 font-semibold text-[11px] rounded-lg transition-colors cursor-pointer border border-amber-500/30 flex items-center justify-center gap-1.5"
                   >
-                    {purchasingKey === '1m-gold' && <Loader2 className="w-3 h-3 animate-spin" />}
+                    {purchasingKey === '1m-gold' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                     <span>{purchasingKey === '1m-gold' ? 'Processing...' : 'Buy (120 Gold)'}</span>
                   </button>
                 </div>
               </div>
 
-              {/* Tier 3: Monthly Auto-Renewal Enterprise */}
+              {/* Tier 3: Enterprise Long-Term (180 Days) */}
               <div className="p-4 bg-slate-950 border border-cyan-500/40 rounded-xl flex flex-col justify-between space-y-3 relative overflow-hidden">
                 <div className="absolute top-0 right-0 bg-cyan-500 text-slate-950 text-[9px] font-black uppercase px-2 py-0.5 rounded-bl">
-                  Auto-Renew
+                  Enterprise
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-white">Enterprise Auto-Renewal</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">90-day extended pass</div>
+                  <div className="text-xs font-bold text-white">Enterprise Long-Term</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">180-day extended pass</div>
                   <div className="text-sm font-mono font-bold text-emerald-400 mt-2">$500,000 USD</div>
                   <div className="text-[10px] font-mono text-amber-400">or 350 Gold</div>
                 </div>
                 <div className="space-y-1.5">
                   <button
                     disabled={purchasingKey !== null}
-                    onClick={() => handlePurchase('auto', false, 'Enterprise Auto-Renewal Tier', '$500,000')}
+                    onClick={() => handlePurchase('auto', false, 'Enterprise Long-Term Tier', '$500,000')}
                     className="w-full py-2 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-lg transition-colors cursor-pointer shadow-md flex items-center justify-center gap-1.5"
                   >
                     {purchasingKey === 'auto-usd' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -203,7 +203,7 @@ export const AiDispatcherModal: React.FC<AiDispatcherModalProps> = ({ onClose, o
                   </button>
                   <button
                     disabled={purchasingKey !== null}
-                    onClick={() => handlePurchase('auto', true, 'Enterprise Auto-Renewal Tier (Gold)', '350 Gold')}
+                    onClick={() => handlePurchase('auto', true, 'Enterprise Long-Term Tier (Gold)', '350 Gold')}
                     className="w-full py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:opacity-50 text-cyan-300 font-semibold text-[11px] rounded-lg transition-colors cursor-pointer border border-cyan-500/30 flex items-center justify-center gap-1.5"
                   >
                     {purchasingKey === 'auto-gold' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}

@@ -330,6 +330,8 @@ export interface ActiveTrip {
   eventLogs: string[];
   isRestingNow: boolean;
   isStalledBreakdown: boolean;
+  roadsideRepairMinutesRemaining?: number;
+  roadsideRepairType?: 'mobile' | 'heavy_tow';
 }
 
 export type TransactionType = 'freight_revenue' | 'fuel_expense' | 'maintenance_expense' | 'driver_wages' | 'toll_expense' | 'broker_fee' | 'loan_repay' | 'loan_disbursement' | 'equipment_purchase' | 'depot_upgrade' | 'breakdown_recovery';
@@ -358,7 +360,7 @@ export interface GameEventNotification {
   simTimeFormatted: string;
   title: string;
   message: string;
-  type: 'delivery' | 'weather' | 'maintenance' | 'breakdown' | 'finance' | 'driver';
+  type: 'delivery' | 'weather' | 'maintenance' | 'breakdown' | 'finance' | 'driver' | 'ai';
   timestamp: number;
 }
 

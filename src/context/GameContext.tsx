@@ -171,6 +171,7 @@ interface GameContextType {
   clearDTCs: (truckId: string) => void;
   activateAiDispatcher: (tier: '7d' | '1m' | 'auto', useGold?: boolean) => boolean;
   executeAiAutoDispatch: () => { dispatchedCount: number; message: string };
+  dispatchRoadsideMechanic: (tripId: string, repairType: 'mobile' | 'heavy_tow') => { success: boolean; message: string };
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -814,8 +815,74 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             // Check if truck is stalled in breakdown
             if (trip.isStalledBreakdown) {
-              remainingTrips.push(trip);
-              continue;
+              let repairMins = trip.roadsideRepairMinutesRemaining;
+              if (repairMins !== undefined && repairMins > 0) {
+                repairMins -= deltaSimMinutes;
+                if (repairMins <= 0) {
+                  // Roadside repair finished!
+                  const isHeavy = trip.roadsideRepairType === 'heavy_tow';
+                  const repairedEngine = isHeavy ? 100 : Math.max(60, trip.telemetry.updatedSubsystems?.engineBlock || 60);
+                  const repairedBrakes = isHeavy ? 100 : Math.max(60, trip.telemetry.updatedSubsystems?.brakePads || 60);
+
+                  updatedTrucks = updatedTrucks.map(t => t.id === truck.id ? {
+                    ...t,
+                    status: 'en_route',
+                    health: isHeavy ? 100 : Math.max(70, t.health),
+                    subsystems: {
+                      ...t.subsystems,
+                      engineBlock: repairedEngine,
+                      brakePads: repairedBrakes,
+                      coolingSystem: Math.max(80, t.subsystems.coolingSystem),
+                      exhaustAftertreatment: Math.max(80, t.subsystems.exhaustAftertreatment),
+                    }
+                  } : t);
+
+                  newNotifications.push({
+                    id: `notif-repair-done-${trip.id}-${newSimMinutes}`,
+                    simTimeFormatted: timeFormatted,
+                    title: isHeavy ? '🚛 Heavy Tow & Workshop Overhaul Complete' : '🛠️ Mobile Roadside Repair Complete',
+                    message: `${truck.plate} has successfully completed roadside service and resumed haul towards destination.`,
+                    type: 'breakdown',
+                    timestamp: Date.now(),
+                  });
+
+                  remainingTrips.push({
+                    ...trip,
+                    isStalledBreakdown: false,
+                    roadsideRepairMinutesRemaining: undefined,
+                    roadsideRepairType: undefined,
+                    elapsedMinutes: trip.elapsedMinutes + deltaSimMinutes,
+                    telemetry: {
+                      ...trip.telemetry,
+                      currentSpeedKmh: 80,
+                      updatedSubsystems: {
+                        ...trip.telemetry.updatedSubsystems,
+                        engineBlock: repairedEngine,
+                        brakePads: repairedBrakes,
+                      }
+                    }
+                  });
+                  continue;
+                } else {
+                  // Repair still in progress
+                  remainingTrips.push({
+                    ...trip,
+                    roadsideRepairMinutesRemaining: repairMins,
+                    elapsedMinutes: trip.elapsedMinutes + deltaSimMinutes,
+                    telemetry: {
+                      ...trip.telemetry,
+                      currentSpeedKmh: 0,
+                      engineRpm: 750,
+                      instantFuelRateLitersPerHour: 2.5,
+                    }
+                  });
+                  continue;
+                }
+              } else {
+                // Waiting for rescue dispatch
+                remainingTrips.push(trip);
+                continue;
+              }
             }
 
             // Check Driver Tachograph Rest Status
@@ -3358,9 +3425,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const activateAiDispatcher = (tier: '7d' | '1m' | 'auto', useGold: boolean = false): boolean => {
     const tierConfig = {
-      '7d': { days: 7, usd: 45000, gold: 40, label: '7-Day Express License' },
-      '1m': { days: 30, usd: 165000, gold: 120, label: '1-Month Corporate License' },
-      'auto': { days: 90, usd: 500000, gold: 350, label: 'Monthly Auto-Renewal Enterprise Tier (90 Days)' },
+      '7d': { days: 14, usd: 45000, gold: 40, label: '14-Day Express License' },
+      '1m': { days: 60, usd: 165000, gold: 120, label: '2-Month Corporate License (60 Days)' },
+      'auto': { days: 180, usd: 500000, gold: 350, label: 'Enterprise Long-Term Tier (180 Days)' },
     };
 
     const cfg = tierConfig[tier] || tierConfig['1m'];
@@ -3385,7 +3452,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               simTimeFormatted: `Day ${simDay}`,
               title: 'Neural AI Dispatcher License Extended',
               message: `Subscribed to ${cfg.label} (-${cfg.gold} Gold). Autonomous dispatching extended!`,
-              type: 'delivery',
+              type: 'ai',
               timestamp: Date.now(),
             },
             ...prev.notifications,
@@ -3426,7 +3493,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               simTimeFormatted: `Day ${simDay}`,
               title: 'Neural AI Dispatcher License Extended',
               message: `Subscribed to ${cfg.label} (-$${cfg.usd.toLocaleString()}). Autonomous dispatching extended!`,
-              type: 'delivery',
+              type: 'ai',
               timestamp: Date.now(),
             },
             ...prev.notifications,
@@ -3631,7 +3698,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           simTimeFormatted: `Day ${Math.floor(currentState.simTimeMinutes / 1440) + 1}`,
           title: '🤖 AI Autonomous Dispatch Executed',
           message: `Neural AI Dispatcher successfully auto-dispatched ${dispatchedCount} truck(s) to consignment routes.`,
-          type: 'delivery',
+          type: 'ai',
           timestamp: Date.now(),
         },
         ...newNotifications,
@@ -3655,6 +3722,76 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       dispatchedCount,
       message: resMsg,
     };
+  };
+
+  const dispatchRoadsideMechanic = (tripId: string, repairType: 'mobile' | 'heavy_tow'): { success: boolean; message: string } => {
+    const trip = state.activeTrips.find((t) => t.id === tripId);
+    if (!trip || !trip.isStalledBreakdown) {
+      return { success: false, message: 'Trip not found or vehicle is not currently stalled in breakdown.' };
+    }
+
+    if (trip.roadsideRepairMinutesRemaining && trip.roadsideRepairMinutesRemaining > 0) {
+      return { success: false, message: 'Roadside rescue unit is already dispatched and en route to vehicle.' };
+    }
+
+    const cost = repairType === 'mobile' ? 1800 : 3500;
+    if (state.balanceUsd < cost) {
+      notifyUser('Insufficient Treasury', `Roadside rescue ($${cost.toLocaleString()}) requires $${cost.toLocaleString()}. Available: $${state.balanceUsd.toLocaleString()}.`, 'finance');
+      return { success: false, message: `Insufficient treasury for roadside rescue ($${cost.toLocaleString()} required).` };
+    }
+
+    const truck = state.trucks.find((t) => t.id === trip.truckId);
+    const newBalance = state.balanceUsd - cost;
+    const timeFormatted = `Day ${Math.floor(state.simTimeMinutes / 1440) + 1} ${Math.floor((state.simTimeMinutes % 1440) / 60).toString().padStart(2, '0')}:${(state.simTimeMinutes % 60).toString().padStart(2, '0')}`;
+    const repairDurationMins = repairType === 'mobile' ? 30 : 60;
+
+    const updatedTrips = state.activeTrips.map((t) => {
+      if (t.id === tripId) {
+        return {
+          ...t,
+          roadsideRepairMinutesRemaining: repairDurationMins,
+          roadsideRepairType: repairType,
+        };
+      }
+      return t;
+    });
+
+    const newLedgerEntry = {
+      id: `led-breakdown-rescue-${Date.now()}`,
+      simDay: Math.floor(state.simTimeMinutes / 1440) + 1,
+      simTimeFormatted: timeFormatted,
+      type: 'breakdown_recovery' as const,
+      description: repairType === 'mobile'
+        ? `Mobile roadside mechanic dispatch for ${truck?.plate || 'Truck'}`
+        : `Heavy-duty tow and workshop overhaul dispatch for ${truck?.plate || 'Truck'}`,
+      amountUsd: -cost,
+      runningBalanceUsd: newBalance,
+    };
+
+    const newNotif = {
+      id: `notif-rescue-${Date.now()}`,
+      simTimeFormatted: timeFormatted,
+      title: repairType === 'mobile' ? '🛠️ Mobile Mechanic En Route' : '🚛 Heavy Tow En Route',
+      message: repairType === 'mobile'
+        ? `Mobile roadside mechanic dispatched to ${truck?.plate || 'truck'}. Estimated repair time: 30 sim mins ($${cost.toLocaleString()}).`
+        : `Heavy tow truck & workshop recovery dispatched to ${truck?.plate || 'truck'}. Estimated overhaul time: 60 sim mins ($${cost.toLocaleString()}).`,
+      type: 'breakdown' as const,
+      timestamp: Date.now(),
+    };
+
+    const nextState = {
+      ...state,
+      balanceUsd: newBalance,
+      activeTrips: updatedTrips,
+      ledger: [newLedgerEntry, ...state.ledger],
+      notifications: deduplicateNotifications([newNotif, ...state.notifications]),
+    };
+
+    setState(nextState);
+    stateRef.current = nextState;
+    notifyUser(newNotif.title, newNotif.message, 'breakdown');
+
+    return { success: true, message: `Roadside rescue dispatched successfully for $${cost.toLocaleString()}!` };
   };
 
   return (
@@ -3704,6 +3841,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearDTCs,
         activateAiDispatcher,
         executeAiAutoDispatch,
+        dispatchRoadsideMechanic,
       }}
     >
       {children}

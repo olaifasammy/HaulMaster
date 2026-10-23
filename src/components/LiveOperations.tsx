@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronUp,
   Gauge,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface LiveOperationsProps {
@@ -21,7 +22,7 @@ interface LiveOperationsProps {
 }
 
 export const LiveOperations: React.FC<LiveOperationsProps> = ({ onInspectTruck, onOpenDispatch }) => {
-  const { state, dismissNotification } = useGame();
+  const { state, dismissNotification, dispatchRoadsideMechanic } = useGame();
   const [isEnRouteExpanded, setIsEnRouteExpanded] = useState(false);
   const [expandedTripIds, setExpandedTripIds] = useState<Record<string, boolean>>({});
   const [currentPage, setCurrentPage] = useState(1);
@@ -282,6 +283,59 @@ export const LiveOperations: React.FC<LiveOperationsProps> = ({ onInspectTruck, 
                           {/* Expanded Card Details */}
                           {isExpanded && (
                             <div className="px-4 pb-5 sm:px-5 space-y-4 border-t border-slate-800/80 pt-4 animate-in fade-in">
+                              {/* Breakdown Alert & Roadside Rescue Actions */}
+                              {trip.isStalledBreakdown && (
+                                <div className="p-3.5 bg-rose-950/40 border border-rose-800/80 rounded-xl space-y-2.5">
+                                  <div className="flex items-center gap-2 text-rose-400 font-bold text-xs">
+                                    <AlertTriangle className="w-4 h-4 shrink-0 animate-bounce" />
+                                    <span>VEHICLE STALLED IN ROADSIDE BREAKDOWN!</span>
+                                  </div>
+                                  {trip.roadsideRepairMinutesRemaining && trip.roadsideRepairMinutesRemaining > 0 ? (
+                                    <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg space-y-1.5 text-xs font-mono">
+                                      <div className="flex items-center justify-between text-amber-300 font-bold">
+                                        <span>{trip.roadsideRepairType === 'heavy_tow' ? '🚛 Heavy Tow & Overhaul in Progress' : '🛠️ Mobile Mechanic On-Site'}</span>
+                                        <span className="tabular-nums">~{trip.roadsideRepairMinutesRemaining} sim mins left</span>
+                                      </div>
+                                      <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
+                                        <div
+                                          className="bg-amber-400 h-full rounded-full animate-pulse"
+                                          style={{ width: `${Math.max(10, 100 - (trip.roadsideRepairMinutesRemaining / (trip.roadsideRepairType === 'heavy_tow' ? 60 : 30)) * 100)}%` }}
+                                        />
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <p className="text-[11px] text-slate-300 leading-snug">
+                                        Truck has suffered critical mechanical failure on highway corridor. Dispatch roadside rescue service:
+                                      </p>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                                        <button
+                                          onClick={() => {
+                                            const confirmed = window.confirm("Dispatch Mobile Roadside Mechanic for $1,800? This will take ~30 simulation minutes on-site before resuming the haul.");
+                                            if (confirmed) {
+                                              dispatchRoadsideMechanic(trip.id, 'mobile');
+                                            }
+                                          }}
+                                          className="py-2 px-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold text-xs rounded-lg border border-amber-500/40 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                                        >
+                                          <span>🛠️ Mobile Mechanic ($1,800)</span>
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            const confirmed = window.confirm("Dispatch Heavy-Duty Tow Truck & Overhaul for $3,500? This will take ~60 simulation minutes before fully repairing and resuming haul.");
+                                            if (confirmed) {
+                                              dispatchRoadsideMechanic(trip.id, 'heavy_tow');
+                                            }
+                                          }}
+                                          className="py-2 px-3 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-semibold text-xs rounded-lg border border-rose-500/40 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                                        >
+                                          <span>🚛 Heavy Tow & Overhaul ($3,500)</span>
+                                        </button>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              )}
                               {/* Progress Bar */}
                               <div className="space-y-1">
                                 <div className="flex items-center justify-between text-xs font-mono">

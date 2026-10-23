@@ -13,8 +13,8 @@ export const AiDispatcherPage: React.FC<AiDispatcherPageProps> = ({ onOpenDispat
   const [purchasingKey, setPurchasingKey] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const isSubActive = state.aiDispatcherActive && state.simTimeMinutes < state.aiSubscriptionExpiresSimMinutes;
-  const remainingMinutes = Math.max(0, state.aiSubscriptionExpiresSimMinutes - state.simTimeMinutes);
+  const isSubActive = !!(state?.aiDispatcherActive && (state?.simTimeMinutes || 0) < (state?.aiSubscriptionExpiresSimMinutes || 0));
+  const remainingMinutes = Math.max(0, (state?.aiSubscriptionExpiresSimMinutes || 0) - (state?.simTimeMinutes || 0));
   const remainingDays = Math.ceil(remainingMinutes / 1440);
 
   const handlePurchase = (tier: '7d' | '1m' | 'auto', useGold: boolean, label: string, costStr: string) => {
@@ -43,6 +43,9 @@ export const AiDispatcherPage: React.FC<AiDispatcherPageProps> = ({ onOpenDispat
       setLoading(false);
     }, 400);
   };
+
+  const contracts = state?.availableContracts || [];
+  const hubs = state?.hubs || [];
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in">
@@ -116,14 +119,14 @@ export const AiDispatcherPage: React.FC<AiDispatcherPageProps> = ({ onOpenDispat
             </h3>
           </div>
           <span className="text-xs font-mono text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 px-3 py-1 rounded-full">
-            {state.availableContracts.length} available consignment(s)
+            {contracts.length} available consignment(s)
           </span>
         </div>
         <p className="text-xs text-slate-300 leading-relaxed">
           Instantly command the AI Neural Core to match idle trucks, ready drivers, and unlocked corridor routes to all available freight jobs simultaneously.
         </p>
         <button
-          disabled={!isSubActive || loading || state.availableContracts.length === 0}
+          disabled={!isSubActive || loading || contracts.length === 0}
           onClick={handleAutoDispatch}
           className="w-full flex items-center justify-center gap-2 py-3.5 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl transition-colors cursor-pointer shadow-lg"
         >
@@ -149,18 +152,18 @@ export const AiDispatcherPage: React.FC<AiDispatcherPageProps> = ({ onOpenDispat
           Corporate Subscription Tiers & Pricing
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Tier 1: 7 Days */}
+          {/* Tier 1: 14 Days */}
           <div className="p-5 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col justify-between space-y-4 shadow-xl">
             <div>
-              <div className="text-sm font-bold text-white">7-Day Express</div>
-              <div className="text-xs text-slate-400 mt-0.5">Weekly trial license</div>
+              <div className="text-sm font-bold text-white">14-Day Express</div>
+              <div className="text-xs text-slate-400 mt-0.5">Bi-weekly license</div>
               <div className="text-base font-mono font-bold text-emerald-400 mt-3">$45,000 USD</div>
               <div className="text-xs font-mono text-amber-400">or 40 Gold</div>
             </div>
             <div className="space-y-2">
               <button
                 disabled={purchasingKey !== null}
-                onClick={() => handlePurchase('7d', false, '7-Day Express License', '$45,000')}
+                onClick={() => handlePurchase('7d', false, '14-Day Express License', '$45,000')}
                 className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer border border-slate-700 flex items-center justify-center gap-2"
               >
                 {purchasingKey === '7d-usd' && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -168,7 +171,7 @@ export const AiDispatcherPage: React.FC<AiDispatcherPageProps> = ({ onOpenDispat
               </button>
               <button
                 disabled={purchasingKey !== null}
-                onClick={() => handlePurchase('7d', true, '7-Day Express License (Gold)', '40 Gold')}
+                onClick={() => handlePurchase('7d', true, '14-Day Express License (Gold)', '40 Gold')}
                 className="w-full py-2 bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-50 text-amber-300 font-semibold text-xs rounded-xl transition-colors cursor-pointer border border-amber-500/30 flex items-center justify-center gap-2"
               >
                 {purchasingKey === '7d-gold' && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -177,21 +180,21 @@ export const AiDispatcherPage: React.FC<AiDispatcherPageProps> = ({ onOpenDispat
             </div>
           </div>
 
-          {/* Tier 2: 1 Month */}
+          {/* Tier 2: 2 Months (60 Days) */}
           <div className="p-5 bg-slate-900 border border-amber-500/40 rounded-2xl flex flex-col justify-between space-y-4 relative overflow-hidden shadow-xl">
             <div className="absolute top-0 right-0 bg-amber-500 text-slate-950 text-[10px] font-black uppercase px-2.5 py-1 rounded-bl">
               Popular
             </div>
             <div>
-              <div className="text-sm font-bold text-white">1-Month Corporate</div>
-              <div className="text-xs text-slate-400 mt-0.5">30 simulation days</div>
+              <div className="text-sm font-bold text-white">2-Month Corporate</div>
+              <div className="text-xs text-slate-400 mt-0.5">60 simulation days</div>
               <div className="text-base font-mono font-bold text-emerald-400 mt-3">$165,000 USD</div>
               <div className="text-xs font-mono text-amber-400">or 120 Gold</div>
             </div>
             <div className="space-y-2">
               <button
                 disabled={purchasingKey !== null}
-                onClick={() => handlePurchase('1m', false, '1-Month Corporate License', '$165,000')}
+                onClick={() => handlePurchase('1m', false, '2-Month Corporate License', '$165,000')}
                 className="w-full py-2.5 bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition-colors cursor-pointer shadow-md flex items-center justify-center gap-2"
               >
                 {purchasingKey === '1m-usd' && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -199,7 +202,7 @@ export const AiDispatcherPage: React.FC<AiDispatcherPageProps> = ({ onOpenDispat
               </button>
               <button
                 disabled={purchasingKey !== null}
-                onClick={() => handlePurchase('1m', true, '1-Month Corporate License (Gold)', '120 Gold')}
+                onClick={() => handlePurchase('1m', true, '2-Month Corporate License (Gold)', '120 Gold')}
                 className="w-full py-2 bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-50 text-amber-300 font-semibold text-xs rounded-xl transition-colors cursor-pointer border border-amber-500/30 flex items-center justify-center gap-2"
               >
                 {purchasingKey === '1m-gold' && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -208,21 +211,21 @@ export const AiDispatcherPage: React.FC<AiDispatcherPageProps> = ({ onOpenDispat
             </div>
           </div>
 
-          {/* Tier 3: Monthly Auto-Renewal Enterprise */}
+          {/* Tier 3: Enterprise Long-Term (180 Days) */}
           <div className="p-5 bg-slate-900 border border-cyan-500/40 rounded-2xl flex flex-col justify-between space-y-4 relative overflow-hidden shadow-xl">
             <div className="absolute top-0 right-0 bg-cyan-500 text-slate-950 text-[10px] font-black uppercase px-2.5 py-1 rounded-bl">
-              Auto-Renew
+              Enterprise
             </div>
             <div>
-              <div className="text-sm font-bold text-white">Enterprise Auto-Renewal</div>
-              <div className="text-xs text-slate-400 mt-0.5">90-day extended pass</div>
+              <div className="text-sm font-bold text-white">Enterprise Long-Term</div>
+              <div className="text-xs text-slate-400 mt-0.5">180-day extended pass</div>
               <div className="text-base font-mono font-bold text-emerald-400 mt-3">$500,000 USD</div>
               <div className="text-xs font-mono text-amber-400">or 350 Gold</div>
             </div>
             <div className="space-y-2">
               <button
                 disabled={purchasingKey !== null}
-                onClick={() => handlePurchase('auto', false, 'Enterprise Auto-Renewal Tier', '$500,000')}
+                onClick={() => handlePurchase('auto', false, 'Enterprise Long-Term Tier', '$500,000')}
                 className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition-colors cursor-pointer shadow-md flex items-center justify-center gap-2"
               >
                 {purchasingKey === 'auto-usd' && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -230,7 +233,7 @@ export const AiDispatcherPage: React.FC<AiDispatcherPageProps> = ({ onOpenDispat
               </button>
               <button
                 disabled={purchasingKey !== null}
-                onClick={() => handlePurchase('auto', true, 'Enterprise Auto-Renewal Tier (Gold)', '350 Gold')}
+                onClick={() => handlePurchase('auto', true, 'Enterprise Long-Term Tier (Gold)', '350 Gold')}
                 className="w-full py-2 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:opacity-50 text-cyan-300 font-semibold text-xs rounded-xl transition-colors cursor-pointer border border-cyan-500/30 flex items-center justify-center gap-2"
               >
                 {purchasingKey === 'auto-gold' && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -241,32 +244,34 @@ export const AiDispatcherPage: React.FC<AiDispatcherPageProps> = ({ onOpenDispat
         </div>
       </div>
 
-      {/* Live Freight Exchange Quick List */}
+      {/* AI Operation Feeds */}
       <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-4 shadow-xl">
-        <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300">
-          Live Freight Exchange & Direct Dispatch
+        <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300 flex items-center justify-between">
+          <span>AI Operation Feeds & Telemetry Logs</span>
+          <span className="text-[10px] text-cyan-400 font-mono">Real-time neural stream</span>
         </h3>
-        <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-          {state.availableContracts.map((contract) => {
-            const origin = state.hubs.find(h => h.id === contract.originHubId)?.name || contract.originHubId;
-            const dest = state.hubs.find(h => h.id === contract.destinationHubId)?.name || contract.destinationHubId;
-            return (
-              <div key={contract.id} className="p-3.5 bg-slate-950 border border-slate-800/80 rounded-xl flex items-center justify-between text-xs hover:border-slate-700 transition-colors">
-                <div>
-                  <div className="font-bold text-white">{contract.title}</div>
-                  <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                    {origin} ➔ {dest} · <span className="text-emerald-400 font-bold">${contract.payoutUsd.toLocaleString()}</span>
-                  </div>
+        <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+          {(() => {
+            const aiNotifications = (state?.notifications || []).filter(n => n.type === 'ai');
+            if (aiNotifications.length === 0) {
+              return (
+                <div className="text-center py-8 text-xs text-slate-500 font-mono">
+                  No AI action logs recorded yet. Run autonomous auto-dispatch or subscribe to AI dispatcher tiers to generate neural feed events.
                 </div>
-                <button
-                  onClick={() => onOpenDispatch(contract.id)}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg font-mono text-xs border border-slate-700 cursor-pointer shadow-sm"
-                >
-                  Dispatch
-                </button>
+              );
+            }
+            return aiNotifications.map((notif) => (
+              <div key={notif.id} className="p-3.5 bg-slate-950 border border-slate-800/80 rounded-xl space-y-1 text-xs hover:border-slate-700 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-white truncate max-w-[240px]">{notif.title}</span>
+                  <span className="text-[10px] font-mono text-cyan-400/80 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">{notif.simTimeFormatted}</span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-snug">
+                  {notif.message}
+                </p>
               </div>
-            );
-          })}
+            ));
+          })()}
         </div>
       </div>
     </div>

@@ -20,6 +20,7 @@ import { OfflineProgressModal } from './components/OfflineProgressModal';
 import { DatabaseManagerModal } from './components/DatabaseManagerModal';
 import { AiDispatcherPage } from './components/AiDispatcherPage';
 import { RepairWorkshopPage } from './components/RepairWorkshopPage';
+import { AiQuickActionModal } from './components/AiQuickActionModal';
 import {
   Activity,
   Truck,
@@ -36,6 +37,7 @@ import {
   Bell,
   Trophy,
   Wrench,
+  Brain,
 } from 'lucide-react';
 
 const DashboardContent: React.FC = () => {
@@ -46,12 +48,15 @@ const DashboardContent: React.FC = () => {
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState<boolean>(false);
   const [isCompanyProfileOpen, setIsCompanyProfileOpen] = useState<boolean>(false);
   const [isDbModalOpen, setIsDbModalOpen] = useState<boolean>(false);
+  const [isAiQuickModalOpen, setIsAiQuickModalOpen] = useState<boolean>(false);
   const [preselectedContractId, setPreselectedContractId] = useState<string | undefined>(undefined);
 
   const handleOpenDispatch = (contractId?: string) => {
     setPreselectedContractId(contractId);
     setIsDispatchModalOpen(true);
   };
+
+  const isSubActive = !!(state?.aiDispatcherActive && (state?.simTimeMinutes || 0) < (state?.aiSubscriptionExpiresSimMinutes || 0));
 
   const mobileNavItems = [
     { id: 'operations', label: 'Ops', icon: Activity },
@@ -75,7 +80,7 @@ const DashboardContent: React.FC = () => {
         onOpenDispatchModal={() => handleOpenDispatch()}
         onOpenCompanyProfile={() => setIsCompanyProfileOpen(true)}
         onOpenDatabaseModal={() => setIsDbModalOpen(true)}
-        onOpenAiDispatcher={() => setIsAiDispatcherOpen(true)}
+        onOpenAiDispatcher={() => setIsAiQuickModalOpen(true)}
       />
 
       {/* Floating System Notification Toast (Non-blocking replacement for window.alert) */}
@@ -182,16 +187,18 @@ const DashboardContent: React.FC = () => {
         {currentTab === 'profile' && <CompanyProfilePage onOpenAchievements={() => setCurrentTab('achievements')} />}
       </main>
 
-      {/* Floating Mobile Quick Dispatch Action Button */}
-      <div className="fixed bottom-20 right-4 z-30 lg:hidden">
-        <button
-          onClick={() => handleOpenDispatch()}
-          aria-label="New Freight Dispatch"
-          className="w-13 h-13 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 flex items-center justify-center shadow-2xl active:scale-95 transition-transform cursor-pointer"
-        >
-          <PlusCircle className="w-6 h-6" />
-        </button>
-      </div>
+      {/* Floating Mobile AI Quick Action Button (only displayed when AI subscription is active) */}
+      {isSubActive && (
+        <div className="fixed bottom-20 right-4 z-30 lg:hidden">
+          <button
+            onClick={() => setIsAiQuickModalOpen(true)}
+            aria-label="AI Dispatcher Quick Actions"
+            className="w-13 h-13 rounded-full bg-cyan-400 hover:bg-cyan-300 text-slate-950 flex items-center justify-center shadow-2xl active:scale-95 transition-transform cursor-pointer animate-pulse border-2 border-cyan-200"
+          >
+            <Brain className="w-6 h-6" />
+          </button>
+        </div>
+      )}
 
       {/* Fixed Mobile Bottom Tab Bar (375px - 1024px) */}
       <nav
@@ -246,6 +253,13 @@ const DashboardContent: React.FC = () => {
             setIsCompanyProfileOpen(false);
             setCurrentTab('achievements');
           }}
+        />
+      )}
+
+      {isAiQuickModalOpen && (
+        <AiQuickActionModal
+          onClose={() => setIsAiQuickModalOpen(false)}
+          onOpenAiPage={() => setCurrentTab('ai')}
         />
       )}
 

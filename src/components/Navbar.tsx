@@ -32,6 +32,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const nextLevelExp = currentLevel * 2500;
   const expPercent = Math.min(100, (currentExp / Math.max(1, nextLevelExp)) * 100);
   const circleCircumference = 2 * Math.PI * 13;
+  const isSubActive = !!(state?.aiDispatcherActive && (state?.simTimeMinutes || 0) < (state?.aiSubscriptionExpiresSimMinutes || 0));
 
   const navLinks = [
     { id: 'operations', label: 'Operations' },
@@ -43,6 +44,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'drivers', label: 'Drivers' },
     { id: 'ledger', label: 'Financials' },
     { id: 'ai', label: 'AI Dispatcher' },
+    { id: 'profile', label: 'Profile' },
   ];
 
   const handleNewGame = () => {
@@ -60,9 +62,13 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Zone 1: Circular Level Progress & Company Info */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
           <button
-            onClick={onOpenCompanyProfile}
+            onClick={() => onSelectTab('profile')}
             title="Open Enterprise Profile & Management"
-            className="flex items-center gap-2 text-white font-bold tracking-tight text-left min-h-[44px] cursor-pointer hover:opacity-90 transition-opacity group min-w-0"
+            className={`flex items-center gap-2 text-white font-bold tracking-tight text-left min-h-[44px] cursor-pointer transition-all group min-w-0 px-2 py-1 rounded-xl border ${
+              currentTab === 'profile'
+                ? 'bg-amber-500/20 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
+                : 'bg-slate-900/60 border-slate-800 hover:bg-slate-800/80'
+            }`}
           >
             <div className="relative w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center flex-shrink-0">
               <svg className="absolute inset-0 w-8 h-8 sm:w-9 sm:h-9 -rotate-90">
@@ -173,14 +179,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             <HelpCircle className="w-4 h-4 text-amber-400" />
           </button>
 
-          {/* Quick Dispatch CTA button */}
-          <button
-            onClick={onOpenDispatchModal}
-            className="hidden sm:flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>Dispatch</span>
-          </button>
+          {/* Quick AI Action button (only displayed when AI subscription is active) */}
+          {isSubActive && (
+            <button
+              onClick={onOpenAiDispatcher}
+              title="AI Dispatcher Hub"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-950 bg-cyan-400 hover:bg-cyan-300 rounded-lg transition-colors whitespace-nowrap cursor-pointer shadow-lg animate-pulse"
+            >
+              <Brain className="w-4 h-4" />
+              <span>AI Hub</span>
+            </button>
+          )}
         </div>
       </div>
 
