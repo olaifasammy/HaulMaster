@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { Play, Pause, PlusCircle, Fuel, HelpCircle, Award, Globe, Bell, Plus, LogOut, Cpu } from 'lucide-react';
+import { PlusCircle, Fuel, HelpCircle, Award, Globe, Bell, Plus, LogOut, Cpu } from 'lucide-react';
 
 interface NavbarProps {
   currentTab: string;
@@ -108,7 +108,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
           ))}
         </nav>
 
-        {/* Zone 3: Financial Balances, Time Warp & Action Buttons */}
+        {/* Zone 3: Financial Balances & Action Buttons */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           
           {/* Capital & Gold Reserves */}
@@ -126,29 +126,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
                 <span>★</span> {state.gold} G
               </span>
             </div>
-          </div>
-
-          {/* Time & Pause Controls (Permanent 1x) */}
-          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs">
-            <button
-              onClick={() => setSimSpeed(state.simSpeed === 0 ? 1 : 0)}
-              title={state.simSpeed === 0 ? 'Resume Simulation' : 'Pause Simulation'}
-              className={`px-2.5 py-1 rounded flex items-center gap-1.5 transition-colors cursor-pointer ${
-                state.simSpeed === 0 ? 'bg-amber-500/20 text-amber-400 font-bold' : 'text-slate-300 hover:text-white font-medium'
-              }`}
-            >
-              {state.simSpeed === 0 ? (
-                <>
-                  <Play className="w-3 h-3" />
-                  <span>PAUSED</span>
-                </>
-              ) : (
-                <>
-                  <Pause className="w-3 h-3" />
-                  <span>1x LIVE</span>
-                </>
-              )}
-            </button>
           </div>
 
           {/* AI Dispatcher Toggle */}
