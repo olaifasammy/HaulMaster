@@ -3789,8 +3789,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const driver = readyDrivers[0];
       if (!truck || !driver) continue;
 
-      // Strict regional & hub restriction: Truck must be stationed at the contract's origin hub
-      const matchingContractIdx = remainingContracts.findIndex(c => c.originHubId === truck.currentHubId);
+      // Strict regional & hub restriction: Truck must be stationed at the contract's origin hub and both must be in the same region
+      const truckHub = hubs.find(h => h.id === truck.currentHubId);
+      const matchingContractIdx = remainingContracts.findIndex(c => {
+        const oHub = hubs.find(h => h.id === c.originHubId);
+        const dHub = hubs.find(h => h.id === c.destinationHubId);
+        if (!oHub || !dHub || !truckHub) return false;
+        return c.originHubId === truck.currentHubId && oHub.region === truckHub.region && dHub.region === truckHub.region;
+      });
       if (matchingContractIdx === -1) {
         // No local consignment starts at this truck's hub; skip so Munich trucks stay in Europe!
         continue;

@@ -18,10 +18,16 @@ interface FreightMarketProps {
 
 export const FreightMarket: React.FC<FreightMarketProps> = ({ onDispatchContract }) => {
   const { state, refreshAvailableContracts } = useGame();
+  const unlockedRegions = state.unlockedRegions || [];
+  const [selectedRegion, setSelectedRegion] = useState<string>(unlockedRegions[0] || '');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const unlockedRegions = state.unlockedRegions || ['North America'];
+  React.useEffect(() => {
+    if (unlockedRegions.length > 0 && !unlockedRegions.includes(selectedRegion)) {
+      setSelectedRegion(unlockedRegions[0]);
+    }
+  }, [unlockedRegions, selectedRegion]);
 
   const categories: { id: string; label: string }[] = [
     { id: 'all', label: 'All Consignments' },
@@ -34,9 +40,9 @@ export const FreightMarket: React.FC<FreightMarketProps> = ({ onDispatchContract
 
   const filteredContracts = state.availableContracts.filter((c) => {
     const originHub = state.hubs.find((h) => h.id === c.originHubId);
-    const unlockedRegions = state.unlockedRegions || [];
     if (!originHub || !originHub.isUnlocked || !unlockedRegions.includes(originHub.region)) return false;
 
+    if (selectedRegion && originHub.region !== selectedRegion) return false;
     if (selectedCategory !== 'all' && c.category !== selectedCategory) return false;
     return true;
   });
@@ -83,6 +89,26 @@ export const FreightMarket: React.FC<FreightMarketProps> = ({ onDispatchContract
           </button>
         </div>
       </div>
+
+      {/* Region Filter Tabs */}
+      {unlockedRegions.length > 1 && (
+        <div className="flex items-center gap-2 p-1.5 bg-slate-900/90 border border-slate-800 rounded-xl overflow-x-auto">
+          <span className="text-[11px] font-mono font-bold text-slate-400 pl-2">Region:</span>
+          {unlockedRegions.map((reg) => (
+            <button
+              key={reg}
+              onClick={() => setSelectedRegion(reg)}
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                selectedRegion === reg
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+              }`}
+            >
+              {reg}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Filter Tabs */}
       <div className="flex items-center gap-1.5 p-1 bg-slate-900/90 border border-slate-800 rounded-xl overflow-x-auto">
