@@ -8,10 +8,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  ArrowRight,
 } from 'lucide-react';
 
-export const FinancialLedger: React.FC = () => {
-  const { state, takeLoan, repayLoan } = useGame();
+export const FinancialLedger: React.FC<{ onOpenLoansPage: () => void }> = ({ onOpenLoansPage }) => {
+  const { state, repayLoan } = useGame();
   const [filterType, setFilterType] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -148,98 +149,67 @@ export const FinancialLedger: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Bank Credit Facility */}
-      <div className="space-y-3 sm:space-y-4 pt-4 border-t border-slate-800">
-        <div>
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 font-mono flex items-center gap-2">
-            <Landmark className="w-4 h-4 text-amber-400" />
-            <span>Commercial Equipment Credit</span>
-          </h3>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Finance fleet expansions or depot fuel infrastructure.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl space-y-2.5">
-            <div className="flex justify-between items-start">
-              <div>
-                <h4 className="text-xs font-bold text-white">Micro Credit</h4>
-                <div className="text-[10px] font-mono text-slate-400">30-Day Facility</div>
-              </div>
-              <span className="font-mono text-[11px] font-bold text-amber-400">7% Term</span>
-            </div>
-            <div className="text-xl font-mono font-bold text-white tabular-nums">$50,000</div>
-            <button
-              onClick={() => handleTakeLoan(50000, 30)}
-              className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs rounded-lg transition-colors min-h-[44px]"
-            >
-              Disburse $50,000
-            </button>
+      {/* Corporate Banking & Grants Portal Banner */}
+      <div className="p-5 bg-gradient-to-r from-amber-500/10 via-slate-900 to-slate-900 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+            <Landmark className="w-6 h-6" />
           </div>
-
-          <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl space-y-2.5">
-            <div className="flex justify-between items-start">
-              <div>
-                <h4 className="text-xs font-bold text-white">Fleet Expansion</h4>
-                <div className="text-[10px] font-mono text-slate-400">60-Day Facility</div>
-              </div>
-              <span className="font-mono text-[11px] font-bold text-amber-400">7% Term</span>
-            </div>
-            <div className="text-xl font-mono font-bold text-white tabular-nums">$125,000</div>
-            <button
-              onClick={() => handleTakeLoan(125000, 60)}
-              className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs rounded-lg transition-colors min-h-[44px]"
-            >
-              Disburse $125,000
-            </button>
-          </div>
-
-          <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl space-y-2.5">
-            <div className="flex justify-between items-start">
-              <div>
-                <h4 className="text-xs font-bold text-white">Terminal Mortgage</h4>
-                <div className="text-[10px] font-mono text-slate-400">90-Day Facility</div>
-              </div>
-              <span className="font-mono text-[11px] font-bold text-amber-400">7% Term</span>
-            </div>
-            <div className="text-xl font-mono font-bold text-white tabular-nums">$250,000</div>
-            <button
-              onClick={() => handleTakeLoan(250000, 90)}
-              className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs rounded-lg transition-colors min-h-[44px]"
-            >
-              Disburse $250,000
-            </button>
+          <div>
+            <span className="text-[10px] font-mono uppercase font-bold text-amber-400 tracking-wider">
+              Corporate Banking & Debt Bureau
+            </span>
+            <h4 className="text-base font-bold text-white mt-0.5">Corporate Financing, Revolving Credit & Grants</h4>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Manage corporate credit lines, heavy equipment financing, terminal mortgages, and government logistics subsidies.
+            </p>
           </div>
         </div>
 
-        {/* Active Loans */}
-        {state.loans.length > 0 && (
-          <div className="p-4 bg-slate-950/80 border border-amber-500/30 rounded-xl space-y-2.5">
+        <button
+          onClick={onOpenLoansPage}
+          className="px-5 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs font-mono uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-2 shrink-0 cursor-pointer shadow-lg shadow-amber-500/10"
+        >
+          <span>Open Corporate Banking Portal</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Active Debt Portfolio Summary if loans exist */}
+      {state.loans.length > 0 && (
+        <div className="p-4 bg-slate-950/80 border border-amber-500/30 rounded-xl space-y-2.5">
+          <div className="flex items-center justify-between">
             <h4 className="text-[11px] font-mono font-bold uppercase text-amber-400 tracking-wider">
               Active Debt Facilities ({state.loans.length})
             </h4>
-            <div className="space-y-2">
-              {state.loans.map((loan, index) => (
-                <div key={`${loan.id}-${index}`} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-lg text-xs font-mono gap-2">
-                  <div>
-                    <span className="text-white font-bold">${Math.round(loan.remainingBalanceUsd).toLocaleString()} remaining</span>
-                    <span className="text-slate-500 text-[11px] block sm:inline sm:ml-2">
-                      ({loan.daysRemaining} days left at ${loan.dailyPaymentUsd}/day)
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => repayLoan(loan.id, 25000)}
-                    className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded text-xs font-semibold transition-colors min-h-[36px]"
-                  >
-                    Repay $25,000
-                  </button>
-                </div>
-              ))}
-            </div>
+            <button
+              onClick={onOpenLoansPage}
+              className="text-xs font-mono text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <span>Manage in Portal</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
           </div>
-        )}
-      </div>
+          <div className="space-y-2">
+            {state.loans.map((loan, index) => (
+              <div key={`${loan.id}-${index}`} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-lg text-xs font-mono gap-2">
+                <div>
+                  <span className="text-white font-bold">${Math.round(loan.remainingBalanceUsd).toLocaleString()} remaining</span>
+                  <span className="text-slate-500 text-[11px] block sm:inline sm:ml-2">
+                    ({loan.daysRemaining} days left at ${loan.dailyPaymentUsd}/day)
+                  </span>
+                </div>
+                <button
+                  onClick={() => repayLoan(loan.id, 25000)}
+                  className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded text-xs font-semibold transition-colors min-h-[36px]"
+                >
+                  Repay $25,000
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 3. Transaction Journal */}
       <div className="space-y-3 sm:space-y-4 pt-4 border-t border-slate-800">

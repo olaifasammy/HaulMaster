@@ -25,7 +25,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
     { id: 'hubs', label: 'Hubs' },
     { id: 'drivers', label: 'Drivers' },
     { id: 'ledger', label: 'Financials' },
-    { id: 'achievements', label: 'Achievements' },
   ];
 
   return (

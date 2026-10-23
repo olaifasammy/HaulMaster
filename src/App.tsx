@@ -9,6 +9,7 @@ import { Marketplace } from './components/Marketplace';
 import { DriverRoster } from './components/DriverRoster';
 import { HubsManager } from './components/HubsManager';
 import { FinancialLedger } from './components/FinancialLedger';
+import { GrantsAndLoansPage } from './components/GrantsAndLoansPage';
 import { AchievementsPage } from './components/AchievementsPage';
 import { TruckInspectorModal } from './components/TruckInspectorModal';
 import { RouteDispatcherModal } from './components/RouteDispatcherModal';
@@ -53,7 +54,6 @@ const DashboardContent: React.FC = () => {
     { id: 'hubs', label: 'Hubs', icon: MapPin },
     { id: 'drivers', label: 'Crew', icon: Users },
     { id: 'ledger', label: 'P&L', icon: DollarSign },
-    { id: 'achievements', label: 'Awards', icon: Trophy },
   ];
 
   // Latest notification toast
@@ -144,7 +144,10 @@ const DashboardContent: React.FC = () => {
         {currentTab === 'hubs' && <HubsManager />}
 
         {/* Financial P&L & Banking View */}
-        {currentTab === 'ledger' && <FinancialLedger />}
+        {currentTab === 'ledger' && <FinancialLedger onOpenLoansPage={() => setCurrentTab('loans')} />}
+
+        {/* Standalone Grants and Loans Corporate Page */}
+        {currentTab === 'loans' && <GrantsAndLoansPage onBackToLedger={() => setCurrentTab('ledger')} />}
 
         {/* Achievements & Executive Rewards Full Page View */}
         {currentTab === 'achievements' && <AchievementsPage />}
