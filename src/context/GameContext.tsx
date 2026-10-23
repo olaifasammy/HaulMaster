@@ -692,6 +692,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           let updatedPlayerXp = prevState.playerXp;
           let updatedPlayerRank = prevState.playerRank;
           let updatedRankTitle = prevState.rankTitle;
+          let updatedGold = prevState.gold;
 
           for (const finished of completedTrips) {
             const destHub = prevState.hubs.find((h) => h.id === finished.contract.destinationHubId);
@@ -715,11 +716,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               if (updatedPlayerXp >= tier.xpRequired && tier.rank > updatedPlayerRank) {
                 updatedPlayerRank = tier.rank;
                 updatedRankTitle = tier.title;
+                updatedGold += 5;
                 newNotifications.push({
                   id: `notif-rank-${tier.rank}-${newSimMinutes}-${Date.now()}`,
                   simTimeFormatted: timeFormatted,
-                  title: `⭐ PROMOTED: ${tier.title.toUpperCase()} (Rank ${tier.rank})`,
-                  message: `Carrier reputation elevated to Rank ${tier.rank} (${tier.title}). New hub concessions and trade corridors are now unlocked in the Marketplace!`,
+                  title: `🪙 PROMOTED: ${tier.title.toUpperCase()} (Rank ${tier.rank})`,
+                  message: `Carrier reputation elevated to Rank ${tier.rank} (${tier.title}). Earned +5 Gold and unlocked new trade corridors!`,
                   type: 'delivery',
                   timestamp: Date.now(),
                 });
@@ -857,6 +859,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             playerRank: updatedPlayerRank,
             playerXp: updatedPlayerXp,
             rankTitle: updatedRankTitle,
+            gold: updatedGold,
           };
         });
       });

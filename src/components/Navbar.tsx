@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { PlusCircle, Fuel, HelpCircle, Award, Globe, Bell, Plus, LogOut, Cpu } from 'lucide-react';
+import { PlusCircle, Fuel, HelpCircle, Award, Globe, Bell, Plus, LogOut, Cpu, Coins } from 'lucide-react';
 
 interface NavbarProps {
   currentTab: string;
@@ -122,8 +122,9 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
             <div className="w-[1px] h-6 bg-slate-800 hidden sm:block" />
             <div className="flex flex-col items-end">
               <span className="text-[9px] uppercase font-mono tracking-wider text-amber-500 hidden sm:block">Gold</span>
-              <span className="text-xs font-mono font-bold text-amber-400 tabular-nums flex items-center gap-0.5">
-                <span>★</span> {state.gold} G
+              <span className="text-xs font-mono font-bold text-amber-400 tabular-nums flex items-center gap-1">
+                <Coins className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>{state.gold.toLocaleString()}</span>
               </span>
             </div>
           </div>
