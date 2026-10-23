@@ -33,7 +33,7 @@ import { computePhysicsStep } from '../utils/physicsEngine';
 import { getLocalWeather } from '../utils/weatherEngine';
 import { WorldCompanyRepository } from '../constants/worldCompanies';
 
-const STORAGE_KEY = 'haulmaster_game_state_v3';
+const STORAGE_KEY = 'haulmaster_game_state_v4';
 
 export const deduplicateNotifications = (list: GameEventNotification[]): GameEventNotification[] => {
   const seen = new Set<string>();
@@ -252,6 +252,7 @@ const createInitialState = (): GameState => {
     ratingScore: 4.8,
     playerRank: 1,
     playerXp: 0,
+    gold: 15,
     rankTitle: 'Novice Carrier',
     ownedHubIds,
     ownedRouteIds,
@@ -271,6 +272,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.trucks && parsed.hubs) {
+          if (parsed.gold === undefined) parsed.gold = 15;
           // Strictly deduplicate and ensure unique keys for any restored notifications
           parsed.notifications = deduplicateNotifications(parsed.notifications || []);
           if (!parsed.trailers || parsed.trailers.length === 0) {
