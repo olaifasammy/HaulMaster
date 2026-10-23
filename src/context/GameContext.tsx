@@ -60,7 +60,8 @@ export const deduplicateNotifications = (list: GameEventNotification[]): GameEve
 export const generateContractsForRoutes = (
   unlockedRoutes: RouteCorridor[],
   hubs: Hub[],
-  count: number = 8
+  count: number = 20,
+  ownedTrucks?: Truck[]
 ): CargoContract[] => {
   if (unlockedRoutes.length === 0) return [];
 
@@ -77,18 +78,27 @@ export const generateContractsForRoutes = (
     { title: 'Hydrochloric Acid ADR Bulk Solution', category: 'Hazardous Chemicals' as const, isCold: false, haz: true, hazClass: 'Class 8 Corrosive' as const, rate: 5.2 },
   ];
 
+  // Prioritize routes originating from hubs where player trucks are parked
+  const truckHubIds = new Set(ownedTrucks?.map(t => t.currentHubId) || []);
+  const prioritizedRoutes = [...unlockedRoutes].sort((a, b) => {
+    const aHasTruck = truckHubIds.has(a.originHubId) ? 1 : 0;
+    const bHasTruck = truckHubIds.has(b.originHubId) ? 1 : 0;
+    return bHasTruck - aHasTruck;
+  });
+
   const contracts: CargoContract[] = [];
-  for (let i = 0; i < count; i++) {
-    const route = unlockedRoutes[i % unlockedRoutes.length];
+  const targetCount = Math.max(count, prioritizedRoutes.length * 2);
+  for (let i = 0; i < targetCount; i++) {
+    const route = prioritizedRoutes[i % prioritizedRoutes.length];
     const originHub = hubs.find((h) => h.id === route.originHubId);
     const destHub = hubs.find((h) => h.id === route.destinationHubId);
     if (!originHub || !destHub) continue;
 
     const shipper = WorldCompanyRepository.getRandomForRegion(originHub.region);
     const template = cargoCatalog[(i + Math.floor(Math.random() * cargoCatalog.length)) % cargoCatalog.length];
-    const weightTons = Number((12 + Math.random() * 16).toFixed(1));
+    const weightTons = Number((10 + Math.random() * 18).toFixed(1));
     const dist = route.distanceKm;
-    const basePayout = Math.round(dist * template.rate * (0.9 + Math.random() * 0.25) * (shipper.rating / 90));
+    const basePayout = Math.round(dist * template.rate * (0.95 + Math.random() * 0.3) * (shipper.rating / 90));
 
     contracts.push({
       id: `cnt-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 6)}`,
