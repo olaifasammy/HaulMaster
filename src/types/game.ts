@@ -132,6 +132,7 @@ export interface TruckModel {
   basePriceUsd: number;
   specs: PowertrainSpecs;
   description: string;
+  isRigid?: boolean;
 }
 
 export type SleeperTier = 'day_cab' | 'standard_sleeper' | 'deluxe_suite';

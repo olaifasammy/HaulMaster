@@ -120,7 +120,7 @@ export const Marketplace: React.FC = () => {
   const truckTotalCost =
     selectedTruckModel.basePriceUsd + truckAeroCost + truckRetarderCost + truckTiresCost + truckSleeperCost + truckLiveryCost;
 
-  const bundledTrailerCost = bundleTrailer ? bundledTrailerModel.basePriceUsd + (bundledTrailerHasAero ? 2200 : 0) : 0;
+  const bundledTrailerCost = !selectedTruckModel.isRigid && bundleTrailer ? bundledTrailerModel.basePriceUsd + (bundledTrailerHasAero ? 2200 : 0) : 0;
   const truckTotalCostWithTrailer = truckTotalCost + bundledTrailerCost;
 
   const truckDownPayment = Math.round(truckTotalCostWithTrailer * 0.2);
@@ -1514,58 +1514,67 @@ export const Marketplace: React.FC = () => {
                   </div>
 
                   {/* Bundle Cargo Trailer */}
-                  <div className="space-y-2.5 pt-3 border-t border-slate-800/80">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-mono uppercase tracking-wider text-amber-400 font-bold flex items-center gap-1.5">
-                        <Package className="w-3.5 h-3.5" />
-                        <span>Bundle Cargo Trailer</span>
-                      </label>
-                      <button
-                        onClick={() => setBundleTrailer(!bundleTrailer)}
-                        className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-colors ${
-                          bundleTrailer ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-950 text-slate-400 border border-slate-800'
-                        }`}
-                      >
-                        {bundleTrailer ? 'Bundled (Active)' : 'Optional Add-on'}
-                      </button>
-                    </div>
-
-                    {bundleTrailer && (
-                      <div className="p-3 bg-slate-950/80 border border-amber-500/30 rounded-xl space-y-2.5">
-                        <div>
-                          <label className="text-[10px] font-mono uppercase text-slate-400 block mb-1">Select Trailer Model</label>
-                          <select
-                            value={bundledTrailerModelId}
-                            onChange={(e) => setBundledTrailerModelId(e.target.value as TrailerModelId)}
-                            className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-white font-mono focus:outline-none focus:border-slate-700"
-                          >
-                            {TRAILER_MODELS.map((tm) => (
-                              <option key={tm.id} value={tm.id}>
-                                {tm.name} (${tm.basePriceUsd.toLocaleString()})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="flex items-center justify-between text-xs font-mono">
-                          <span className="text-slate-400">Aero Skirts (+$2,200)</span>
-                          <button
-                            onClick={() => setBundledTrailerHasAero(!bundledTrailerHasAero)}
-                            className={`px-2.5 py-1 rounded text-xs font-bold ${
-                              bundledTrailerHasAero ? 'bg-amber-400 text-slate-950' : 'bg-slate-900 text-slate-400 border border-slate-800'
-                            }`}
-                          >
-                            {bundledTrailerHasAero ? 'Equipped' : 'None'}
-                          </button>
-                        </div>
-
-                        <div className="text-[11px] font-mono text-amber-400 pt-1 border-t border-slate-800 flex justify-between">
-                          <span>Trailer Cost:</span>
-                          <span className="font-bold">+${bundledTrailerCost.toLocaleString()}</span>
-                        </div>
+                  {!selectedTruckModel.isRigid ? (
+                    <div className="space-y-2.5 pt-3 border-t border-slate-800/80">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-mono uppercase tracking-wider text-amber-400 font-bold flex items-center gap-1.5">
+                          <Package className="w-3.5 h-3.5" />
+                          <span>Bundle Cargo Trailer</span>
+                        </label>
+                        <button
+                          onClick={() => setBundleTrailer(!bundleTrailer)}
+                          className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-colors ${
+                            bundleTrailer ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-950 text-slate-400 border border-slate-800'
+                          }`}
+                        >
+                          {bundleTrailer ? 'Bundled (Active)' : 'Optional Add-on'}
+                        </button>
                       </div>
-                    )}
-                  </div>
+
+                      {bundleTrailer && (
+                        <div className="p-3 bg-slate-950/80 border border-amber-500/30 rounded-xl space-y-2.5">
+                          <div>
+                            <label className="text-[10px] font-mono uppercase text-slate-400 block mb-1">Select Trailer Model</label>
+                            <select
+                              value={bundledTrailerModelId}
+                              onChange={(e) => setBundledTrailerModelId(e.target.value as TrailerModelId)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-white font-mono focus:outline-none focus:border-slate-700"
+                            >
+                              {TRAILER_MODELS.map((tm) => (
+                                <option key={tm.id} value={tm.id}>
+                                  {tm.name} (${tm.basePriceUsd.toLocaleString()})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="flex items-center justify-between text-xs font-mono">
+                            <span className="text-slate-400">Aero Skirts (+$2,200)</span>
+                            <button
+                              onClick={() => setBundledTrailerHasAero(!bundledTrailerHasAero)}
+                              className={`px-2.5 py-1 rounded text-xs font-bold ${
+                                bundledTrailerHasAero ? 'bg-amber-400 text-slate-950' : 'bg-slate-900 text-slate-400 border border-slate-800'
+                              }`}
+                            >
+                              {bundledTrailerHasAero ? 'Equipped' : 'None'}
+                            </button>
+                          </div>
+
+                          <div className="text-[11px] font-mono text-amber-400 pt-1 border-t border-slate-800 flex justify-between">
+                            <span>Trailer Cost:</span>
+                            <span className="font-bold">+${bundledTrailerCost.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2 pt-3 border-t border-slate-800/80">
+                      <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl text-xs text-slate-400">
+                        <span className="text-amber-400 font-bold block mb-0.5">Rigid Truck Specification</span>
+                        <span>This rigid vehicle features an integrated cargo box body. No separate trailer required.</span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Payment method */}
                   <div className="space-y-1.5 pt-2 border-t border-slate-800/80">

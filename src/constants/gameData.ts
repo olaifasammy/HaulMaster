@@ -185,6 +185,7 @@ export const TRUCK_MODELS: TruckModel[] = [
       frontalAreaM2: 8.6,
     },
     description: 'Free starter commercial vehicle. Agile medium-duty rigid cargo truck with integrated aerodynamic box body. Ideal company starter vehicle for regional distribution and palletized consignments up to 14 metric tons.',
+    isRigid: true,
   },
   {
     id: 'strada-460',

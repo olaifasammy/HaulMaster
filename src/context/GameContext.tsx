@@ -168,7 +168,7 @@ const createInitialState = (): GameState => {
   const ownedHubIds = [primaryHubId];
   const ownedRouteIds: string[] = [];
 
-  // Free starter commercial vehicle: MetroFreight Rigid 320 Urban stationed at Denver primary base
+  // Free starter commercial vehicle: MetroFreight Rigid 320 Urban stationed at Denver primary base (Rigid truck - no trailer required)
   const initialTrucks: TruckInstance[] = [
     {
       id: 'trk-01',
@@ -190,17 +190,12 @@ const createInitialState = (): GameState => {
       tireCompound: 'highway_eco',
       sleeperTier: 'day_cab',
       liveryColor: 'obsidian_slate',
-      assignedTrailerId: 'trl-01',
+      assignedTrailerId: null,
       serviceDueKm: 50000,
     },
   ];
 
-  const initialTrailers: TrailerInstance[] = [
-    {
-      ...INITIAL_TRAILERS[0],
-      currentHubId: primaryHubId,
-    },
-  ];
+  const initialTrailers: TrailerInstance[] = [];
 
   const initialDrivers: Driver[] = [
     {
@@ -1854,6 +1849,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     const starterTruckModel = TRUCK_MODELS.find((m) => m.id === config.starterTruckModelId) || TRUCK_MODELS[0];
+    const isRigid = starterTruckModel.isRigid;
     const starterTrailerModel = TRAILER_MODELS.find((m) => m.id === config.starterTrailerModelId) || TRAILER_MODELS[0];
 
     const starterTruck: TruckInstance = {
@@ -1876,24 +1872,26 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tireCompound: 'highway_eco',
       sleeperTier: 'standard_sleeper',
       liveryColor: config.starterLivery,
-      assignedTrailerId: 'trl-01',
+      assignedTrailerId: isRigid ? null : 'trl-01',
       serviceDueKm: 50000,
     };
 
-    const starterTrailer: TrailerInstance = {
-      id: 'trl-01',
-      modelId: starterTrailerModel.id,
-      serialNumber: `AH-${Math.floor(10000 + Math.random() * 90000)}`,
-      currentHubId: primaryHubId,
-      status: 'idle',
-      odometerKm: 12000,
-      hasAeroSkirts: true,
-      hasReeferUnit: starterTrailerModel.supportsReeferUnit,
-      reeferFuelCurrentLiters: starterTrailerModel.supportsReeferUnit ? 180 : 0,
-      tireCompound: 'highway_eco',
-      assignedTruckId: 'trk-01',
-      assignedTripId: null,
-    };
+    const initialTrailers: TrailerInstance[] = isRigid ? [] : [
+      {
+        id: 'trl-01',
+        modelId: starterTrailerModel.id,
+        serialNumber: `AH-${Math.floor(10000 + Math.random() * 90000)}`,
+        currentHubId: primaryHubId,
+        status: 'idle',
+        odometerKm: 12000,
+        hasAeroSkirts: true,
+        hasReeferUnit: starterTrailerModel.supportsReeferUnit,
+        reeferFuelCurrentLiters: starterTrailerModel.supportsReeferUnit ? 180 : 0,
+        tireCompound: 'highway_eco',
+        assignedTruckId: 'trk-01',
+        assignedTripId: null,
+      },
+    ];
 
     const starterDriver: Driver = {
       id: 'drv-01',
