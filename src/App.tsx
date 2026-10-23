@@ -252,13 +252,7 @@ const DashboardContent: React.FC = () => {
         onClose={() => setIsDbModalOpen(false)}
       />
 
-      {/* AI Dispatcher Intelligence Hub Modal */}
-      {isAiDispatcherOpen && (
-        <AiDispatcherModal
-          onClose={() => setIsAiDispatcherOpen(false)}
-          onOpenDispatch={(contractId) => handleOpenDispatch(contractId)}
-        />
-      )}
+
 
       {/* New User Onboarding Setup Wizard (Automatic on new game, or via restart) */}
       {!state.hasCompletedOnboarding && (
