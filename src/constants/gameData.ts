@@ -1914,6 +1914,7 @@ export const INITIAL_DRIVERS: Driver[] = [
     continuousDriveMinutes: 0,
     dailyDriveMinutes: 0,
     currentRestMinutesRemaining: 0,
+    contractDaysRemaining: 45,
     stats: {
       ecoDrivingRating: 92,
       mechanicalSympathy: 95,
@@ -1940,6 +1941,7 @@ export const INITIAL_DRIVERS: Driver[] = [
     continuousDriveMinutes: 0,
     dailyDriveMinutes: 0,
     currentRestMinutesRemaining: 0,
+    contractDaysRemaining: 45,
     stats: {
       ecoDrivingRating: 88,
       mechanicalSympathy: 90,
@@ -1966,6 +1968,7 @@ export const INITIAL_DRIVERS: Driver[] = [
     continuousDriveMinutes: 0,
     dailyDriveMinutes: 0,
     currentRestMinutesRemaining: 0,
+    contractDaysRemaining: 45,
     stats: {
       ecoDrivingRating: 96,
       mechanicalSympathy: 94,

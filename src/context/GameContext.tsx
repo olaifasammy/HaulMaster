@@ -692,7 +692,24 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           // 1. Process Midnight Rollover (Daily loan payments, driver retainers, hub depot maintenance)
           let updatedLoans = prevState.loans;
+          let updatedDrivers = [...prevState.drivers];
           if (isMidnightRollover) {
+            // Driver contract days countdown
+            updatedDrivers = prevState.drivers.map((drv) => {
+              const remaining = Math.max(0, (drv.contractDaysRemaining || 45) - 1);
+              if (remaining === 0 && (drv.contractDaysRemaining || 45) > 0) {
+                newNotifications.push({
+                  id: `notif-contract-exp-${drv.id}-${currentDay}-${Date.now()}`,
+                  simTimeFormatted: timeFormatted,
+                  title: '⚠️ Driver Contract Expired',
+                  message: `Employment contract for ${drv.name} has expired. Enroll them in training to auto-extend contract or re-sign.`,
+                  type: 'driver',
+                  timestamp: Date.now(),
+                });
+              }
+              return { ...drv, contractDaysRemaining: remaining };
+            });
+
             // Driver retainers
             let totalRetainers = 0;
             prevState.drivers.forEach((drv) => {
@@ -782,7 +799,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const completedTrips: ActiveTrip[] = [];
           let updatedTrucks = [...prevState.trucks];
           let updatedTrailers = [...(prevState.trailers || [])];
-          let updatedDrivers = [...prevState.drivers];
 
           for (const trip of prevState.activeTrips) {
             const truck = updatedTrucks.find((t) => t.id === trip.truckId);
@@ -2019,6 +2035,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       continuousDriveMinutes: 0,
       dailyDriveMinutes: 0,
       currentRestMinutesRemaining: 0,
+      contractDaysRemaining: 45,
       stats: driverData.stats || {
         ecoDrivingRating: 85,
         mechanicalSympathy: 88,
@@ -2091,10 +2108,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
     const nextBal = state.balanceUsd - cost;
+    const targetDriver = state.drivers.find(d => d.id === driverId);
 
     setState((prev) => ({
       ...prev,
       balanceUsd: nextBal,
+      playerXp: prev.playerXp + 250,
       drivers: prev.drivers.map((d) => {
         if (d.id !== driverId) return d;
         const newStats = { ...d.stats };
@@ -2102,7 +2121,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (certType === 'winter') newStats.winterCert = true;
         if (certType === 'hazmat') newStats.hazmatCert = true;
         if (certType === 'eco') newStats.ecoDrivingRating = Math.min(100, newStats.ecoDrivingRating + 12);
-        return { ...d, stats: newStats };
+        return { 
+          ...d, 
+          stats: newStats,
+          contractDaysRemaining: (d.contractDaysRemaining || 45) + 30 
+        };
       }),
       ledger: [
         {
@@ -2110,12 +2133,23 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           simDay,
           simTimeFormatted: `Day ${simDay}`,
           type: 'driver_wages',
-          description: `Advanced driver accreditation course (${certType})`,
+          description: `Advanced driver accreditation & badge (${certType}) + 30d contract extension`,
           amountUsd: -cost,
           runningBalanceUsd: nextBal,
         },
         ...prev.ledger,
       ],
+      notifications: deduplicateNotifications([
+        {
+          id: `notif-train-${driverId}-${Date.now()}`,
+          simTimeFormatted: `Day ${simDay}`,
+          title: '🏅 Staff Accreditation & Contract Extended',
+          message: `${targetDriver?.name || 'Driver'} completed ${certType} training course, received professional badge, and employment contract was automatically extended by +30 days (+250 XP company reputation).`,
+          type: 'driver',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ]),
     }));
 
     return true;
