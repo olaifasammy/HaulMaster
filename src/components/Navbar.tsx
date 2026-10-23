@@ -42,6 +42,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'hubs', label: 'Hubs' },
     { id: 'drivers', label: 'Drivers' },
     { id: 'ledger', label: 'Financials' },
+    { id: 'ai', label: 'AI Dispatcher' },
   ];
 
   const handleNewGame = () => {
@@ -151,8 +152,12 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* AI Dispatcher Intelligence Hub */}
           <button
-            onClick={onOpenAiDispatcher}
-            className="p-1.5 rounded-lg border transition-all duration-300 relative cursor-pointer bg-cyan-500/20 text-cyan-400 border-cyan-500/40 shadow-[0_0_10px_rgba(34,211,238,0.2)] hover:bg-cyan-500/30 flex items-center gap-1.5 px-2"
+            onClick={() => onSelectTab('ai')}
+            className={`p-1.5 rounded-lg border transition-all duration-300 relative cursor-pointer flex items-center gap-1.5 px-2 ${
+              currentTab === 'ai'
+                ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow-[0_0_15px_rgba(34,211,238,0.4)]'
+                : 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40 shadow-[0_0_10px_rgba(34,211,238,0.2)] hover:bg-cyan-500/30'
+            }`}
             title="Open Neural AI Dispatcher Core"
           >
             <Brain className="w-4 h-4 animate-pulse" />

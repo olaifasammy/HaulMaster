@@ -18,7 +18,7 @@ import { UserGuideWalkthrough } from './components/UserGuideWalkthrough';
 import { CompanyProfileModal } from './components/CompanyProfileModal';
 import { OfflineProgressModal } from './components/OfflineProgressModal';
 import { DatabaseManagerModal } from './components/DatabaseManagerModal';
-import { AiDispatcherModal } from './components/AiDispatcherModal';
+import { AiDispatcherPage } from './components/AiDispatcherPage';
 import { RepairWorkshopPage } from './components/RepairWorkshopPage';
 import {
   Activity,
@@ -46,7 +46,6 @@ const DashboardContent: React.FC = () => {
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState<boolean>(false);
   const [isCompanyProfileOpen, setIsCompanyProfileOpen] = useState<boolean>(false);
   const [isDbModalOpen, setIsDbModalOpen] = useState<boolean>(false);
-  const [isAiDispatcherOpen, setIsAiDispatcherOpen] = useState<boolean>(false);
   const [preselectedContractId, setPreselectedContractId] = useState<string | undefined>(undefined);
 
   const handleOpenDispatch = (contractId?: string) => {
@@ -175,6 +174,9 @@ const DashboardContent: React.FC = () => {
 
         {/* Achievements & Executive Rewards Full Page View */}
         {currentTab === 'achievements' && <AchievementsPage />}
+
+        {/* AI Dispatcher Full Page View */}
+        {currentTab === 'ai' && <AiDispatcherPage onOpenDispatch={(contractId) => handleOpenDispatch(contractId)} />}
       </main>
 
       {/* Floating Mobile Quick Dispatch Action Button */}
