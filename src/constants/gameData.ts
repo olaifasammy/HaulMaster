@@ -597,15 +597,15 @@ export interface RankTier {
 
 export const RANK_TIERS: RankTier[] = [
   { rank: 1, title: 'Novice Carrier', xpRequired: 0, perks: 'Starter hub operations & initial regional freight corridors' },
-  { rank: 2, title: 'Regional Carrier', xpRequired: 1200, perks: 'Unlocks Tier 2 regional distribution depots & mountain pass routes (+5 Gold)' },
-  { rank: 3, title: 'Interstate Fleet', xpRequired: 3500, perks: 'Unlocks high-demand inland intermodal yards & refrigerated freight (+5 Gold)' },
-  { rank: 4, title: 'Logistics Enterprise', xpRequired: 8000, perks: 'Unlocks advanced regional terminals & hazardous material permits (+5 Gold)' },
-  { rank: 5, title: 'Continental Mogul', xpRequired: 16000, perks: 'Unlocks coastal gateway seaports & major intermodal hubs (+5 Gold)' },
-  { rank: 6, title: 'Global Freight Titan', xpRequired: 30000, perks: 'Unlocks major eastern seaboard hubs & heavy industrial terminals (+5 Gold)' },
-  { rank: 7, title: 'Transoceanic Carrier', xpRequired: 55000, perks: 'Unlocks international mega-hubs & oversized modular transport (+5 Gold)' },
-  { rank: 8, title: 'Syndicate Logistics Lead', xpRequired: 95000, perks: 'Unlocks elite corporate terminals & heavy ballast corridors (+5 Gold)' },
-  { rank: 9, title: 'Supreme Sovereign Hauler', xpRequired: 150000, perks: 'Unlocks apex continental gateway hubs & ultra-heavy fleets (+5 Gold)' },
-  { rank: 10, title: 'Omnipresent Logistics Emperor', xpRequired: 250000, perks: 'Unlocks all global trade corridors & supreme fleet supremacy (+5 Gold)' },
+  { rank: 2, title: 'Regional Carrier', xpRequired: 5000, perks: 'Unlocks Tier 2 regional distribution depots & mountain pass routes (+5 Gold)' },
+  { rank: 3, title: 'Interstate Fleet', xpRequired: 15000, perks: 'Unlocks high-demand inland intermodal yards & refrigerated freight (+5 Gold)' },
+  { rank: 4, title: 'Logistics Enterprise', xpRequired: 40000, perks: 'Unlocks advanced regional terminals & hazardous material permits (+5 Gold)' },
+  { rank: 5, title: 'Continental Mogul', xpRequired: 90000, perks: 'Unlocks coastal gateway seaports & major intermodal hubs (+5 Gold)' },
+  { rank: 6, title: 'Global Freight Titan', xpRequired: 180000, perks: 'Unlocks major eastern seaboard hubs & heavy industrial terminals (+5 Gold)' },
+  { rank: 7, title: 'Transoceanic Carrier', xpRequired: 350000, perks: 'Unlocks international mega-hubs & oversized modular transport (+5 Gold)' },
+  { rank: 8, title: 'Syndicate Logistics Lead', xpRequired: 650000, perks: 'Unlocks elite corporate terminals & heavy ballast corridors (+5 Gold)' },
+  { rank: 9, title: 'Supreme Sovereign Hauler', xpRequired: 1100000, perks: 'Unlocks apex continental gateway hubs & ultra-heavy fleets (+5 Gold)' },
+  { rank: 10, title: 'Omnipresent Logistics Emperor', xpRequired: 2000000, perks: 'Unlocks all global trade corridors & supreme fleet supremacy (+5 Gold)' },
 ];
 
 const RAW_INITIAL_HUBS: Hub[] = [

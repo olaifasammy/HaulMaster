@@ -371,7 +371,7 @@ const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameS
     currentBalance += finalRevenue - driverWage - tolls;
     updatedCargoTons += finished.contract.weightTons;
 
-    const earnedXp = Math.round(finished.totalDistanceKm * 0.35 + finished.contract.weightTons * 12);
+    const earnedXp = Math.max(10, Math.round(finished.totalDistanceKm * 0.08 + finished.contract.weightTons * 2));
     updatedPlayerXp += earnedXp;
 
     for (const tier of RANK_TIERS) {
@@ -1071,7 +1071,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             updatedCargoTons += finished.contract.weightTons;
 
             // XP and Rank Promotion
-            const earnedXp = Math.round(finished.totalDistanceKm * 0.35 + finished.contract.weightTons * 12);
+            const earnedXp = Math.max(10, Math.round(finished.totalDistanceKm * 0.08 + finished.contract.weightTons * 2));
             updatedPlayerXp += earnedXp;
 
             for (const tier of RANK_TIERS) {
