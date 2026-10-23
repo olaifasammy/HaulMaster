@@ -1776,12 +1776,19 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const completeOnboarding = (config: OnboardingConfig) => {
     const primaryHubId = config.primaryHubId;
-    const connectedLocationId = config.connectedLocationId;
+    const primaryHubObj = INITIAL_HUBS.find((h) => h.id === primaryHubId);
+    
+    // Default to connecting another hub in the same region if not specified
+    let connectedLocationId = config.connectedLocationId;
+    if (!connectedLocationId && primaryHubObj) {
+      const fallbackHub = INITIAL_HUBS.find(h => h.region === primaryHubObj.region && h.id !== primaryHubId);
+      connectedLocationId = fallbackHub ? fallbackHub.id : '';
+    }
+
     const activeHubIds = [primaryHubId];
     const initialSpokeConnections: string[] = [];
     let updatedRoutes = INITIAL_ROUTES.map((route) => ({ ...route, isUnlocked: false }));
 
-    const primaryHubObj = INITIAL_HUBS.find((h) => h.id === primaryHubId);
     const connHubObj = connectedLocationId ? INITIAL_HUBS.find((h) => h.id === connectedLocationId) : null;
 
     if (

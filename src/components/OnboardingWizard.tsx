@@ -21,8 +21,8 @@ export const OnboardingWizard: React.FC = () => {
   const [step, setStep] = useState<number>(1);
   const [selectedRegion, setSelectedRegion] = useState<GeoRegion>('North America');
   const [primaryHubId, setPrimaryHubId] = useState<string>('hub-seattle');
-  // High realism: pure headquarters base at start, no default connections
-  const [connectedLocationId, setConnectedLocationId] = useState<string>('');
+  // Automatically connect a primary destination hub at startup for immediate active jobs
+  const [connectedLocationId, setConnectedLocationId] = useState<string>('hub-la');
   const [companyName, setCompanyName] = useState<string>('Apex Continental Freight');
   // Free starter commercial vehicle is the Rigid truck (metro-320)
   const [starterTruckId, setStarterTruckId] = useState<TruckModelId>('metro-320');
@@ -32,15 +32,16 @@ export const OnboardingWizard: React.FC = () => {
   // Filter hubs based on region
   const regionHubs = state.hubs.filter((h) => h.region === selectedRegion);
 
-  // When region changes, auto-select sensible defaults without default connections
+  // When region changes, auto-select sensible defaults with connected route
   const handleRegionChange = (newRegion: GeoRegion) => {
     setSelectedRegion(newRegion);
-    setConnectedLocationId('');
     if (newRegion === 'Europe') {
       setPrimaryHubId('hub-rotterdam');
+      setConnectedLocationId('hub-hamburg');
       setStarterTruckId('metro-320');
     } else {
       setPrimaryHubId('hub-seattle');
+      setConnectedLocationId('hub-la');
       setStarterTruckId('metro-320');
     }
   };
