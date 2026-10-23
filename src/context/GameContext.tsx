@@ -137,6 +137,7 @@ interface GameContextType {
   hireDriver: (driverData: Partial<Driver>) => boolean;
   fireDriver: (driverId: string) => void;
   trainDriver: (driverId: string, certType: 'mountain' | 'winter' | 'hazmat' | 'eco') => boolean;
+  renewDriverContract: (driverId: string) => boolean;
   upgradeHub: (hubId: string, upgradeType: 'workshop' | 'bulkFuel') => boolean;
   refuelTruckAtHub: (truckId: string, liters: number) => boolean;
   takeLoan: (amount: number, termDays: number) => boolean;
@@ -2155,6 +2156,50 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
+  const renewDriverContract = (driverId: string): boolean => {
+    const cost = 1200;
+    if (state.balanceUsd < cost) {
+      notifyUser('Insufficient Funds', `Insufficient funds to renew driver contract ($${cost.toLocaleString()}).`, 'finance');
+      return false;
+    }
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd - cost;
+    const targetDriver = state.drivers.find((d) => d.id === driverId);
+
+    setState((prev) => ({
+      ...prev,
+      balanceUsd: nextBal,
+      playerXp: prev.playerXp + 50,
+      drivers: prev.drivers.map((d) => (d.id === driverId ? { ...d, contractDaysRemaining: (d.contractDaysRemaining || 45) + 30 } : d)),
+      ledger: [
+        {
+          id: `led-renew-${Date.now()}`,
+          simDay,
+          simTimeFormatted: `Day ${simDay}`,
+          type: 'driver_wages',
+          description: `Contract renewal fee (+30 days): ${targetDriver?.name || 'Driver'}`,
+          amountUsd: -cost,
+          runningBalanceUsd: nextBal,
+        },
+        ...prev.ledger,
+      ],
+      notifications: deduplicateNotifications([
+        {
+          id: `notif-renew-${driverId}-${Date.now()}`,
+          simTimeFormatted: `Day ${simDay}`,
+          title: '📜 Employment Contract Renewed',
+          message: `Employment contract for ${targetDriver?.name || 'Driver'} successfully extended by +30 simulation days (+50 XP).`,
+          type: 'driver',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ]),
+    }));
+
+    return true;
+  };
+
   const upgradeHub = (hubId: string, upgradeType: 'workshop' | 'bulkFuel'): boolean => {
     const hub = state.hubs.find((h) => h.id === hubId);
     if (!hub) return false;
@@ -3629,6 +3674,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         hireDriver,
         fireDriver,
         trainDriver,
+        renewDriverContract,
         upgradeHub,
         refuelTruckAtHub,
         takeLoan,

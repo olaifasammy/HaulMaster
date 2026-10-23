@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 export const DriverRoster: React.FC = () => {
-  const { state, trainDriver, hireDriver, fireDriver } = useGame();
+  const { state, trainDriver, renewDriverContract, hireDriver, fireDriver } = useGame();
   const [showHireModal, setShowHireModal] = useState(false);
   const [expandedDriverIds, setExpandedDriverIds] = useState<Record<string, boolean>>({});
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -241,6 +241,9 @@ export const DriverRoster: React.FC = () => {
                       <div className="text-[11px] text-amber-400 font-mono mt-0.5">
                         ${driver.wagePerKmUsd}/km · ${driver.dailyRetainerUsd}/day
                       </div>
+                      <div className="text-[10px] font-mono mt-1">
+                        Contract: <span className={(driver.contractDaysRemaining ?? 45) <= 5 ? 'text-rose-400 font-bold' : 'text-emerald-400 font-bold'}>{driver.contractDaysRemaining ?? 45} days remaining</span>
+                      </div>
                     </div>
                   </div>
 
@@ -378,6 +381,21 @@ export const DriverRoster: React.FC = () => {
                           </button>
                         )}
                       </div>
+                    </div>
+
+                    {/* Contract Renewal Action */}
+                    <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-xs font-mono">
+                      <span className="text-slate-400">Employment Term:</span>
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`Renew employment contract for ${driver.name}?\n\nCost: $1,200\nDuration: +30 Simulation Days\nBonus: +50 XP Company Reputation`)) {
+                            renewDriverContract(driver.id);
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold rounded-lg transition-colors cursor-pointer"
+                      >
+                        Renew Contract (+$1.2k / +30d)
+                      </button>
                     </div>
                   </div>
                 )}
