@@ -1683,6 +1683,9 @@ export const INITIAL_CONTRACTS: CargoContract[] = [
     deadlineMinutes: 1800, // 30h
     temperatureControlled: false,
     isHazardous: false,
+    shipperCompany: 'Landstar System',
+    shipperRating: 93,
+    shipperIndustry: 'Specialized Heavy Haul & Van',
   },
   {
     id: 'cnt-02',
@@ -1697,6 +1700,9 @@ export const INITIAL_CONTRACTS: CargoContract[] = [
     deadlineMinutes: 1350,
     temperatureControlled: true,
     isHazardous: false,
+    shipperCompany: 'Schneider National',
+    shipperRating: 93,
+    shipperIndustry: 'Intermodal & Van Truckload',
   },
   {
     id: 'cnt-03',
@@ -1711,6 +1717,9 @@ export const INITIAL_CONTRACTS: CargoContract[] = [
     deadlineMinutes: 1500,
     temperatureControlled: false,
     isHazardous: false,
+    shipperCompany: 'FedEx Freight North America',
+    shipperRating: 94,
+    shipperIndustry: 'LTL & Truckload Freight',
   },
   {
     id: 'cnt-04',
@@ -1726,6 +1735,9 @@ export const INITIAL_CONTRACTS: CargoContract[] = [
     temperatureControlled: false,
     hazardClass: 'Class 3 Flammable',
     isHazardous: true,
+    shipperCompany: 'Kuehne+Nagel',
+    shipperRating: 96,
+    shipperIndustry: 'Global Freight Forwarding',
   },
   {
     id: 'cnt-05',
@@ -1740,6 +1752,9 @@ export const INITIAL_CONTRACTS: CargoContract[] = [
     deadlineMinutes: 1000,
     temperatureControlled: false,
     isHazardous: false,
+    shipperCompany: 'DSV Panalpina',
+    shipperRating: 92,
+    shipperIndustry: 'Transport & Logistics',
   },
   {
     id: 'cnt-06',
@@ -1754,5 +1769,8 @@ export const INITIAL_CONTRACTS: CargoContract[] = [
     deadlineMinutes: 1900,
     temperatureControlled: true,
     isHazardous: false,
+    shipperCompany: 'Maersk Logistics Europe',
+    shipperRating: 97,
+    shipperIndustry: 'Containerized Supply Chain',
   },
 ];

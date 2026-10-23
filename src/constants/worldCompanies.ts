@@ -187,8 +187,13 @@ export class WorldCompanyRepository {
   }
 
   public static getByRegion(region: string): WorldShipperCompany[] {
-    const norm = region.toLowerCase().trim();
-    return WORLD_SHIPPER_COMPANIES.filter(c => c.region === norm || c.region === 'global' || norm.includes(c.region));
+    if (!region) return WORLD_SHIPPER_COMPANIES;
+    const norm = region.toLowerCase().trim().replace(/\s+/g, '-');
+    const matched = WORLD_SHIPPER_COMPANIES.filter(
+      c => c.region === norm || c.region === 'global' || norm.includes(c.region) || c.region.includes(norm)
+    );
+    if (matched.length > 0) return matched;
+    return WORLD_SHIPPER_COMPANIES;
   }
 
   public static getRandomForRegion(region: string): WorldShipperCompany {
