@@ -145,7 +145,7 @@ interface GameContextType {
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
 const createInitialState = (): GameState => {
-  const primaryHubId = 'hub-seattle';
+  const primaryHubId = 'hub-denver';
   const activeHubIds = [primaryHubId];
 
   // Configure initial hubs: strictly 1 primary headquarters hub is unlocked initially (no default connected second hub/location)
@@ -167,13 +167,13 @@ const createInitialState = (): GameState => {
   const ownedHubIds = [primaryHubId];
   const ownedRouteIds: string[] = [];
 
-  // Free starter commercial vehicle: MetroFreight Rigid 320 Urban stationed at Seattle primary base
+  // Free starter commercial vehicle: MetroFreight Rigid 320 Urban stationed at Denver primary base
   const initialTrucks: TruckInstance[] = [
     {
       id: 'trk-01',
       modelId: 'metro-320', // Free starter rigid truck
       vin: '1MTR320U9K001844',
-      plate: 'WA-320-RG',
+      plate: 'CO-320-RG',
       currentHubId: primaryHubId,
       status: 'idle',
       odometerKm: 8500,
@@ -212,7 +212,7 @@ const createInitialState = (): GameState => {
 
   return {
     companyName: 'Apex Continental Freight',
-    balanceUsd: 145000,
+    balanceUsd: 28500,
     simTimeMinutes: 480, // Day 1, 08:00 AM
     simSpeed: 1,
     selectedRegion: 'North America',
@@ -230,8 +230,8 @@ const createInitialState = (): GameState => {
         simTimeFormatted: 'Day 1 08:00',
         type: 'equipment_purchase',
         description: 'Starting equity capitalization and fleet acquisition',
-        amountUsd: 145000,
-        runningBalanceUsd: 145000,
+        amountUsd: 28500,
+        runningBalanceUsd: 28500,
       },
     ],
     loans: [],

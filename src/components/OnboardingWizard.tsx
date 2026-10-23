@@ -20,28 +20,28 @@ export const OnboardingWizard: React.FC = () => {
 
   const [step, setStep] = useState<number>(1);
   const [selectedRegion, setSelectedRegion] = useState<GeoRegion>('North America');
-  const [primaryHubId, setPrimaryHubId] = useState<string>('hub-seattle');
+  const [primaryHubId, setPrimaryHubId] = useState<string>('hub-denver');
   // Automatically connect a primary destination hub at startup for immediate active jobs
-  const [connectedLocationId, setConnectedLocationId] = useState<string>('hub-la');
+  const [connectedLocationId, setConnectedLocationId] = useState<string>('hub-chicago');
   const [companyName, setCompanyName] = useState<string>('Apex Continental Freight');
   // Free starter commercial vehicle is the Rigid truck (metro-320)
   const [starterTruckId, setStarterTruckId] = useState<TruckModelId>('metro-320');
   const [starterTrailerId, setStarterTrailerId] = useState<TrailerModelId>('dry-van-53');
   const [starterLivery, setStarterLivery] = useState<FleetLivery>('obsidian_slate');
 
-  // Filter hubs based on region
-  const regionHubs = state.hubs.filter((h) => h.region === selectedRegion);
+  // Filter hubs based on region (show medium regional hubs for startup inspiration)
+  const regionHubs = state.hubs.filter((h) => h.region === selectedRegion && h.locationType === 'regional_hub');
 
   // When region changes, auto-select sensible defaults with connected route
   const handleRegionChange = (newRegion: GeoRegion) => {
     setSelectedRegion(newRegion);
     if (newRegion === 'Europe') {
-      setPrimaryHubId('hub-rotterdam');
-      setConnectedLocationId('hub-hamburg');
+      setPrimaryHubId('hub-munich');
+      setConnectedLocationId('hub-milan');
       setStarterTruckId('metro-320');
     } else {
-      setPrimaryHubId('hub-seattle');
-      setConnectedLocationId('hub-la');
+      setPrimaryHubId('hub-denver');
+      setConnectedLocationId('hub-chicago');
       setStarterTruckId('metro-320');
     }
   };
@@ -282,106 +282,61 @@ export const OnboardingWizard: React.FC = () => {
             </div>
           )}
 
-          {/* STEP 3: Connect 1 Strategic Terminal or Start with Base Only */}
+          {/* STEP 3: Choose Between 2 Route Options */}
           {step === 3 && (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs text-slate-400">
                 <p>
-                  No routes or locations have default connections. You may launch with your headquarters base only, or establish an optional initial corridor to a terminal in <span className="text-amber-400 font-bold">{selectedRegion}</span>.
+                  Your headquarters depot at <span className="text-amber-400 font-bold">{selectedPrimaryHub.name}</span> comes equipped with your free hub concession. Choose 1 of the 2 primary route corridors below to establish your initial operational lane:
                 </p>
-                <span className="font-mono text-xs font-bold text-amber-400 shrink-0">
-                  {connectedLocationId ? '1 Initial Corridor' : 'Base Terminal Only'}
+                <span className="font-mono text-xs font-bold text-emerald-400 shrink-0">
+                  Select 1 Route Option
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                {/* Zero Default Connections Option */}
-                <div
-                  onClick={() => handleSelectConnectedLocation('')}
-                  className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between space-y-3 sm:col-span-2 ${
-                    connectedLocationId === ''
-                      ? 'bg-amber-500/10 border-amber-500 shadow-md ring-1 ring-amber-500/40'
-                      : 'bg-slate-950/70 border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="text-[10px] font-mono text-amber-400 font-bold uppercase">
-                        Zero Default Connections (Recommended)
-                      </span>
-                      <h4 className="text-sm font-bold text-white mt-0.5">
-                        Start with Headquarters Base Only (No Default Routes)
-                      </h4>
-                      <p className="text-xs text-slate-400 mt-1">
-                        Begin with pure operations at {selectedPrimaryHub.name}. No routes, cities, or locations start pre-connected. You will purchase and establish routes in the Marketplace.
-                      </p>
-                    </div>
-
-                    <div
-                      className={`w-6 h-6 rounded-md flex items-center justify-center border transition-colors shrink-0 ml-3 ${
-                        connectedLocationId === ''
-                          ? 'bg-amber-400 text-slate-950 border-amber-400 font-bold'
-                          : 'border-slate-700 bg-slate-900 text-transparent'
-                      }`}
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                    </div>
-                  </div>
-                </div>
-
-                {regionHubs
-                  .filter((h) => h.id !== primaryHubId)
-                  .map((hub) => {
-                    const isConnected = connectedLocationId === hub.id;
-                    const matchedCorridor = state.routes.find(
-                      (r) =>
-                        (r.originHubId === primaryHubId && r.destinationHubId === hub.id) ||
-                        (r.originHubId === hub.id && r.destinationHubId === primaryHubId)
-                    );
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {state.routes
+                  .filter((r) => r.originHubId === primaryHubId)
+                  .slice(0, 2)
+                  .map((route, idx) => {
+                    const destHub = state.hubs.find((h) => h.id === route.destinationHubId);
+                    const isSelected = connectedLocationId === route.destinationHubId;
 
                     return (
                       <div
-                        key={hub.id}
-                        onClick={() => handleSelectConnectedLocation(hub.id)}
-                        className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
-                          isConnected
-                            ? 'bg-emerald-500/10 border-emerald-500 shadow-md ring-1 ring-emerald-500/40'
+                        key={route.id}
+                        onClick={() => setConnectedLocationId(route.destinationHubId)}
+                        className={`p-5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between space-y-4 ${
+                          isSelected
+                            ? 'bg-amber-500/10 border-amber-500 shadow-lg ring-1 ring-amber-500/30'
                             : 'bg-slate-950/70 border-slate-800 hover:border-slate-700'
                         }`}
                       >
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <span className="text-[10px] font-mono text-slate-500 uppercase">
-                              {hub.code} · {hub.country} · {hub.locationType === 'spoke_terminal' ? 'Delivery Terminal' : 'Regional Hub'}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider">
+                              Route Option {idx + 1}
                             </span>
-                            <h4 className="text-sm font-bold text-white mt-0.5">{hub.name}</h4>
+                            {isSelected && <CheckCircle2 className="w-5 h-5 text-amber-400" />}
                           </div>
-
-                          <div
-                            className={`w-6 h-6 rounded-md flex items-center justify-center border transition-colors ${
-                              isConnected
-                                ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-bold'
-                                : 'border-slate-700 bg-slate-900 text-transparent'
-                            }`}
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                          </div>
+                          <h4 className="text-sm font-bold text-white mb-1">{route.name}</h4>
+                          <p className="text-xs text-slate-400">
+                            Connecting <span className="text-white font-semibold">{selectedPrimaryHub.name}</span> to <span className="text-white font-semibold">{destHub?.name || 'Destination Terminal'}</span>
+                          </p>
                         </div>
 
-                        {/* Corridor specs between base and this terminal */}
-                        <div className="p-2.5 bg-slate-900/80 rounded-lg border border-slate-800/80 text-[11px] font-mono space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-400 flex items-center gap-1">
-                              <Route className="w-3.5 h-3.5 text-amber-400" />
-                              Connecting Lane
-                            </span>
-                            <span className="text-white font-bold">
-                              {matchedCorridor?.distanceKm || 1200} km
-                            </span>
+                        <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-800 text-[11px] font-mono">
+                          <div className="p-2 bg-slate-900 rounded">
+                            <span className="text-slate-500 block text-[9px] uppercase">Distance</span>
+                            <span className="font-bold text-slate-200">{route.distanceKm} km</span>
                           </div>
-                          <div className="flex items-center justify-between text-slate-400 text-[10px]">
-                            <span>Corridor: {matchedCorridor?.roadType || 'Interstate'}</span>
-                            <span className="text-emerald-400">Demand {hub.trafficDemandScore}%</span>
+                          <div className="p-2 bg-slate-900 rounded">
+                            <span className="text-slate-500 block text-[9px] uppercase">Road Type</span>
+                            <span className="font-bold text-slate-200 truncate block">{route.roadType}</span>
+                          </div>
+                          <div className="p-2 bg-slate-900 rounded">
+                            <span className="text-slate-500 block text-[9px] uppercase">Speed Limit</span>
+                            <span className="font-bold text-amber-400">{route.baseSpeedLimitKmh} km/h</span>
                           </div>
                         </div>
                       </div>
@@ -412,60 +367,40 @@ export const OnboardingWizard: React.FC = () => {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-mono uppercase tracking-wider text-slate-300 font-semibold block">
-                    Starter Commercial Vehicle
+                    Starter Commercial Vehicle (Rigid Unit)
                   </span>
                   <span className="text-[11px] font-mono text-emerald-400 font-bold">
-                    Rigid 320: Free Starter Truck ($0)
+                    Included Free ($0) · Buy Heavy Tractors at Dealership Later
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {TRUCK_MODELS.map((truck) => {
-                    const isSelected = starterTruckId === truck.id;
-                    const isRigid = truck.id === 'metro-320';
-                    return (
-                      <div
-                        key={truck.id}
-                        onClick={() => setStarterTruckId(truck.id)}
-                        className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between space-y-2 relative ${
-                          isSelected
-                            ? 'bg-amber-500/10 border-amber-500 text-white ring-1 ring-amber-500/30'
-                            : 'bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-300'
-                        }`}
-                      >
-                        {isRigid && (
-                          <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-emerald-500 text-slate-950 font-bold text-[9px] rounded font-mono uppercase tracking-wide">
-                            Free Starter
-                          </div>
-                        )}
-                        <div className="h-24 rounded-lg overflow-hidden bg-slate-900 border border-slate-800/80">
-                          <img
-                            src={truck.image}
-                            alt={truck.name}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-mono text-amber-400 font-bold block">
-                            {truck.category}
-                          </span>
-                          <h5 className="text-xs font-bold text-white leading-snug">{truck.name}</h5>
-                        </div>
-                        <div className="space-y-1 pt-1 border-t border-slate-800 text-[10px] font-mono text-slate-400">
-                          <div className="flex items-center justify-between">
-                            <span>{truck.specs.horsepower} HP</span>
-                            <span>{truck.specs.torqueNm} Nm</span>
-                          </div>
-                          <div className="flex items-center justify-between text-emerald-400">
-                            <span className="flex items-center gap-1">
-                              <Weight className="w-3 h-3" />
-                              Payload Rating
-                            </span>
-                            <span className="font-bold">{truck.specs.maxPayloadKg / 1000}t Max</span>
-                          </div>
+                <div className="grid grid-cols-1 gap-3 max-w-md">
+                  {TRUCK_MODELS.filter((truck) => truck.id === 'metro-320').map((truck) => (
+                    <div
+                      key={truck.id}
+                      className="p-4 rounded-xl border-2 bg-amber-500/10 border-amber-500 text-white flex items-center gap-4 relative"
+                    >
+                      <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-emerald-500 text-slate-950 font-bold text-[9px] rounded font-mono uppercase tracking-wide">
+                        Default Starter
+                      </div>
+                      <div className="w-28 h-20 rounded-lg overflow-hidden bg-slate-900 border border-slate-800/80 shrink-0">
+                        <img
+                          src={truck.image}
+                          alt={truck.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-mono text-amber-400 font-bold block">
+                          {truck.category}
+                        </span>
+                        <h5 className="text-sm font-bold text-white leading-snug truncate">{truck.name}</h5>
+                        <div className="flex items-center gap-3 text-[11px] font-mono text-slate-300 mt-1">
+                          <span>{truck.specs.horsepower} HP</span>
+                          <span className="text-emerald-400 font-bold">{truck.specs.maxPayloadKg / 1000}t Payload</span>
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               </div>
 
