@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { Play, Pause, PlusCircle, Fuel, HelpCircle, Award, ShoppingBag, Truck, Package, Trophy } from 'lucide-react';
+import { Play, Pause, PlusCircle, Fuel, HelpCircle, Award, Globe, Bell, Plus, LogOut, Cpu } from 'lucide-react';
 
 interface NavbarProps {
   currentTab: string;
@@ -10,12 +10,19 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenDispatchModal, onOpenCompanyProfile }) => {
-  const { state, setSimSpeed, setShowGuide } = useGame();
+  const { state, setSimSpeed, setShowGuide, restartOnboarding } = useGame();
+  const [aiActive, setAiActive] = useState(true);
 
   const day = Math.floor(state.simTimeMinutes / 1440) + 1;
   const hours = Math.floor((state.simTimeMinutes % 1440) / 60);
   const mins = state.simTimeMinutes % 60;
-  const formattedTime = `D${day} ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+  const formattedTime = `Day ${day} ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+
+  const currentLevel = state.playerRank;
+  const currentExp = state.playerXp;
+  const nextLevelExp = currentLevel * 2500;
+  const expPercent = Math.min(100, (currentExp / Math.max(1, nextLevelExp)) * 100);
+  const circleCircumference = 2 * Math.PI * 13;
 
   const navLinks = [
     { id: 'operations', label: 'Operations' },
@@ -27,34 +34,65 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
     { id: 'ledger', label: 'Financials' },
   ];
 
+  const handleNewGame = () => {
+    const confirmed = window.confirm(
+      "Start a new game? Your current company progress will be replaced when you finish the new setup."
+    );
+    if (confirmed) restartOnboarding();
+  };
+
   return (
-    <header className="sticky top-0 z-40 w-full bg-slate-950/95 border-b border-slate-800/80 backdrop-blur-md">
+    <header className="sticky top-0 z-40 w-full bg-slate-950/95 border-b border-slate-800/80 backdrop-blur-xl">
+      {/* Top Header Row */}
       <div className="max-w-7xl mx-auto px-3 sm:px-6 flex items-center justify-between h-14 gap-2">
-        {/* Zone 1: Brand Wordmark & Carrier Rank Badge */}
+        
+        {/* Zone 1: Circular Level Progress & Company Info */}
         <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={onOpenCompanyProfile}
-            title="Open Enterprise Profile & Management (Reset / Restart)"
-            className="flex items-center gap-2 text-white font-bold tracking-tight text-sm sm:text-base text-left min-h-[44px] cursor-pointer hover:opacity-90 transition-opacity group"
+            title="Open Enterprise Profile & Management"
+            className="flex items-center gap-2.5 text-white font-bold tracking-tight text-left min-h-[44px] cursor-pointer hover:opacity-90 transition-opacity group"
           >
-            <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/30 group-hover:border-amber-400 flex items-center justify-center text-amber-500 shrink-0 transition-colors">
-              <Fuel className="w-4 h-4" />
+            <div className="relative w-9 h-9 flex items-center justify-center flex-shrink-0">
+              <svg className="absolute inset-0 w-9 h-9 -rotate-90">
+                <circle
+                  cx="18"
+                  cy="18"
+                  r="14"
+                  className="stroke-slate-800 fill-none"
+                  strokeWidth="2.5"
+                />
+                <circle
+                  cx="18"
+                  cy="18"
+                  r="14"
+                  className="stroke-amber-500 fill-none transition-all duration-1000 ease-out"
+                  strokeWidth="2.5"
+                  strokeDasharray={2 * Math.PI * 14}
+                  strokeDashoffset={(2 * Math.PI * 14) * (1 - expPercent / 100)}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="w-5 h-5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center font-bold text-xs relative z-10">
+                <Fuel className="w-3 h-3" />
+              </div>
             </div>
-            <span className="font-extrabold tracking-wider hidden sm:inline">{state.companyName}</span>
-          </button>
 
-          {/* Company Rank Badge */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-lg text-xs font-mono">
-            <Award className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="text-slate-400 text-[11px] hidden xs:inline">Rank {state.playerRank}:</span>
-            <span className="text-amber-300 font-bold text-[11px] truncate max-w-[110px] sm:max-w-none">
-              {state.rankTitle}
-            </span>
-          </div>
+            <div className="min-w-0">
+              <div className="text-xs font-extrabold text-white tracking-tight leading-none truncate max-w-[120px] sm:max-w-[180px]">
+                {state.companyName}
+              </div>
+              <div className="flex items-center space-x-1.5 text-[10px] text-amber-400 font-semibold mt-1 truncate">
+                <span>Rank {currentLevel}</span>
+                <span>•</span>
+                <span className="font-mono font-bold text-amber-300">{state.rankTitle}</span>
+              </div>
+            </div>
+          </button>
         </div>
 
-        {/* Zone 2: Desktop Navigation Links (hidden on mobile) */}
-        <nav className="hidden lg:flex items-center gap-4 xl:gap-6 text-xs font-semibold uppercase tracking-wider text-slate-400">
+        {/* Zone 2: Desktop Navigation Links */}
+        <nav className="hidden lg:flex items-center gap-4 xl:gap-5 text-xs font-semibold uppercase tracking-wider text-slate-400">
           {navLinks.map((link) => (
             <button
               key={link.id}
@@ -66,66 +104,102 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
               }`}
             >
               {link.label}
-              {link.id === 'market' && (
-                <span className="ml-1.5 px-1.5 py-0.2 rounded-full text-[9px] bg-amber-500/20 text-amber-300 font-mono">
-                  Market
-                </span>
-              )}
             </button>
           ))}
         </nav>
 
-        {/* Zone 3: Time Controls, Capital & Quick Dispatch */}
+        {/* Zone 3: Financial Balances, Time Warp & Action Buttons */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          {/* Guide walkthrough trigger button */}
-          <button
-            onClick={() => setShowGuide(true)}
-            title="Open Field Guide & Operations Manual"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-medium transition-colors min-h-[32px] cursor-pointer"
-          >
-            <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden md:inline">Field Guide</span>
-          </button>
+          
+          {/* Capital & Gold Reserves */}
+          <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1">
+            <div className="flex flex-col items-end">
+              <span className="text-[9px] uppercase font-mono tracking-wider text-slate-500 hidden sm:block">Treasury</span>
+              <span className="text-xs font-mono font-bold text-emerald-400 tabular-nums">
+                ${state.balanceUsd.toLocaleString()}
+              </span>
+            </div>
+            <div className="w-[1px] h-6 bg-slate-800 hidden sm:block" />
+            <div className="flex flex-col items-end">
+              <span className="text-[9px] uppercase font-mono tracking-wider text-amber-500 hidden sm:block">Gold</span>
+              <span className="text-xs font-mono font-bold text-amber-400 tabular-nums flex items-center gap-0.5">
+                <span>★</span> {state.gold} G
+              </span>
+            </div>
+          </div>
 
           {/* Time & Speed Controls */}
           <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs">
             <button
               onClick={() => setSimSpeed(state.simSpeed === 0 ? 1 : 0)}
-              title={state.simSpeed === 0 ? 'Resume' : 'Pause'}
-              className={`p-1.5 rounded min-w-[32px] min-h-[32px] flex items-center justify-center transition-colors cursor-pointer ${
+              title={state.simSpeed === 0 ? 'Resume Simulation' : 'Pause Simulation'}
+              className={`p-1.5 rounded min-w-[28px] min-h-[28px] flex items-center justify-center transition-colors cursor-pointer ${
                 state.simSpeed === 0 ? 'bg-amber-500/20 text-amber-400' : 'text-slate-400 hover:text-white'
               }`}
             >
-              {state.simSpeed === 0 ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+              {state.simSpeed === 0 ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
             </button>
             <button
               onClick={() => setSimSpeed(state.simSpeed === 5 ? 15 : state.simSpeed === 15 ? 1 : 5)}
               title="Simulation Speed Warp"
-              className="px-2 py-1 font-mono text-[11px] font-bold text-amber-400 min-h-[32px] flex items-center cursor-pointer"
+              className="px-2 py-1 font-mono text-[11px] font-bold text-amber-400 min-h-[28px] flex items-center cursor-pointer"
             >
               {state.simSpeed === 0 ? 'PAUSE' : `${state.simSpeed}x`}
             </button>
-            <span className="hidden sm:inline font-mono text-[11px] text-slate-400 px-2 border-l border-slate-800 tabular-nums">
+            <span className="hidden xl:inline font-mono text-[11px] text-slate-400 px-2 border-l border-slate-800 tabular-nums">
               {formattedTime}
             </span>
           </div>
 
-          {/* Capital */}
-          <div className="flex flex-col items-end px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-lg">
-            <span className="text-[9px] uppercase font-mono tracking-wider text-slate-500 hidden sm:block">Capital</span>
-            <span className="text-xs font-mono font-bold text-emerald-400 tabular-nums">
-              ${(state.balanceUsd / 1000).toFixed(0)}k
-            </span>
-          </div>
+          {/* AI Dispatcher Toggle */}
+          <button
+            onClick={() => setAiActive(!aiActive)}
+            className={`p-1.5 rounded-lg border transition-all duration-300 relative cursor-pointer ${
+              aiActive
+                ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40 shadow-[0_0_10px_rgba(34,211,238,0.2)]'
+                : 'bg-slate-800 text-slate-500 border-slate-700/60'
+            }`}
+            title={aiActive ? 'AI Dispatcher: Active' : 'AI Dispatcher: Idle'}
+          >
+            <Cpu className="w-4 h-4" />
+          </button>
 
-          {/* Quick Dispatch CTA button on larger screens */}
+          {/* Guide / Field Manual */}
+          <button
+            onClick={() => setShowGuide(true)}
+            title="Field Guide"
+            className="p-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white rounded-lg transition-colors cursor-pointer hidden md:flex items-center justify-center"
+          >
+            <HelpCircle className="w-4 h-4 text-amber-400" />
+          </button>
+
+          {/* Quick Dispatch CTA button */}
           <button
             onClick={onOpenDispatchModal}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg transition-colors whitespace-nowrap min-h-[36px] cursor-pointer"
+            className="hidden sm:flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
           >
             <PlusCircle className="w-4 h-4" />
             <span>Dispatch</span>
           </button>
+        </div>
+      </div>
+
+      {/* Sub-Bar: Fuel Price Ticker, Clock & Weather */}
+      <div className="bg-slate-950 border-t border-slate-800/80 px-3 py-1 flex items-center justify-between text-[10px] font-medium text-slate-400 gap-2 overflow-x-auto no-scrollbar">
+        <div className="flex items-center space-x-1.5 flex-shrink-0">
+          <Fuel className="w-3 h-3 text-amber-400 animate-pulse" />
+          <span>Diesel Market:</span>
+          <strong className="text-amber-300 font-mono font-bold">$1.45/L</strong>
+        </div>
+
+        <div className="flex items-center space-x-3 flex-shrink-0">
+          <div className="font-mono font-bold text-slate-200">
+            <span>{formattedTime}</span>
+          </div>
+          <div className="flex items-center space-x-1 bg-slate-900 px-2 py-0.5 rounded border border-slate-800 text-amber-300">
+            <span>☀️</span>
+            <span className="font-semibold">Clear Skies (18°C)</span>
+          </div>
         </div>
       </div>
     </header>
