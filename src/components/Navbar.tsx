@@ -128,27 +128,27 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
             </div>
           </div>
 
-          {/* Time & Speed Controls */}
+          {/* Time & Pause Controls (Permanent 1x) */}
           <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs">
             <button
               onClick={() => setSimSpeed(state.simSpeed === 0 ? 1 : 0)}
               title={state.simSpeed === 0 ? 'Resume Simulation' : 'Pause Simulation'}
-              className={`p-1.5 rounded min-w-[28px] min-h-[28px] flex items-center justify-center transition-colors cursor-pointer ${
-                state.simSpeed === 0 ? 'bg-amber-500/20 text-amber-400' : 'text-slate-400 hover:text-white'
+              className={`px-2.5 py-1 rounded flex items-center gap-1.5 transition-colors cursor-pointer ${
+                state.simSpeed === 0 ? 'bg-amber-500/20 text-amber-400 font-bold' : 'text-slate-300 hover:text-white font-medium'
               }`}
             >
-              {state.simSpeed === 0 ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
+              {state.simSpeed === 0 ? (
+                <>
+                  <Play className="w-3 h-3" />
+                  <span>PAUSED</span>
+                </>
+              ) : (
+                <>
+                  <Pause className="w-3 h-3" />
+                  <span>1x LIVE</span>
+                </>
+              )}
             </button>
-            <button
-              onClick={() => setSimSpeed(state.simSpeed === 5 ? 15 : state.simSpeed === 15 ? 1 : 5)}
-              title="Simulation Speed Warp"
-              className="px-2 py-1 font-mono text-[11px] font-bold text-amber-400 min-h-[28px] flex items-center cursor-pointer"
-            >
-              {state.simSpeed === 0 ? 'PAUSE' : `${state.simSpeed}x`}
-            </button>
-            <span className="hidden xl:inline font-mono text-[11px] text-slate-400 px-2 border-l border-slate-800 tabular-nums">
-              {formattedTime}
-            </span>
           </div>
 
           {/* AI Dispatcher Toggle */}

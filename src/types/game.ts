@@ -359,7 +359,7 @@ export interface GameState {
   balanceUsd: number;
   gold: number;
   simTimeMinutes: number; // 0 = Day 1, 00:00
-  simSpeed: 0 | 1 | 5 | 15;
+  simSpeed: 0 | 1;
   selectedRegion: GeoRegion;
   hubs: Hub[];
   routes: RouteCorridor[];

@@ -108,7 +108,7 @@ export const generateContractsForRoutes = (
 
 interface GameContextType {
   state: GameState;
-  setSimSpeed: (speed: 0 | 1 | 5 | 15) => void;
+  setSimSpeed: (speed: 0 | 1) => void;
   setSelectedRegion: (region: GeoRegion) => void;
   dispatchTrip: (contractId: string, truckId: string, driverId: string, routeId: string, trailerId?: string | null) => boolean;
   serviceTruck: (truckId: string, serviceTier: 'A' | 'B' | 'Overhaul' | 'ReplaceTires') => void;
@@ -866,7 +866,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [state.simSpeed]);
 
   // Actions
-  const setSimSpeed = (speed: 0 | 1 | 5 | 15) => {
+  const setSimSpeed = (speed: 0 | 1) => {
     setState((prev) => ({ ...prev, simSpeed: speed }));
   };
 
