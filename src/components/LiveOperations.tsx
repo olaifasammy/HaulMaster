@@ -23,8 +23,9 @@ interface LiveOperationsProps {
 export const LiveOperations: React.FC<LiveOperationsProps> = ({ onInspectTruck, onOpenDispatch }) => {
   const { state, dismissNotification } = useGame();
   const [isEnRouteExpanded, setIsEnRouteExpanded] = useState(false);
+  const [expandedTripIds, setExpandedTripIds] = useState<Record<string, boolean>>({});
   const [currentPage, setCurrentPage] = useState(1);
-  const TRIPS_PER_PAGE = 2;
+  const TRIPS_PER_PAGE = 6;
 
   const totalTrucks = state.trucks.length;
   const enRouteCount = state.trucks.filter((t) => t.status === 'en_route').length;
@@ -38,6 +39,13 @@ export const LiveOperations: React.FC<LiveOperationsProps> = ({ onInspectTruck, 
   const totalPages = Math.max(1, Math.ceil(totalTrips / TRIPS_PER_PAGE));
   const safePage = Math.min(Math.max(1, currentPage), totalPages);
   const paginatedTrips = state.activeTrips.slice((safePage - 1) * TRIPS_PER_PAGE, safePage * TRIPS_PER_PAGE);
+
+  const toggleTripExpanded = (tripId: string) => {
+    setExpandedTripIds((prev) => ({
+      ...prev,
+      [tripId]: !prev[tripId],
+    }));
+  };
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -82,9 +90,9 @@ export const LiveOperations: React.FC<LiveOperationsProps> = ({ onInspectTruck, 
 
       {/* Main Grid: Active Hauler Convoys vs Live Event Stream */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6">
-        {/* Left 2 Cols: Active Hauler Cards with default-closed toggle and pagination */}
+        {/* Left 2 Cols: Active Hauler Cards with individual accordion toggle and pagination */}
         <div className="lg:col-span-2 space-y-3 sm:space-y-4">
-          {/* Collapsible Header Card */}
+          {/* Collapsible Section Header */}
           <div className="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden transition-all shadow-sm">
             <div
               role="button"
@@ -121,7 +129,7 @@ export const LiveOperations: React.FC<LiveOperationsProps> = ({ onInspectTruck, 
                     {isEnRouteExpanded
                       ? 'Real-time telemetry, powertrain diagnostics & driver rest monitoring'
                       : totalTrips > 0
-                        ? `${totalTrips} truck${totalTrips === 1 ? '' : 's'} on corridor · Tap to expand live telemetry`
+                        ? `${totalTrips} truck${totalTrips === 1 ? '' : 's'} on corridor · Tap to view individual hauls`
                         : 'All trucks parked in terminal · Tap to expand'}
                   </p>
                 </div>
@@ -139,7 +147,7 @@ export const LiveOperations: React.FC<LiveOperationsProps> = ({ onInspectTruck, 
                 </button>
 
                 <div className="flex items-center gap-1 text-xs text-slate-400 font-mono group-hover:text-slate-200 px-2 py-1 rounded-lg bg-slate-800/60 border border-slate-700/50">
-                  <span className="hidden sm:inline text-[11px]">{isEnRouteExpanded ? 'Close' : 'Expand'}</span>
+                  <span className="hidden sm:inline text-[11px]">{isEnRouteExpanded ? 'Close' : 'View All'}</span>
                   {isEnRouteExpanded ? (
                     <ChevronUp className="w-4 h-4 text-amber-400" />
                   ) : (
@@ -185,7 +193,7 @@ export const LiveOperations: React.FC<LiveOperationsProps> = ({ onInspectTruck, 
             )}
           </div>
 
-          {/* Expanded Cards Section */}
+          {/* Expanded Cards Section with individual trip card accordions */}
           {isEnRouteExpanded && (
             <div className="space-y-3 sm:space-y-4">
               {totalTrips === 0 ? (
@@ -215,105 +223,127 @@ export const LiveOperations: React.FC<LiveOperationsProps> = ({ onInspectTruck, 
                       const progressPct = Math.min(100, Math.round((trip.progressKm / trip.totalDistanceKm) * 100));
                       const remainingKm = Math.max(0, Math.round(trip.totalDistanceKm - trip.progressKm));
                       const remainingHours = (remainingKm / Math.max(25, trip.telemetry.currentSpeedKmh || 80)).toFixed(1);
+                      const isExpanded = !!expandedTripIds[trip.id];
 
                       return (
                         <div
                           key={trip.id}
-                          className="p-4 sm:p-5 bg-slate-900/80 border border-slate-800 rounded-xl hover:border-slate-700 transition-all space-y-3.5"
+                          className="bg-slate-900/80 border border-slate-800 rounded-xl overflow-hidden hover:border-slate-700 transition-all shadow-sm"
                         >
-                          {/* Top Row */}
-                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4">
-                            <div>
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-mono text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                                  {truck?.plate}
-                                </span>
-                                <span className="text-xs font-semibold text-white">{model?.name.split(' ')[0]}</span>
-                                <span className="text-slate-600">·</span>
-                                <span className="text-xs text-slate-400">{driver?.name}</span>
-                              </div>
-                              <h4 className="text-sm font-bold text-white mt-1 leading-snug">{trip.contract.title}</h4>
-                              <div className="text-[11px] text-slate-400 mt-0.5">
-                                {originHub?.name.split(' ')[0]} → {destHub?.name.split(' ')[0]}
+                          {/* Card Header (Click to expand/collapse individually) */}
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => toggleTripExpanded(trip.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                toggleTripExpanded(trip.id);
+                              }
+                            }}
+                            className="p-4 sm:p-5 flex items-center justify-between cursor-pointer hover:bg-slate-800/40 transition-colors select-none"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span className="font-mono text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20 shrink-0">
+                                {truck?.plate}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="text-xs sm:text-sm font-bold text-white truncate">{trip.contract.title}</h4>
+                                  <span className="text-[10px] font-mono text-slate-400 shrink-0">({progressPct}%)</span>
+                                </div>
+                                <div className="text-[11px] text-slate-400 mt-0.5 truncate">
+                                  {originHub?.name.split(' ')[0]} → {destHub?.name.split(' ')[0]} · {driver?.name}
+                                </div>
                               </div>
                             </div>
 
-                            {/* Status */}
-                            <div className="shrink-0">
+                            <div className="flex items-center gap-3 shrink-0">
                               {trip.isRestingNow ? (
-                                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-950/40 border border-sky-800/60 rounded-lg text-sky-400 text-xs font-semibold">
-                                  <Coffee className="w-3.5 h-3.5" />
-                                  <span>Resting ({driver?.currentRestMinutesRemaining}m left)</span>
-                                </div>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-sky-950/40 border border-sky-800/60 rounded text-sky-400 text-[11px] font-semibold">
+                                  <Coffee className="w-3 h-3" />
+                                  <span>Resting</span>
+                                </span>
                               ) : (
-                                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-950/40 border border-emerald-800/60 rounded-lg text-emerald-400 text-xs font-semibold">
-                                  <Activity className="w-3.5 h-3.5 animate-pulse" />
-                                  <span>Rolling {Math.round(trip.telemetry.currentSpeedKmh)} km/h</span>
-                                </div>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-950/40 border border-emerald-800/60 rounded text-emerald-400 text-[11px] font-semibold">
+                                  <Activity className="w-3 h-3 animate-pulse" />
+                                  <span>{Math.round(trip.telemetry.currentSpeedKmh)} km/h</span>
+                                </span>
+                              )}
+
+                              {isExpanded ? (
+                                <ChevronUp className="w-4 h-4 text-amber-400" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 text-slate-400" />
                               )}
                             </div>
                           </div>
 
-                          {/* Progress Bar */}
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-xs font-mono">
-                              <span className="text-slate-400">{progressPct}%</span>
-                              <span className="text-slate-300 font-semibold tabular-nums text-[11px]">
-                                {remainingKm} km left (~{remainingHours}h)
-                              </span>
-                            </div>
-                            <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
-                              <div
-                                className="bg-amber-400 h-full rounded-full transition-all duration-500"
-                                style={{ width: `${progressPct}%` }}
-                              />
-                            </div>
-                          </div>
+                          {/* Expanded Card Details */}
+                          {isExpanded && (
+                            <div className="px-4 pb-5 sm:px-5 space-y-4 border-t border-slate-800/80 pt-4 animate-in fade-in">
+                              {/* Progress Bar */}
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between text-xs font-mono">
+                                  <span className="text-slate-400">Route Progress</span>
+                                  <span className="text-slate-300 font-semibold tabular-nums text-[11px]">
+                                    {remainingKm} km left (~{remainingHours}h)
+                                  </span>
+                                </div>
+                                <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
+                                  <div
+                                    className="bg-amber-400 h-full rounded-full transition-all duration-500"
+                                    style={{ width: `${progressPct}%` }}
+                                  />
+                                </div>
+                              </div>
 
-                          {/* Telemetry Strip */}
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs font-mono">
-                            <div className="p-2 bg-slate-950/60 border border-slate-800/60 rounded-lg">
-                              <span className="text-[9px] text-slate-500 uppercase block">Engine</span>
-                              <span className="font-bold text-white tabular-nums">{trip.telemetry.engineRpm} RPM</span>
-                            </div>
+                              {/* Telemetry Strip */}
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                                <div className="p-2 bg-slate-950/60 border border-slate-800/60 rounded-lg">
+                                  <span className="text-[9px] text-slate-500 uppercase block">Engine</span>
+                                  <span className="font-bold text-white tabular-nums">{trip.telemetry.engineRpm} RPM</span>
+                                </div>
 
-                            <div className="p-2 bg-slate-950/60 border border-slate-800/60 rounded-lg">
-                              <span className="text-[9px] text-slate-500 uppercase block">Fuel Burn</span>
-                              <span className="font-bold text-amber-400 tabular-nums">
-                                {trip.telemetry.instantFuelRateL100km} L/100k
-                              </span>
-                            </div>
+                                <div className="p-2 bg-slate-950/60 border border-slate-800/60 rounded-lg">
+                                  <span className="text-[9px] text-slate-500 uppercase block">Fuel Burn</span>
+                                  <span className="font-bold text-amber-400 tabular-nums">
+                                    {trip.telemetry.instantFuelRateL100km} L/100k
+                                  </span>
+                                </div>
 
-                            <div className="p-2 bg-slate-950/60 border border-slate-800/60 rounded-lg">
-                              <span className="text-[9px] text-slate-500 uppercase block">Weather</span>
-                              <span className="text-sky-300 tabular-nums truncate block">
-                                {trip.telemetry.weatherState.type}
-                              </span>
-                            </div>
+                                <div className="p-2 bg-slate-950/60 border border-slate-800/60 rounded-lg">
+                                  <span className="text-[9px] text-slate-500 uppercase block">Weather</span>
+                                  <span className="text-sky-300 tabular-nums truncate block">
+                                    {trip.telemetry.weatherState.type}
+                                  </span>
+                                </div>
 
-                            <div className="p-2 bg-slate-950/60 border border-slate-800/60 rounded-lg">
-                              <span className="text-[9px] text-slate-500 uppercase block">Tank</span>
-                              <span className="font-bold text-white tabular-nums">
-                                {Math.round(truck?.fuelCurrentLiters || 0)} L
-                              </span>
-                            </div>
-                          </div>
+                                <div className="p-2 bg-slate-950/60 border border-slate-800/60 rounded-lg">
+                                  <span className="text-[9px] text-slate-500 uppercase block">Tank</span>
+                                  <span className="font-bold text-white tabular-nums">
+                                    {Math.round(truck?.fuelCurrentLiters || 0)} L
+                                  </span>
+                                </div>
+                              </div>
 
-                          {/* Action */}
-                          <div className="flex items-center justify-between pt-1">
-                            <div className="text-[11px] text-slate-400 font-mono">
-                              Payout: <span className="font-bold text-emerald-400">${trip.contract.payoutUsd.toLocaleString()}</span>
-                            </div>
+                              {/* Action */}
+                              <div className="flex items-center justify-between pt-1">
+                                <div className="text-[11px] text-slate-400 font-mono">
+                                  Payout: <span className="font-bold text-emerald-400">${trip.contract.payoutUsd.toLocaleString()}</span>
+                                </div>
 
-                            <button
-                              onClick={() => onInspectTruck(trip.truckId)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition-colors min-h-[36px]"
-                            >
-                              <Gauge className="w-3.5 h-3.5 text-amber-400" />
-                              <span>Telemetry</span>
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                                <button
+                                  onClick={() => onInspectTruck(trip.truckId)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition-colors min-h-[36px] cursor-pointer"
+                                >
+                                  <Gauge className="w-3.5 h-3.5 text-amber-400" />
+                                  <span>Telemetry</span>
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -377,30 +407,17 @@ export const LiveOperations: React.FC<LiveOperationsProps> = ({ onInspectTruck, 
           </h3>
 
           <div className="p-3 sm:p-4 bg-slate-900/60 border border-slate-800 rounded-xl space-y-2.5 max-h-[320px] sm:max-h-[500px] overflow-y-auto">
-            {state.notifications.length === 0 ? (
-              <div className="text-xs text-slate-500 text-center py-6">
-                No active event logs.
-              </div>
-            ) : (
-              state.notifications.map((notif, index) => (
-                <div
-                  key={`${notif.id || 'notif'}-${index}`}
-                  className="p-2.5 bg-slate-950/80 border border-slate-800/90 rounded-lg space-y-0.5 text-xs"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-[9px] text-slate-400">{notif.simTimeFormatted}</span>
-                    <button
-                      onClick={() => dismissNotification(notif.id)}
-                      className="text-slate-500 hover:text-slate-300 text-[10px]"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <div className="font-semibold text-white text-[11px]">{notif.title}</div>
-                  <p className="text-slate-400 text-[10px] leading-relaxed">{notif.message}</p>
+            {state.notifications.map((notif) => (
+              <div key={notif.id} className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-white truncate max-w-[180px]">{notif.title}</span>
+                  <span className="text-[10px] font-mono text-slate-500">{notif.simTimeFormatted}</span>
                 </div>
-              ))
-            )}
+                <p className="text-[11px] text-slate-300 leading-snug">
+                  {notif.message}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       </div>
