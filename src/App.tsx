@@ -15,7 +15,7 @@ import { TruckInspectorModal } from './components/TruckInspectorModal';
 import { RouteDispatcherModal } from './components/RouteDispatcherModal';
 import { OnboardingWizard } from './components/OnboardingWizard';
 import { UserGuideWalkthrough } from './components/UserGuideWalkthrough';
-import { CompanyProfileModal } from './components/CompanyProfileModal';
+import { CompanyProfilePage } from './components/CompanyProfilePage';
 import { OfflineProgressModal } from './components/OfflineProgressModal';
 import { DatabaseManagerModal } from './components/DatabaseManagerModal';
 import { AiDispatcherPage } from './components/AiDispatcherPage';
@@ -177,6 +177,9 @@ const DashboardContent: React.FC = () => {
 
         {/* AI Dispatcher Full Page View */}
         {currentTab === 'ai' && <AiDispatcherPage onOpenDispatch={(contractId) => handleOpenDispatch(contractId)} />}
+
+        {/* Company Profile Full Page View */}
+        {currentTab === 'profile' && <CompanyProfilePage onOpenAchievements={() => setCurrentTab('achievements')} />}
       </main>
 
       {/* Floating Mobile Quick Dispatch Action Button */}
