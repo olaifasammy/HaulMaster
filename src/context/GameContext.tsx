@@ -125,6 +125,7 @@ interface GameContextType {
   refuelTruckAtHub: (truckId: string, liters: number) => boolean;
   takeLoan: (amount: number, termDays: number) => boolean;
   repayLoan: (loanId: string, amount: number) => void;
+  claimGrant: (amount: number, description: string) => void;
   dismissNotification: (id: string) => void;
   resetGame: () => void;
   // New onboarding, guide, and marketplace capabilities
@@ -1740,6 +1741,37 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
+  const claimGrant = (amount: number, description: string) => {
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    setState((prev) => ({
+      ...prev,
+      balanceUsd: prev.balanceUsd + amount,
+      ledger: [
+        {
+          id: `led-grant-${Date.now()}`,
+          simDay,
+          simTimeFormatted: `Day ${simDay}`,
+          type: 'freight_revenue',
+          description,
+          amountUsd: amount,
+          runningBalanceUsd: prev.balanceUsd + amount,
+        },
+        ...prev.ledger,
+      ],
+      notifications: deduplicateNotifications([
+        {
+          id: `notif-grant-${Date.now()}`,
+          simTimeFormatted: `Day ${simDay}`,
+          title: 'Government Subsidy Granted',
+          message: `${description}: $${amount.toLocaleString()} credited to corporate treasury.`,
+          type: 'delivery',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ]),
+    }));
+  };
+
   const repayLoan = (loanId: string, amount: number) => {
     const loan = state.loans.find((l) => l.id === loanId);
     if (!loan) return;
@@ -2729,6 +2761,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refuelTruckAtHub,
         takeLoan,
         repayLoan,
+        claimGrant,
         dismissNotification,
         resetGame,
         completeOnboarding,

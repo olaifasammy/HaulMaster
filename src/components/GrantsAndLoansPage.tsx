@@ -13,11 +13,33 @@ import {
   FileText,
   Percent,
   Clock,
+  Sparkles,
+  Star,
+  Compass,
+  Package,
+  MapPin,
+  Truck,
 } from 'lucide-react';
 
+const generateRecursiveGrantTiers = (baseTarget: number, baseReward: number, multiplier: number = 2.0) => {
+  const tiers = [];
+  let currentTarget = baseTarget;
+  let currentReward = baseReward;
+  for (let i = 1; i <= 20; i++) {
+    tiers.push({
+      tier: i,
+      target: Math.round(currentTarget),
+      reward: Math.round(currentReward),
+    });
+    currentTarget *= multiplier;
+    currentReward *= 1.5;
+  }
+  return tiers;
+};
+
 export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ onBackToLedger }) => {
-  const { state, takeLoan, repayLoan, notifyUser } = useGame();
-  const [claimedGrants, setClaimedGrants] = useState<string[]>([]);
+  const { state, takeLoan, repayLoan, claimGrant, notifyUser } = useGame();
+  const [claimedGrantTiers, setClaimedGrantTiers] = useState<string[]>([]);
 
   // Corporate financial metrics
   const totalRevenue = state.ledger
@@ -29,13 +51,56 @@ export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ o
   const companyNetWorth = state.balanceUsd + totalTruckValue + totalHubValue;
 
   const totalActiveDebt = state.loans.reduce((acc, l) => acc + l.remainingBalanceUsd, 0);
-  // Realistic corporate debt limit: 3x Net Worth or max $750,000 credit ceiling
   const maxDebtLimit = Math.min(750000, Math.max(100000, companyNetWorth * 2.5));
   const availableCredit = Math.max(0, maxDebtLimit - totalActiveDebt);
   const creditUtilizationPct = Math.round((totalActiveDebt / maxDebtLimit) * 100);
 
-  // Credit Rating based on net worth & financial health
   const creditRating = companyNetWorth > 300000 ? 'AAA (Prime)' : companyNetWorth > 150000 ? 'AA (Investment Grade)' : companyNetWorth > 50000 ? 'A (Stable)' : 'BBB (Speculative)';
+
+  // Operational metrics for recursive grants
+  const totalKm = state.totalKilometersDriven;
+  const totalDeliveries = state.drivers.reduce((acc, d) => acc + d.stats.deliveriesCompleted, 0);
+  const ownedHubsCount = state.hubs.filter((h) => h.isUnlocked).length;
+  const truckCount = state.trucks.length;
+
+  const grantPrograms = [
+    {
+      id: 'grant_green',
+      title: 'Green Fleet & Emissions Subsidy',
+      description: 'Ministry of Transport recursive grant awarded for scaling interstate kilometer transit.',
+      icon: Compass,
+      currentValue: totalKm,
+      unit: 'km',
+      tiers: generateRecursiveGrantTiers(25000, 15000, 2.2),
+    },
+    {
+      id: 'grant_commerce',
+      title: 'Interstate Commerce Subvention',
+      description: 'Federal commerce grant awarded for completing commercial freight dispatches.',
+      icon: Package,
+      currentValue: totalDeliveries,
+      unit: 'deliveries',
+      tiers: generateRecursiveGrantTiers(20, 18000, 2.0),
+    },
+    {
+      id: 'grant_infrastructure',
+      title: 'Terminal Infrastructure Grant',
+      description: 'Regional development grant awarded for expanding terminal hub concessions.',
+      icon: MapPin,
+      currentValue: ownedHubsCount,
+      units: 'hubs',
+      tiers: generateRecursiveGrantTiers(2, 25000, 2.0),
+    },
+    {
+      id: 'grant_fleet',
+      title: 'Commercial Fleet Subvention',
+      description: 'Industrial growth grant awarded for expanding commercial truck fleet capacity.',
+      icon: Truck,
+      currentValue: truckCount,
+      units: 'trucks',
+      tiers: generateRecursiveGrantTiers(2, 20000, 2.0),
+    },
+  ];
 
   const handleApplyLoan = (amount: number, days: number, interestRate: number, title: string) => {
     if (totalActiveDebt + amount > maxDebtLimit) {
@@ -53,21 +118,12 @@ export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ o
     }
   };
 
-  const handleClaimGrant = (grantId: string, grantAmount: number, grantTitle: string, minRank: number) => {
-    if (state.playerRank < minRank) {
-      notifyUser('Grant Requirements Unmet', `Requires Corporate Logistics Rank ${minRank} or higher to qualify for this government subsidy.`, 'finance');
-      return;
-    }
-    if (claimedGrants.includes(grantId)) {
-      notifyUser('Already Claimed', 'This corporate subsidy grant has already been claimed by your enterprise.', 'finance');
-      return;
-    }
+  const handleClaimGrantTier = (programTitle: string, grantKey: string, reward: number, tier: number) => {
+    if (claimedGrantTiers.includes(grantKey)) return;
 
-    if (window.confirm(`Government & Industry Logistics Subsidy:\n\nGrant: ${grantTitle}\nSubvention: $${grantAmount.toLocaleString()}\n\nClaim non-repayable grant funds?`)) {
-      setClaimedGrants((prev) => [...prev, grantId]);
-      // Inject grant revenue into state via ledger / balance
-      // We can use a direct treasury addition or ledger entry if supported, or via grant claim function
-      notifyUser('Grant Approved & Disbursed', `Ministry of Transport approved ${grantTitle}. $${grantAmount.toLocaleString()} credited to company balance.`, 'finance');
+    if (window.confirm(`Government & Industry Subsidy Approval:\n\nProgram: ${programTitle} (Tier ${tier})\nSubvention Grant: $${reward.toLocaleString()}\n\nClaim non-repayable grant funds?`)) {
+      setClaimedGrantTiers((prev) => [...prev, grantKey]);
+      claimGrant(reward, `${programTitle} (Tier ${tier} Subsidy)`);
     }
   };
 
@@ -84,7 +140,7 @@ export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ o
               Corporate Treasury & Credit Bureau
             </span>
             <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
-              Corporate Banking, Debt Facilities & Government Grants
+              Corporate Banking, Debt Facilities & Recursive Subsidies
             </h2>
           </div>
         </div>
@@ -299,66 +355,108 @@ export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ o
         </div>
       )}
 
-      {/* 2. Government & Industry Logistics Subsidies / Grants */}
+      {/* 2. Actively Recursive Government & Industry Subsidies (Grants) */}
       <div className="space-y-4 pt-4 border-t border-slate-800">
         <div>
           <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 font-mono flex items-center gap-2">
             <Award className="w-4 h-4 text-emerald-400" />
-            <span>Government & Industry Logistics Subsidies (Grants)</span>
+            <span>Actively Recursive Government Subsidies & Grants</span>
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            Non-repayable corporate grants awarded upon achieving logistics milestones and rank progressions.
+            Non-repayable corporate grants awarded upon achieving logistics milestones. As your enterprise scales, new tiers unlock recursively!
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Grant 1 */}
-          <div className="p-5 bg-slate-900/90 border border-slate-800 rounded-2xl flex flex-col justify-between space-y-4">
-            <div>
-              <div className="flex items-center justify-between text-xs font-mono mb-2">
-                <span className="text-emerald-400 font-bold">Non-Repayable Grant</span>
-                <span className="text-amber-400 font-bold">$15,000 Subsidy</span>
-              </div>
-              <h4 className="text-base font-bold text-white">Green Fleet & Emissions Subsidy</h4>
-              <p className="text-xs text-slate-400 mt-1">
-                Ministry of Transport grant for establishing low-emission regional freight operations. Requires Rank 2.
-              </p>
-            </div>
-            <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
-              <span className="text-xs font-mono text-slate-400">Requirement: Rank 2+</span>
-              <button
-                onClick={() => handleClaimGrant('grant-green', 15000, 'Green Fleet & Emissions Subsidy', 2)}
-                disabled={claimedGrants.includes('grant-green') || state.playerRank < 2}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-bold text-xs font-mono rounded-xl transition-colors cursor-pointer"
-              >
-                {claimedGrants.includes('grant-green') ? 'Claimed' : 'Claim $15k Grant'}
-              </button>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {grantPrograms.map((prog) => {
+            const activeTierIndex = prog.tiers.findIndex((t) => !claimedGrantTiers.includes(`${prog.id}_tier_${t.tier}`));
+            const isFullyCompleted = activeTierIndex === -1;
+            const currentTier = isFullyCompleted ? prog.tiers[prog.tiers.length - 1] : prog.tiers[activeTierIndex];
+            const previousTierTarget = activeTierIndex > 0 ? prog.tiers[activeTierIndex - 1].target : 0;
+            
+            const currentValue = prog.currentValue;
+            const targetValue = currentTier.target;
+            const isCompleted = currentValue >= targetValue;
+            const grantKey = `${prog.id}_tier_${currentTier.tier}`;
+            const progressPct = isFullyCompleted ? 100 : Math.min(100, Math.max(0, Math.round(((currentValue - previousTierTarget) / (targetValue - previousTierTarget)) * 100)));
+            const IconComp = prog.icon;
 
-          {/* Grant 2 */}
-          <div className="p-5 bg-slate-900/90 border border-slate-800 rounded-2xl flex flex-col justify-between space-y-4">
-            <div>
-              <div className="flex items-center justify-between text-xs font-mono mb-2">
-                <span className="text-emerald-400 font-bold">Non-Repayable Grant</span>
-                <span className="text-amber-400 font-bold">$35,000 Subsidy</span>
-              </div>
-              <h4 className="text-base font-bold text-white">Interstate Trade Corridor Expansion</h4>
-              <p className="text-xs text-slate-400 mt-1">
-                Federal commerce subvention for connecting regional trade corridors and boosting supply chain velocity. Requires Rank 3.
-              </p>
-            </div>
-            <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
-              <span className="text-xs font-mono text-slate-400">Requirement: Rank 3+</span>
-              <button
-                onClick={() => handleClaimGrant('grant-corridor', 35000, 'Interstate Trade Corridor Expansion', 3)}
-                disabled={claimedGrants.includes('grant-corridor') || state.playerRank < 3}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-bold text-xs font-mono rounded-xl transition-colors cursor-pointer"
+            return (
+              <div
+                key={prog.id}
+                className={`p-5 rounded-2xl border transition-all flex flex-col justify-between space-y-4 ${
+                  isFullyCompleted
+                    ? 'bg-slate-950/70 border-emerald-500/30'
+                    : isCompleted
+                    ? 'bg-slate-900/90 border-amber-500/50 ring-1 ring-amber-500/20'
+                    : 'bg-slate-900/60 border-slate-800'
+                }`}
               >
-                {claimedGrants.includes('grant-corridor') ? 'Claimed' : 'Claim $35k Grant'}
-              </button>
-            </div>
-          </div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                        <IconComp className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white">{prog.title}</h4>
+                        <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                          Tier {currentTier.tier} Subvention: ${currentTier.reward.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {isFullyCompleted ? (
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                        <Star className="w-3 h-3 fill-emerald-400 text-emerald-400" />
+                        <span>Max Tiers</span>
+                      </span>
+                    ) : isCompleted ? (
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1 animate-pulse">
+                        <Sparkles className="w-3 h-3" />
+                        <span>Ready to Claim</span>
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-mono text-slate-400 bg-slate-950 border border-slate-800">
+                        Tier {currentTier.tier}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-slate-400">{prog.description}</p>
+
+                  {/* Progress bar */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs font-mono">
+                      <span className="text-slate-400">Progress</span>
+                      <span className="text-white font-bold">
+                        {Math.round(currentValue).toLocaleString()} / {targetValue.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
+                      <div
+                        className="bg-gradient-to-r from-emerald-500 to-amber-400 h-full transition-all duration-300"
+                        style={{ width: `${progressPct}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
+                  <span className="text-[11px] font-mono text-slate-400">
+                    {isFullyCompleted ? 'All recursive tiers claimed' : isCompleted ? 'Subvention funds authorized' : 'In progress...'}
+                  </span>
+                  <button
+                    onClick={() => handleClaimGrantTier(prog.title, grantKey, currentTier.reward, currentTier.tier)}
+                    disabled={!isCompleted || isFullyCompleted || claimedGrantTiers.includes(grantKey)}
+                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-bold text-xs font-mono rounded-xl transition-colors cursor-pointer shadow-md"
+                  >
+                    {claimedGrantTiers.includes(grantKey) ? 'Claimed' : `Claim $${currentTier.reward.toLocaleString()}`}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
