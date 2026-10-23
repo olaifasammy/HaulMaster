@@ -160,6 +160,20 @@ export const FreightMarket: React.FC<FreightMarketProps> = ({ onDispatchContract
 
                   <h4 className="text-sm font-bold text-white leading-snug">{contract.title}</h4>
 
+                  {/* Issuing Shipper Company */}
+                  {contract.shipperCompany && (
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-800/60 text-xs">
+                      <span className="text-slate-300 font-medium truncate" title={contract.shipperCompany}>
+                        🏢 <span className="text-white font-semibold">{contract.shipperCompany}</span>
+                      </span>
+                      {contract.shipperRating && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20 shrink-0">
+                          Rating {contract.shipperRating}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   {/* Origin to Destination */}
                   <div className="flex items-center gap-2 mt-3 text-xs text-slate-300 font-medium">
                     <span className="font-semibold text-white">{originHub?.name.split(' ')[0]}</span>

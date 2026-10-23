@@ -31,6 +31,7 @@ import {
 } from '../constants/gameData';
 import { computePhysicsStep } from '../utils/physicsEngine';
 import { getLocalWeather } from '../utils/weatherEngine';
+import { WorldCompanyRepository } from '../constants/worldCompanies';
 
 const STORAGE_KEY = 'haulmaster_game_state_v3';
 
@@ -53,7 +54,7 @@ export const deduplicateNotifications = (list: GameEventNotification[]): GameEve
 export const generateContractsForRoutes = (
   unlockedRoutes: RouteCorridor[],
   hubs: Hub[],
-  count: number = 6
+  count: number = 8
 ): CargoContract[] => {
   if (unlockedRoutes.length === 0) return [];
 
@@ -77,10 +78,11 @@ export const generateContractsForRoutes = (
     const destHub = hubs.find((h) => h.id === route.destinationHubId);
     if (!originHub || !destHub) continue;
 
+    const shipper = WorldCompanyRepository.getRandomForRegion(originHub.region);
     const template = cargoCatalog[(i + Math.floor(Math.random() * cargoCatalog.length)) % cargoCatalog.length];
     const weightTons = Number((12 + Math.random() * 16).toFixed(1));
     const dist = route.distanceKm;
-    const basePayout = Math.round(dist * template.rate * (0.9 + Math.random() * 0.25));
+    const basePayout = Math.round(dist * template.rate * (0.9 + Math.random() * 0.25) * (shipper.rating / 90));
 
     contracts.push({
       id: `cnt-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 6)}`,
@@ -96,6 +98,9 @@ export const generateContractsForRoutes = (
       temperatureControlled: template.isCold,
       isHazardous: template.haz,
       hazardClass: template.hazClass,
+      shipperCompany: shipper.name,
+      shipperRating: shipper.rating,
+      shipperIndustry: shipper.industry,
     });
   }
   return contracts;

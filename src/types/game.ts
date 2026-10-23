@@ -268,6 +268,9 @@ export interface CargoContract {
   temperatureControlled: boolean; // reefer requires extra diesel burn
   hazardClass?: 'Class 3 Flammable' | 'Class 8 Corrosive';
   isHazardous: boolean;
+  shipperCompany?: string;
+  shipperRating?: number;
+  shipperIndustry?: string;
 }
 
 export interface LiveTelemetry {
