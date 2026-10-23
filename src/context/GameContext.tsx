@@ -3442,11 +3442,19 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setState(nextState);
     stateRef.current = nextState;
 
+    const resMsg = dispatchedCount > 0
+      ? `Successfully auto-dispatched ${dispatchedCount} truck(s) to available jobs!`
+      : `No matching idle trucks or ready drivers available for dispatch. Ensure trucks are idle and drivers are rested.`;
+
+    notifyUser(
+      dispatchedCount > 0 ? 'AI Auto-Dispatch Successful' : 'AI Auto-Dispatch Notice',
+      resMsg,
+      dispatchedCount > 0 ? 'delivery' : 'maintenance'
+    );
+
     return {
       dispatchedCount,
-      message: dispatchedCount > 0
-        ? `Successfully auto-dispatched ${dispatchedCount} truck(s) to available jobs!`
-        : `No matching idle trucks or ready drivers available for dispatch.`,
+      message: resMsg,
     };
   };
 

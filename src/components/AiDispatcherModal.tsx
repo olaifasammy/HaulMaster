@@ -240,8 +240,13 @@ export const AiDispatcherModal: React.FC<AiDispatcherModalProps> = ({ onClose, o
             </button>
 
             {dispatchResult && (
-              <div className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-lg text-xs font-mono text-cyan-300">
-                {dispatchResult}
+              <div className={`p-4 rounded-xl border text-xs font-mono font-bold flex items-center gap-3 animate-in fade-in ${
+                dispatchResult.includes('Successfully') 
+                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300' 
+                  : 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+              }`}>
+                <CheckCircle className="w-5 h-5 shrink-0" />
+                <span>{dispatchResult}</span>
               </div>
             )}
           </div>
