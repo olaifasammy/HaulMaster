@@ -47,7 +47,7 @@ export const TruckInspectorModal: React.FC<TruckInspectorModalProps> = ({
   onClose,
   onOpenWorkshop,
 }) => {
-  const { state, serviceTruck, refuelTruckAtHub } = useGame();
+  const { state, serviceTruck, refuelTruckAtHub, changeTruckTireCompound } = useGame();
   const [activeTab, setActiveTab] = useState<'telemetry' | 'tires' | 'fuel' | 'heat'>('telemetry');
 
   if (!truckId) return null;
@@ -761,6 +761,44 @@ export const TruckInspectorModal: React.FC<TruckInspectorModalProps> = ({
                 <div className="text-xs font-semibold text-white">Overhaul</div>
                 <div className="text-[10px] font-mono text-amber-400 font-bold mt-1">$16,500</div>
               </button>
+            </div>
+
+            {/* Tire Compound Refit */}
+            <div className="space-y-2 pt-3 border-t border-slate-800">
+              <div className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300">
+                Axle Tire Compound Refit
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'highway_eco', label: 'Highway Eco', cost: 500 },
+                  { id: 'all_weather', label: 'All-Weather', cost: 800 },
+                  { id: 'severe_snow', label: 'Severe Snow', cost: 1500 },
+                ].map((tc) => {
+                  const isCurrent = (truck.tireCompound || 'highway_eco') === tc.id;
+                  return (
+                    <button
+                      key={tc.id}
+                      disabled={isEnRoute || isCurrent}
+                      onClick={() => {
+                        const confirmed = window.confirm(`Refit ${truck.plate} with ${tc.label} tires for $${tc.cost.toLocaleString()}?`);
+                        if (confirmed) {
+                          changeTruckTireCompound(truck.id, tc.id as any);
+                        }
+                      }}
+                      className={`p-2.5 rounded-lg border text-left transition-colors cursor-pointer flex flex-col justify-between space-y-1 ${
+                        isCurrent
+                          ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-sm'
+                          : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700 disabled:opacity-40'
+                      }`}
+                    >
+                      <div className="text-xs font-bold">{tc.label}</div>
+                      <div className="text-[10px] font-mono text-amber-400 font-semibold mt-1">
+                        {isCurrent ? 'Equipped' : `$${tc.cost.toLocaleString()}`}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {!isEnRoute && truck.fuelCurrentLiters < model.specs.fuelTankCapacityLiters - 20 && (

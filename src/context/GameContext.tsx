@@ -129,6 +129,7 @@ interface GameContextType {
   setSelectedRegion: (region: GeoRegion) => void;
   dispatchTrip: (contractId: string, truckId: string, driverId: string, routeId: string, trailerId?: string | null) => boolean;
   serviceTruck: (truckId: string, serviceTier: 'A' | 'B' | 'Overhaul' | 'ReplaceTires') => void;
+  changeTruckTireCompound: (truckId: string, compound: 'highway_eco' | 'all_weather' | 'severe_snow') => boolean;
   buyTruck: (modelId: TruckModelId, hubId: string, aeroPackage: boolean) => boolean;
   buyTruckWithConfig: (options: TruckConfigOptions) => boolean;
   sellTruck: (truckId: string) => void;
@@ -1471,6 +1472,58 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ]),
     }));
 
+    return true;
+  };
+
+  const changeTruckTireCompound = (truckId: string, compound: 'highway_eco' | 'all_weather' | 'severe_snow'): boolean => {
+    const truck = state.trucks.find(t => t.id === truckId);
+    if (!truck || truck.status === 'en_route') {
+      notifyUser('Vehicle In Transit', 'Truck is currently en route. Tire compound changes must be done while idle at a terminal.', 'maintenance');
+      return false;
+    }
+
+    const cost = compound === 'severe_snow' ? 1500 : compound === 'all_weather' ? 800 : 500;
+    if (state.balanceUsd < cost) {
+      notifyUser('Insufficient Treasury', `Tire compound upgrade requires $${cost.toLocaleString()}. Available: $${state.balanceUsd.toLocaleString()}.`, 'finance');
+      return false;
+    }
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const hours = Math.floor((state.simTimeMinutes % 1440) / 60);
+    const mins = state.simTimeMinutes % 60;
+    const timeFormatted = `Day ${simDay} ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    const newBal = state.balanceUsd - cost;
+
+    setState(prev => ({
+      ...prev,
+      balanceUsd: newBal,
+      trucks: prev.trucks.map(t => t.id === truckId ? { ...t, tireCompound: compound } : t),
+      ledger: [
+        {
+          id: `led-tire-${Date.now()}`,
+          simDay,
+          simTimeFormatted: timeFormatted,
+          type: 'maintenance_expense',
+          description: `Tire compound refit (${compound.replace('_', ' ' )}) for ${truck.plate}`,
+          amountUsd: -cost,
+          runningBalanceUsd: newBal,
+        },
+        ...prev.ledger,
+      ],
+      notifications: [
+        {
+          id: `notif-tire-${Date.now()}`,
+          simTimeFormatted: timeFormatted,
+          title: '🛞 Tire Compound Refit Completed',
+          message: `Successfully refitted ${truck.plate} with ${compound.replace('_', ' ')} tires (-$${cost.toLocaleString()}).`,
+          type: 'maintenance',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ],
+    }));
+
+    notifyUser('Tire Refit Successful', `Fitted with ${compound.replace('_', ' ')} tires ($${cost.toLocaleString()} paid).`, 'maintenance');
     return true;
   };
 
@@ -4115,6 +4168,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSelectedRegion,
         dispatchTrip,
         serviceTruck,
+        changeTruckTireCompound,
         buyTruck,
         buyTruckWithConfig,
         sellTruck,

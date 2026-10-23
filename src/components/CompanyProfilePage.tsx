@@ -13,9 +13,11 @@ import {
 
 interface CompanyProfilePageProps {
   onOpenAchievements: () => void;
+  onOpenDatabase?: () => void;
+  onOpenAiPage?: () => void;
 }
 
-export const CompanyProfilePage: React.FC<CompanyProfilePageProps> = ({ onOpenAchievements }) => {
+export const CompanyProfilePage: React.FC<CompanyProfilePageProps> = ({ onOpenAchievements, onOpenDatabase, onOpenAiPage }) => {
   const { state, resetGame } = useGame();
   const [companyNameInput, setCompanyNameInput] = useState<string>(state.companyName);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
@@ -140,6 +142,12 @@ export const CompanyProfilePage: React.FC<CompanyProfilePageProps> = ({ onOpenAc
         </div>
         <ChevronRight className="w-5 h-5 text-amber-400 group-hover:translate-x-1 transition-transform" />
       </button>
+
+      {/* Quick Links: DB & AI */}
+      <div className="flex gap-4">
+        <a href="#" onClick={(e) => { e.preventDefault(); onOpenDatabase?.(); }} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold text-xs rounded-xl transition-colors">DB Page</a>
+        <a href="#" onClick={(e) => { e.preventDefault(); onOpenAiPage?.(); }} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold text-xs rounded-xl transition-colors">AI Page</a>
+      </div>
 
       {/* Section 3: Executive Reset / New Game */}
       <div className="p-6 bg-slate-900 border border-rose-500/30 rounded-2xl space-y-4 shadow-xl">

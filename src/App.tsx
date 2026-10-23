@@ -184,7 +184,7 @@ const DashboardContent: React.FC = () => {
         {currentTab === 'ai' && <AiDispatcherPage onOpenDispatch={(contractId) => handleOpenDispatch(contractId)} />}
 
         {/* Company Profile Full Page View */}
-        {currentTab === 'profile' && <CompanyProfilePage onOpenAchievements={() => setCurrentTab('achievements')} />}
+        {currentTab === 'profile' && <CompanyProfilePage onOpenAchievements={() => setCurrentTab('achievements')} onOpenDatabase={() => setIsDbModalOpen(true)} onOpenAiPage={() => setCurrentTab('ai')} />}
       </main>
 
       {/* Floating Mobile AI Quick Action Button (only displayed when AI subscription is active) */}
