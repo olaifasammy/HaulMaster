@@ -949,30 +949,30 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             continuousMins += deltaSimMinutes;
             dailyMins += deltaSimMinutes;
 
-            // Tachograph rule: If continuous >= 270 (4.5h), trigger mandatory 45 min rest
-            if (continuousMins >= 270) {
+            // Tachograph rule: If continuous >= 480 (8h), trigger mandatory 30 min rest
+            if (continuousMins >= 480) {
               isResting = true;
-              currentRestMins = 45;
+              currentRestMins = 30;
               continuousMins = 0; // Reset continuous drive timer so it doesn't repeatedly trigger
               newNotifications.push({
                 id: `notif-tach-rest-${trip.id}-${newSimMinutes}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
                 simTimeFormatted: timeFormatted,
-                title: 'Tachograph Mandatory Rest (4.5h limit)',
-                message: `${driver.name} pulled into highway rest bay for 45-minute mandatory break.`,
+                title: 'Tachograph Mandatory Rest (8h limit)',
+                message: `${driver.name} pulled into highway rest bay for 30-minute mandatory break.`,
                 type: 'driver',
                 timestamp: Date.now(),
               });
-            } else if (dailyMins >= 540) {
-              // Daily 9h drive limit -> 11h (660 min) sleeper rest
+            } else if (dailyMins >= 720) {
+              // Daily 12h drive limit -> 6h (360 min) sleeper rest
               isResting = true;
-              currentRestMins = 660;
+              currentRestMins = 360;
               dailyMins = 0;
               continuousMins = 0;
               newNotifications.push({
                 id: `notif-daily-rest-${trip.id}-${newSimMinutes}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
                 simTimeFormatted: timeFormatted,
-                title: 'Mandatory Daily Sleeper Rest (9h Drive Cap)',
-                message: `${driver.name} concluded 9h shift. Truck parked in truck stop for 11h rest cycle.`,
+                title: 'Mandatory Daily Sleeper Rest (12h Drive Cap)',
+                message: `${driver.name} concluded 12h shift. Truck parked in truck stop for 6h rest cycle.`,
                 type: 'driver',
                 timestamp: Date.now(),
               });
@@ -1184,6 +1184,23 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               };
             }
             return truck;
+          });
+
+          // Replenish fatigue & drive limits for drivers not currently on active trips
+          const activeTripDriverIds = new Set(remainingTrips.map((t) => t.driverId));
+          updatedDrivers = updatedDrivers.map((d) => {
+            if (activeTripDriverIds.has(d.id)) return d;
+            const nextContinuous = Math.max(0, d.continuousDriveMinutes - deltaSimMinutes * 4);
+            const nextDaily = Math.max(0, d.dailyDriveMinutes - deltaSimMinutes * 4);
+            const nextRest = Math.max(0, d.currentRestMinutesRemaining - deltaSimMinutes * 2);
+            const nextHos = nextRest <= 0 ? 'off_duty' : d.hosStatus;
+            return {
+              ...d,
+              continuousDriveMinutes: nextContinuous,
+              dailyDriveMinutes: nextDaily,
+              currentRestMinutesRemaining: nextRest,
+              hosStatus: nextHos,
+            };
           });
 
           return {
