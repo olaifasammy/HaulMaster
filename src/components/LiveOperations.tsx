@@ -22,7 +22,7 @@ interface LiveOperationsProps {
 }
 
 export const LiveOperations: React.FC<LiveOperationsProps> = ({ onInspectTruck, onOpenDispatch }) => {
-  const { state, dismissNotification, dispatchRoadsideMechanic } = useGame();
+  const { state, dismissNotification, dispatchRoadsideMechanic, recallTrip } = useGame();
   const [isEnRouteExpanded, setIsEnRouteExpanded] = useState(false);
   const [expandedTripIds, setExpandedTripIds] = useState<Record<string, boolean>>({});
   const [currentPage, setCurrentPage] = useState(1);
@@ -382,19 +382,28 @@ export const LiveOperations: React.FC<LiveOperationsProps> = ({ onInspectTruck, 
                               </div>
 
                               {/* Action */}
-                              <div className="flex items-center justify-between pt-1">
+                              <div className="flex flex-col sm:flex-row items-center justify-between pt-2 border-t border-slate-800/80 gap-2">
                                 <div className="text-[11px] text-slate-400 font-mono">
                                   Payout: <span className="font-bold text-emerald-400">${trip.contract.payoutUsd.toLocaleString()}</span>
                                 </div>
 
-                                <button
-                                  onClick={() => onInspectTruck(trip.truckId)}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition-colors min-h-[36px] cursor-pointer"
-                                >
-                                  <Gauge className="w-3.5 h-3.5 text-amber-400" />
-                                  <span>Telemetry</span>
-                                  <ChevronRight className="w-3.5 h-3.5" />
-                                </button>
+                                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                                  <button
+                                    onClick={() => recallTrip(trip.id)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 rounded-lg text-xs font-semibold transition-colors border border-rose-500/30 cursor-pointer min-h-[36px]"
+                                  >
+                                    <span>🔄 Recall to Terminal ($1,200)</span>
+                                  </button>
+
+                                  <button
+                                    onClick={() => onInspectTruck(trip.truckId)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition-colors min-h-[36px] cursor-pointer"
+                                  >
+                                    <Gauge className="w-3.5 h-3.5 text-amber-400" />
+                                    <span>Telemetry</span>
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           )}

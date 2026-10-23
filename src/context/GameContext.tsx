@@ -176,6 +176,7 @@ interface GameContextType {
   toggleAiFleetMaintenance: () => void;
   executeAiAutoDispatch: () => { dispatchedCount: number; message: string };
   dispatchRoadsideMechanic: (tripId: string, repairType: 'mobile' | 'heavy_tow') => { success: boolean; message: string };
+  recallTrip: (tripId: string) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -674,15 +675,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (state.simSpeed === 0) return;
 
-    // Tick every 1000ms real time.
-    // Sim delta in simulation minutes = simSpeed * 1 min
-    const intervalMs = 1000;
+    // Tick every 12000ms real time (12 seconds) to achieve 5x real-time speed (1 real minute = 5 sim minutes).
+    const intervalMs = 12000;
     const timer = setInterval(() => {
       startTransition(() => {
         setState((prevState) => {
           if (prevState.simSpeed === 0) return prevState;
 
-          const deltaSimMinutes = prevState.simSpeed * 1; // 1 sim minute per second at 1x
+          const deltaSimMinutes = 1; // 1 sim minute per 12 seconds (5x real life speed)
           const newSimMinutes = prevState.simTimeMinutes + deltaSimMinutes;
           const currentDay = Math.floor(newSimMinutes / 1440) + 1;
           const prevDay = Math.floor(prevState.simTimeMinutes / 1440) + 1;
@@ -3972,6 +3972,71 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   };
 
+  const recallTrip = (tripId: string) => {
+    const trip = state.activeTrips.find(t => t.id === tripId);
+    if (!trip) return;
+
+    const confirmed = window.confirm("Recall truck to base hub? Active consignment will be cancelled, and the truck will return to its origin hub.");
+    if (!confirmed) return;
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const hours = Math.floor((state.simTimeMinutes % 1440) / 60);
+    const mins = state.simTimeMinutes % 60;
+    const timeFormatted = `Day ${simDay} ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+
+    const cancelFee = 1200;
+    const newBal = Math.max(0, state.balanceUsd - cancelFee);
+    const truck = state.trucks.find(t => t.id === trip.truckId);
+
+    setState(prev => ({
+      ...prev,
+      balanceUsd: newBal,
+      activeTrips: prev.activeTrips.filter(t => t.id !== tripId),
+      trucks: prev.trucks.map(t => t.id === trip.truckId ? {
+        ...t,
+        status: 'idle',
+        activeTripId: null,
+        currentHubId: trip.contract.originHubId,
+      } : t),
+      drivers: prev.drivers.map(d => d.id === trip.driverId ? {
+        ...d,
+        hosStatus: 'off_duty',
+        assignedTruckId: null,
+      } : d),
+      trailers: prev.trailers.map(tr => tr.id === trip.trailerId ? {
+        ...tr,
+        status: 'idle',
+        assignedTruckId: null,
+        currentHubId: trip.contract.originHubId,
+      } : tr),
+      ledger: [
+        {
+          id: `led-recall-${trip.id}-${Date.now()}`,
+          simDay,
+          simTimeFormatted: timeFormatted,
+          type: 'broker_fee',
+          description: `Consignment cancellation & truck recall fee for ${truck?.plate || 'Truck'}`,
+          amountUsd: -cancelFee,
+          runningBalanceUsd: newBal,
+        },
+        ...prev.ledger,
+      ],
+      notifications: [
+        {
+          id: `notif-recall-${trip.id}-${Date.now()}`,
+          simTimeFormatted: timeFormatted,
+          title: '🔄 Truck Recalled to Terminal',
+          message: `${truck?.plate || 'Truck'} successfully recalled to origin hub. Consignment cancelled (-$${cancelFee.toLocaleString()}).`,
+          type: 'breakdown',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ],
+    }));
+
+    notifyUser('Truck Recalled', `Vehicle returned to terminal. Cancellation fee: $${cancelFee.toLocaleString()}`, 'breakdown');
+  };
+
   const dispatchRoadsideMechanic = (tripId: string, repairType: 'mobile' | 'heavy_tow'): { success: boolean; message: string } => {
     const trip = state.activeTrips.find((t) => t.id === tripId);
     if (!trip || !trip.isStalledBreakdown) {
@@ -4093,6 +4158,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toggleAiFleetMaintenance,
         executeAiAutoDispatch,
         dispatchRoadsideMechanic,
+        recallTrip,
       }}
     >
       {children}
