@@ -491,6 +491,7 @@ const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameS
         ...updatedDrivers[driverIndex],
         currentHubId: finished.contract.destinationHubId,
         hosStatus: 'off_duty',
+        assignedTruckId: null,
       };
     }
   }
@@ -1417,6 +1418,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     ...d,
                     currentHubId: finished.contract.destinationHubId,
                     hosStatus: 'off_duty',
+                    assignedTruckId: null,
                     stats: {
                       ...d.stats,
                       deliveriesCompleted: d.stats.deliveriesCompleted + 1,
@@ -3977,7 +3979,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const runAutoDispatchOnState = (currentState: GameState): { nextState: GameState; dispatchedCount: number } => {
     let idleTrucks = [...currentState.trucks.filter(t => t.status === 'idle')];
-    let readyDrivers = [...currentState.drivers.filter(d => !d.assignedTruckId && d.hosStatus !== 'driving' && d.hosStatus !== 'resting')];
+    let readyDrivers = [...currentState.drivers.filter(d => d.hosStatus !== 'driving' && d.hosStatus !== 'resting')];
     let trailers = [...(currentState.trailers || [])];
     let routes = [...currentState.routes];
     let hubs = [...currentState.hubs];
@@ -4003,7 +4005,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let remainingContracts = [...contracts];
 
     for (let i = 0; i < idleTrucks.length; i++) {
-      if (readyDrivers.length === 0 || remainingContracts.length === 0) break;
+      if (readyDrivers.length === 0) break;
 
       const truck = idleTrucks[i];
       const driver = readyDrivers[0];
@@ -4011,12 +4013,68 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Strict regional & hub restriction: Truck must be stationed at the contract's origin hub and both must be in the same region
       const truckHub = hubs.find(h => h.id === truck.currentHubId);
-      const matchingContractIdx = remainingContracts.findIndex(c => {
+      let matchingContractIdx = remainingContracts.findIndex(c => {
         const oHub = hubs.find(h => h.id === c.originHubId);
         const dHub = hubs.find(h => h.id === c.destinationHubId);
         if (!oHub || !dHub || !truckHub) return false;
         return c.originHubId === truck.currentHubId && oHub.region === truckHub.region && dHub.region === truckHub.region;
       });
+
+      if (matchingContractIdx === -1 && truckHub) {
+        const sameRegionHubs = hubs.filter(h => h.region === truckHub.region && h.id !== truckHub.id);
+        if (sameRegionHubs.length > 0) {
+          const destHub = sameRegionHubs[Math.floor(Math.random() * sameRegionHubs.length)];
+          const dx = truckHub.coord.x - destHub.coord.x;
+          const dy = truckHub.coord.y - destHub.coord.y;
+          const dist = Math.max(250, Math.round(Math.sqrt(dx * dx + dy * dy) * 3.5));
+
+          let route = updatedRoutes.find(r => r.originHubId === truckHub.id && r.destinationHubId === destHub.id);
+          if (!route) {
+            route = {
+              id: `route-ai-dyn-${truckHub.code}-${destHub.code}-${Date.now()}`,
+              originHubId: truckHub.id,
+              destinationHubId: destHub.id,
+              name: `${truckHub.name.split(' ')[0]} - ${destHub.name.split(' ')[0]} AI Corridor`,
+              distanceKm: dist,
+              roadType: 'Interstate Highway',
+              baseSpeedLimitKmh: 105,
+              avgElevationGradePct: 1.0,
+              maxGradePct: 5.0,
+              tollCostUsd: Math.round(dist * 0.04),
+              waypoints: [
+                { name: truckHub.name, coord: truckHub.coord, elevationMeters: 50 },
+                { name: destHub.name, coord: destHub.coord, elevationMeters: 40 },
+              ],
+              hazardRisk: 0.1,
+              isUnlocked: true,
+              licenseFeeUsd: 0,
+              requiredRank: 1,
+              trafficRateScore: 90,
+            };
+            updatedRoutes.push(route);
+          }
+
+          const dynamicContract: CargoContract = {
+            id: `cnt-ai-dyn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            title: 'Express Regional Freight Consignment',
+            originHubId: truckHub.id,
+            destinationHubId: destHub.id,
+            category: 'Dry Freight',
+            weightTons: 16,
+            payoutUsd: Math.round(dist * 4.5),
+            bonusOnTimeUsd: Math.round(dist * 0.8),
+            penaltyLateUsd: Math.round(dist * 1.5),
+            deadlineMinutes: Math.round((dist / 85) * 60 * 1.5),
+            temperatureControlled: false,
+            isHazardous: false,
+            shipperCompany: 'NexHaul Logistics Prime',
+            shipperRating: 95,
+          };
+          remainingContracts.unshift(dynamicContract);
+          matchingContractIdx = 0;
+        }
+      }
+
       if (matchingContractIdx === -1) {
         continue;
       }
