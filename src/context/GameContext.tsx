@@ -233,7 +233,7 @@ const createInitialState = (): GameState => {
       currentHubId: primaryHubId,
       status: 'idle',
       odometerKm: 0,
-      fuelCurrentLiters: 300,
+      fuelCurrentLiters: 150, // 50% capacity so it draws from hub bulk fuel stock on start
       adBlueCurrentLiters: 42,
       subsystems: createPristineSubsystems(),
       activeDTCs: [],
@@ -1521,33 +1521,35 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               simTimeMinutes: newSimMinutes,
             });
 
-            // Fuel depletion check & roadside emergency fill
+            // Fuel depletion check & en-route service stop
             let nextFuel = Math.max(0, truck.fuelCurrentLiters - physics.fuelBurnedLiters);
             const nextAdBlue = Math.max(0, truck.adBlueCurrentLiters - physics.adBlueBurnedLiters);
             updatedFuelBurned += physics.fuelBurnedLiters;
 
-            if (nextFuel <= 35 && nextFuel > 0 && truck.fuelCurrentLiters > 35) {
-              const emergencyBuyLiters = Math.min(200, (model.specs.fuelTankCapacityLiters || 600) - nextFuel);
-              const roadsideCost = Math.round(emergencyBuyLiters * 2.85);
-              currentBalance -= roadsideCost;
-              nextFuel += emergencyBuyLiters;
+            const tankCap = model.specs.fuelTankCapacityLiters || 600;
+            const lowFuelThreshold = tankCap * 0.4;
+            if (nextFuel <= lowFuelThreshold && nextFuel > 0 && truck.fuelCurrentLiters > lowFuelThreshold) {
+              const buyLiters = Math.min(tankCap - nextFuel, tankCap * 0.6);
+              const roadFuelCost = Math.round(buyLiters * 1.65); // highway pump price
+              currentBalance -= roadFuelCost;
+              nextFuel += buyLiters;
 
               newLedgerEntries.push({
-                id: `led-roadside-fuel-${trip.id}-${newSimMinutes}-${Math.random().toString(36).substring(2, 7)}`,
+                id: `led-road-fuel-${trip.id}-${newSimMinutes}-${Math.random().toString(36).substring(2, 7)}`,
                 simDay: currentDay,
                 simTimeFormatted: timeFormatted,
                 type: 'fuel_expense',
-                description: `Roadside emergency fuel purchase (${Math.round(emergencyBuyLiters)}L) for ${truck.plate}`,
-                amountUsd: -roadsideCost,
+                description: `En-route highway fuel stop (${Math.round(buyLiters)}L) for ${truck.plate}`,
+                amountUsd: -roadFuelCost,
                 runningBalanceUsd: currentBalance,
               });
 
               newNotifications.push({
-                id: `notif-roadside-fuel-${trip.id}-${newSimMinutes}-${Math.random().toString(36).substring(2, 7)}`,
+                id: `notif-road-fuel-${trip.id}-${newSimMinutes}-${Math.random().toString(36).substring(2, 7)}`,
                 simTimeFormatted: timeFormatted,
-                title: '⛽ Roadside Emergency Fuel Purchase',
-                message: `${truck.plate} ran low on fuel en route. Emergency roadside tanker delivered ${Math.round(emergencyBuyLiters)}L of diesel ($${roadsideCost.toLocaleString()}).`,
-                type: 'breakdown',
+                title: '⛽ En-Route Highway Fuel Stop',
+                message: `${truck.plate} refueled at highway service plaza (${Math.round(buyLiters)}L diesel, $${roadFuelCost.toLocaleString()}).`,
+                type: 'delivery',
                 timestamp: Date.now(),
               });
             }
@@ -2582,7 +2584,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       currentHubId: hubId,
       status: 'idle',
       odometerKm: 250, // factory delivery distance
-      fuelCurrentLiters: model.specs.fuelTankCapacityLiters * 0.9,
+      fuelCurrentLiters: model.specs.fuelTankCapacityLiters * 0.5,
       adBlueCurrentLiters: model.specs.adBlueTankLiters * 0.9,
       subsystems: createPristineSubsystems(),
       activeDTCs: [],
@@ -2690,7 +2692,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       currentHubId: options.hubId,
       status: 'idle',
       odometerKm: 250,
-      fuelCurrentLiters: model.specs.fuelTankCapacityLiters * 0.9,
+      fuelCurrentLiters: model.specs.fuelTankCapacityLiters * 0.5,
       adBlueCurrentLiters: model.specs.adBlueTankLiters * 0.9,
       subsystems: createPristineSubsystems(),
       activeDTCs: [],
