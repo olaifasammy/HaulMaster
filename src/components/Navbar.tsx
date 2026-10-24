@@ -95,13 +95,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
 
             <div className="min-w-0">
-              <div className="text-[11px] sm:text-xs font-extrabold text-white tracking-tight leading-none truncate max-w-[90px] xs:max-w-[120px] sm:max-w-[180px]">
+              <div className="text-xs sm:text-sm font-extrabold text-white tracking-tight leading-none whitespace-nowrap">
                 {state.companyName}
               </div>
-              <div className="flex items-center space-x-1 text-[9px] sm:text-[10px] text-amber-400 font-semibold mt-1 truncate">
+              <div className="flex items-center space-x-1.5 text-[10px] sm:text-xs text-amber-400 font-semibold mt-1 whitespace-nowrap">
                 <span>Rk {currentLevel}</span>
-                <span className="hidden xs:inline">•</span>
-                <span className="font-mono font-bold text-amber-300 truncate max-w-[70px] xs:max-w-[110px]">{state.rankTitle}</span>
+                <span>•</span>
+                <span className="font-mono font-bold text-amber-300">{state.rankTitle}</span>
               </div>
             </div>
           </button>
@@ -125,7 +125,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </nav>
 
         {/* Zone 3: Financial Balances & Action Buttons */}
-        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 ml-auto shrink-0">
           
           {/* Capital & Gold Reserves (Clickable to open Gold Valuation Desk) */}
           <button
@@ -147,23 +147,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span>{state.gold.toLocaleString()}</span>
               </span>
             </div>
-          </button>
-
-          {/* World Events & Incidents Bureau Quick Button */}
-          <button
-            onClick={() => onSelectTab('events')}
-            className={`p-1.5 rounded-lg border transition-all flex items-center gap-1 cursor-pointer min-h-[36px] ${
-              activeEvents.length > 0
-                ? 'bg-amber-500/15 border-amber-500/50 text-amber-400 hover:bg-amber-500/25 shadow-sm shadow-amber-500/10'
-                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-            }`}
-            title="Open Global Events, Incidents & Insurance Bureau"
-          >
-            <span className="text-xs">⚡</span>
-            <span className="hidden md:inline text-[11px] font-mono font-semibold">Risk</span>
-            {activeEvents.length > 0 && (
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-            )}
           </button>
 
           {/* Guide / Field Manual */}

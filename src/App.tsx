@@ -212,7 +212,7 @@ const DashboardContent: React.FC = () => {
         )}
 
         {/* Company Profile Full Page View */}
-        {currentTab === 'profile' && <CompanyProfilePage onOpenAchievements={() => setCurrentTab('achievements')} onOpenDatabase={() => setIsDbModalOpen(true)} onOpenAiPage={() => setCurrentTab('ai')} onOpenExchange={() => setCurrentTab('exchange')} />}
+        {currentTab === 'profile' && <CompanyProfilePage onOpenAchievements={() => setCurrentTab('achievements')} onOpenDatabase={() => setIsDbModalOpen(true)} onOpenAiPage={() => setCurrentTab('ai')} onOpenExchange={() => setCurrentTab('exchange')} onOpenEventsPage={() => { setEventsInitialTab('events'); setCurrentTab('events'); }} />}
       </main>
 
       {/* Floating Mobile AI Quick Action Button (only displayed when AI subscription is active) */}

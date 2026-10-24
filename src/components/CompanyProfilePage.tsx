@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Brain,
   Database,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface CompanyProfilePageProps {
@@ -18,9 +19,10 @@ interface CompanyProfilePageProps {
   onOpenDatabase?: () => void;
   onOpenAiPage?: () => void;
   onOpenExchange: () => void;
+  onOpenEventsPage: () => void;
 }
 
-export const CompanyProfilePage: React.FC<CompanyProfilePageProps> = ({ onOpenAchievements, onOpenDatabase, onOpenAiPage, onOpenExchange }) => {
+export const CompanyProfilePage: React.FC<CompanyProfilePageProps> = ({ onOpenAchievements, onOpenDatabase, onOpenAiPage, onOpenExchange, onOpenEventsPage }) => {
   const { state, resetGame } = useGame();
   const [companyNameInput, setCompanyNameInput] = useState<string>(state.companyName);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
@@ -207,6 +209,27 @@ export const CompanyProfilePage: React.FC<CompanyProfilePageProps> = ({ onOpenAc
           </div>
         </div>
         <ChevronRight className="w-5 h-5 text-purple-400 group-hover:translate-x-1 transition-transform" />
+      </button>
+
+      {/* Global Events, Commercial Risk & Insurance Bureau Banner */}
+      <button
+        onClick={onOpenEventsPage}
+        className="w-full p-6 bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-slate-950 border border-amber-500/40 hover:border-amber-400 rounded-2xl flex items-center justify-between group transition-all cursor-pointer shadow-xl"
+      >
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-xl bg-amber-400 text-slate-950 font-bold">
+            <ShieldAlert className="w-6 h-6" />
+          </div>
+          <div className="text-left">
+            <div className="text-base font-bold text-white group-hover:text-amber-300 transition-colors">
+              Global Events, Commercial Risk & Insurance Bureau
+            </div>
+            <div className="text-xs text-slate-300 mt-0.5">
+              Monitor active macroeconomic world events, review fleet incident records, file insurance claims, and check gold market bullion rates
+            </div>
+          </div>
+        </div>
+        <ChevronRight className="w-5 h-5 text-amber-400 group-hover:translate-x-1 transition-transform" />
       </button>
 
       {/* Section 3: Executive Reset / New Game */}
