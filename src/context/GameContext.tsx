@@ -360,7 +360,7 @@ const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameS
   }
 
   const updatedTrucks = [...prevState.trucks];
-  const updatedTrailers = [...prevState.trailers];
+  let updatedTrailers = [...prevState.trailers];
   const updatedDrivers = [...prevState.drivers];
   const newLedgerEntries: LedgerEntry[] = [];
   const newNotifications: GameEventNotification[] = [];
@@ -490,6 +490,173 @@ const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameS
         currentHubId: finished.contract.destinationHubId,
         hosStatus: 'off_duty',
       };
+    }
+  }
+
+  // Autonomous Offline AI Dispatcher: if AI Dispatcher subscription is active, automatically redispatch idle trucks and drivers while away
+  const isAiSubActive = prevState.aiDispatcherActive && prevState.simTimeMinutes < prevState.aiSubscriptionExpiresSimMinutes;
+  let offlineAiDispatchedCount = 0;
+  if (isAiSubActive) {
+    let availableContracts = [...prevState.availableContracts];
+    if (availableContracts.length === 0) {
+      const unlockedRoutes = prevState.routes.filter(r => r.isUnlocked);
+      availableContracts = generateContractsForRoutes(unlockedRoutes.length > 0 ? unlockedRoutes : prevState.routes, prevState.hubs, 20, updatedTrucks);
+    }
+    availableContracts.sort((a, b) => b.payoutUsd - a.payoutUsd);
+
+    const truckHubMap = new Map<string, string>();
+    for (const t of updatedTrucks) {
+      const activeTrip = finishedTrips.find(ft => ft.truckId === t.id);
+      if (activeTrip) {
+        truckHubMap.set(t.id, activeTrip.contract.destinationHubId);
+      } else if (!updatedTrips.some(ut => ut.truckId === t.id)) {
+        truckHubMap.set(t.id, t.currentHubId);
+      }
+    }
+
+    for (const truck of updatedTrucks) {
+      if (updatedTrips.some(ut => ut.truckId === truck.id)) continue;
+      const currentHubId = truckHubMap.get(truck.id) || truck.currentHubId;
+      const truckHub = prevState.hubs.find(h => h.id === currentHubId);
+      if (!truckHub) continue;
+
+      const driver = updatedDrivers.find(d => !d.assignedTruckId && d.hosStatus !== 'driving' && d.hosStatus !== 'resting');
+      if (!driver) break;
+
+      const contractIdx = availableContracts.findIndex(c => {
+        const oHub = prevState.hubs.find(h => h.id === c.originHubId);
+        const dHub = prevState.hubs.find(h => h.id === c.destinationHubId);
+        if (!oHub || !dHub) return false;
+        return c.originHubId === currentHubId && oHub.region === truckHub.region && dHub.region === truckHub.region;
+      });
+
+      if (contractIdx === -1) continue;
+      const contract = availableContracts[contractIdx];
+      availableContracts.splice(contractIdx, 1);
+
+      let route = prevState.routes.find(r => r.originHubId === contract.originHubId && r.destinationHubId === contract.destinationHubId);
+      if (!route) {
+        const oHub = prevState.hubs.find(h => h.id === contract.originHubId);
+        const dHub = prevState.hubs.find(h => h.id === contract.destinationHubId);
+        if (oHub && dHub) {
+          const dx = oHub.coord.x - dHub.coord.x;
+          const dy = oHub.coord.y - dHub.coord.y;
+          const dist = Math.max(200, Math.round(Math.sqrt(dx * dx + dy * dy) * 3.5));
+          route = {
+            id: `route-offai-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            originHubId: oHub.id,
+            destinationHubId: dHub.id,
+            name: `${oHub.name.split(' ')[0]} - ${dHub.name.split(' ')[0]} AI Offline Express`,
+            distanceKm: dist,
+            roadType: 'Interstate Highway',
+            baseSpeedLimitKmh: 105,
+            avgElevationGradePct: 1.0,
+            maxGradePct: 5.0,
+            tollCostUsd: Math.round(dist * 0.04),
+            waypoints: [
+              { name: oHub.name, coord: oHub.coord, elevationMeters: 50 },
+              { name: dHub.name, coord: dHub.coord, elevationMeters: 40 },
+            ],
+            hazardRisk: 0.1,
+            isUnlocked: true,
+            licenseFeeUsd: 0,
+            requiredRank: 1,
+            trafficRateScore: 90,
+          };
+        }
+      }
+      if (!route) continue;
+
+      let chosenTrailerId: string | null = null;
+      const truckModel = TRUCK_MODELS.find(m => m.id === truck.modelId);
+      if (!truckModel?.isRigid) {
+        let trailer = updatedTrailers.find(tr => tr.status === 'idle' && tr.currentHubId === contract.originHubId);
+        if (!trailer) {
+          const newTr: TrailerInstance = {
+            id: `trl-offai-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            modelId: contract.temperatureControlled ? 'trailer-reefer' : contract.isHazardous ? 'trailer-cistern' : 'trailer-dry-van',
+            plate: `AI-${Math.floor(1000 + Math.random() * 9000)}`,
+            status: 'en_route',
+            currentHubId: contract.originHubId,
+            assignedTruckId: truck.id,
+            assignedTripId: null,
+            conditionPct: 100,
+            odometerKm: 0,
+            purchaseDateSimDay: simDay,
+          };
+          updatedTrailers.push(newTr);
+          trailer = newTr;
+        } else {
+          updatedTrailers = updatedTrailers.map(tr => tr.id === trailer!.id ? { ...tr, status: 'en_route', assignedTruckId: truck.id, currentHubId: contract.originHubId } : tr);
+        }
+        chosenTrailerId = trailer?.id || null;
+      }
+
+      const newOfflineAiTrip: ActiveTrip = {
+        id: `trip-offai-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        contract,
+        corridor: route,
+        truckId: truck.id,
+        driverId: driver.id,
+        trailerId: chosenTrailerId,
+        progressKm: 0,
+        totalDistanceKm: route.distanceKm,
+        elapsedMinutes: 0,
+        departureTimeSimMinutes: prevState.simTimeMinutes,
+        fuelConsumedLiters: 0,
+        telemetry: {
+          currentSpeedKmh: 85,
+          currentGear: 10,
+          engineRpm: 1400,
+          instantFuelRateL100km: 32,
+          instantFuelRateLitersPerHour: 28,
+          engineLoadPct: 65,
+          turboBoostBar: 1.2,
+          oilTempCelsius: 92,
+          oilPressureBar: 4.5,
+          coolantTempCelsius: 88,
+          brakeTempCelsius: 120,
+          retarderActive: false,
+          retarderLevel: 0,
+          currentInclinePct: 0,
+          currentWindSpeedKmh: 10,
+          currentHeadwindComponentKmh: 0,
+          weatherState: getLocalWeather(route.waypoints[0].coord, 50, prevState.simTimeMinutes),
+        },
+        eventLogs: [`[${timeFormatted}] Autonomous AI Offline Dispatcher authorized consignment: ${contract.title}`],
+        isRestingNow: false,
+        isStalledBreakdown: false,
+      };
+
+      updatedTrips.push(newOfflineAiTrip);
+      completedCount++;
+      offlineAiDispatchedCount++;
+
+      const tIdx = updatedTrucks.findIndex(t => t.id === truck.id);
+      if (tIdx >= 0) {
+        updatedTrucks[tIdx] = {
+          ...updatedTrucks[tIdx],
+          status: 'en_route',
+          activeTripId: newOfflineAiTrip.id,
+        };
+      }
+      const dIdx = updatedDrivers.findIndex(d => d.id === driver.id);
+      if (dIdx >= 0) {
+        updatedDrivers[dIdx] = {
+          ...updatedDrivers[dIdx],
+          hosStatus: 'driving',
+          assignedTruckId: truck.id,
+        };
+      }
+
+      newNotifications.push({
+        id: `notif-offai-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        simTimeFormatted: timeFormatted,
+        title: '🤖 Autonomous AI Offline Dispatch',
+        message: `AI Neural Dispatcher auto-assigned ${truck.plate} to "${contract.title}" while away.`,
+        type: 'delivery',
+        timestamp: Date.now(),
+      });
     }
   }
 
