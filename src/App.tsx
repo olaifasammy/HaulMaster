@@ -75,7 +75,6 @@ const DashboardContent: React.FC = () => {
     { id: 'hubs', label: 'Hubs', icon: MapPin },
     { id: 'drivers', label: 'Crew', icon: Users },
     { id: 'ledger', label: 'P&L', icon: DollarSign },
-    { id: 'events', label: 'Risk', icon: Radio },
   ];
 
   // Latest notification toast
