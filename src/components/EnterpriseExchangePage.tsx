@@ -45,8 +45,46 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
   const revolvingLimit = state?.revolvingCreditLimitUsd || 500000;
   const revolvingUsed = state?.revolvingCreditUsedUsd || 0;
 
-  const spotAuctions = state?.spotAuctions || [];
-  const terminalConcessions = state?.terminalConcessions || [];
+  const spotAuctions = state?.spotAuctions && state.spotAuctions.length > 0 ? state.spotAuctions : [
+    {
+      id: 'spot-01',
+      shipperName: 'Maersk Global Container Logistics',
+      cargoTitle: 'Urgent Port-to-Hub Intermodal Freight',
+      weightTons: 22,
+      originName: 'Los Angeles Hub',
+      destinationName: 'Denver Primary Base',
+      distanceKm: 1450,
+      baseBidUsd: 11500,
+      currentHighestBidUsd: 12200,
+      expiresSimMinutes: 720,
+      category: 'General Cargo',
+      isHazardous: false,
+      temperatureControlled: false,
+      bidStatus: 'open' as const,
+    },
+    {
+      id: 'spot-02',
+      shipperName: 'Amazon Prime Fulfillment Network',
+      cargoTitle: 'Priority High-Value E-Commerce Consignment',
+      weightTons: 16,
+      originName: 'Chicago Logistics Center',
+      destinationName: 'Dallas Mega Terminal',
+      distanceKm: 1200,
+      baseBidUsd: 9800,
+      currentHighestBidUsd: 10400,
+      expiresSimMinutes: 960,
+      category: 'Electronics',
+      isHazardous: false,
+      temperatureControlled: false,
+      bidStatus: 'open' as const,
+    },
+  ];
+
+  const terminalConcessions = state?.terminalConcessions && state.terminalConcessions.length > 0 ? state.terminalConcessions : [
+    { id: 'term-lax', name: 'Port of Los Angeles Container Terminal', type: 'port_container' as const, location: 'Los Angeles, CA', acquisitionCostUsd: 2500000, weeklyRevenueUsd: 85000, isOwned: false },
+    { id: 'term-chi', name: 'Chicago Intermodal Rail-Bridge Yard', type: 'rail_bridge' as const, location: 'Chicago, IL', acquisitionCostUsd: 1800000, weeklyRevenueUsd: 62000, isOwned: false },
+    { id: 'term-rot', name: 'Port of Rotterdam Deep-Water Container Pier', type: 'port_container' as const, location: 'Rotterdam, Netherlands', acquisitionCostUsd: 4500000, weeklyRevenueUsd: 165000, isOwned: false },
+  ];
 
   // B2B International Supply Deals
   const b2bDeals = [
@@ -192,12 +230,15 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
       return;
     }
 
-    setState((prev) => ({
-      ...prev,
-      spotAuctions: (prev.spotAuctions || []).map((a) => a.id === auction.id ? { ...a, currentHighestBidUsd: bidAmount, bidStatus: 'won' } : a),
-      balanceUsd: prev.balanceUsd + bidAmount,
-      playerXp: prev.playerXp + 800,
-    }));
+    setState((prev) => {
+      const currentSpots = prev.spotAuctions && prev.spotAuctions.length > 0 ? prev.spotAuctions : spotAuctions;
+      return {
+        ...prev,
+        spotAuctions: currentSpots.map((a) => a.id === auction.id ? { ...a, currentHighestBidUsd: bidAmount, bidStatus: 'won' as const } : a),
+        balanceUsd: prev.balanceUsd + bidAmount,
+        playerXp: prev.playerXp + 800,
+      };
+    });
     notifyUser('🎯 Spot Auction Won', `Successfully won spot auction contract with ${auction.shipperName}. Payout of $${bidAmount.toLocaleString()} credited.`, 'delivery');
   };
 
@@ -245,12 +286,15 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
       return;
     }
 
-    setState((prev) => ({
-      ...prev,
-      terminalConcessions: (prev.terminalConcessions || []).map((t) => t.id === term.id ? { ...t, isOwned: true } : t),
-      balanceUsd: prev.balanceUsd - term.acquisitionCostUsd,
-      playerXp: prev.playerXp + 3500,
-    }));
+    setState((prev) => {
+      const currentTerminals = prev.terminalConcessions && prev.terminalConcessions.length > 0 ? prev.terminalConcessions : terminalConcessions;
+      return {
+        ...prev,
+        terminalConcessions: currentTerminals.map((t) => t.id === term.id ? { ...t, isOwned: true } : t),
+        balanceUsd: prev.balanceUsd - term.acquisitionCostUsd,
+        playerXp: prev.playerXp + 3500,
+      };
+    });
     notifyUser('⚓ Terminal Concession Acquired', `Successfully acquired ${term.name}. Weekly intermodal revenue secured.`, 'delivery');
   };
 
