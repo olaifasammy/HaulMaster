@@ -37,12 +37,16 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
   const [acquiredEquities, setAcquiredEquities] = useState<Array<{ id: string; name: string; costUsd: number; dailyDividendUsd: number; equityPct: number }>>([]);
   const [activePacts, setActivePacts] = useState<Array<{ id: string; name: string; costUsd: number; bonusPct: number }>>([]);
 
-  const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+  const simDay = Math.floor((state?.simTimeMinutes || 0) / 1440) + 1;
 
   // Credit score calculation based on financial state
-  const creditScore = state.balanceUsd > 1000000 ? 'AAA' : state.balanceUsd > 500000 ? 'AA' : state.balanceUsd > 200000 ? 'A' : state.balanceUsd > 50000 ? 'BBB' : 'BB';
-  const revolvingLimit = state.revolvingCreditLimitUsd || 500000;
-  const revolvingUsed = state.revolvingCreditUsedUsd || 0;
+  const balance = state?.balanceUsd || 0;
+  const creditScore = balance > 1000000 ? 'AAA' : balance > 500000 ? 'AA' : balance > 200000 ? 'A' : balance > 50000 ? 'BBB' : 'BB';
+  const revolvingLimit = state?.revolvingCreditLimitUsd || 500000;
+  const revolvingUsed = state?.revolvingCreditUsedUsd || 0;
+
+  const spotAuctions = state?.spotAuctions || [];
+  const terminalConcessions = state?.terminalConcessions || [];
 
   // B2B International Supply Deals
   const b2bDeals = [
@@ -110,7 +114,7 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
   ];
 
   const handleSignB2B = (deal: typeof b2bDeals[0]) => {
-    if (state.playerRank < deal.minRank) {
+    if ((state?.playerRank || 1) < deal.minRank) {
       notifyUser('Rank Restriction', `This international B2B accord requires Carrier Rank ${deal.minRank} (${deal.partner}).`, 'finance');
       return;
     }
@@ -140,12 +144,12 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
   };
 
   const handleAcquireSubsidiary = (sub: typeof subsidiaryTargets[0]) => {
-    if (state.playerRank < sub.minRank) {
+    if ((state?.playerRank || 1) < sub.minRank) {
       notifyUser('Rank Restriction', `M&A acquisition requires Carrier Rank ${sub.minRank}.`, 'finance');
       return;
     }
-    if (state.balanceUsd < sub.costUsd) {
-      notifyUser('Insufficient Capital', `Acquisition cost is $${sub.costUsd.toLocaleString()}, but treasury holds $${state.balanceUsd.toLocaleString()}.`, 'finance');
+    if (balance < sub.costUsd) {
+      notifyUser('Insufficient Capital', `Acquisition cost is $${sub.costUsd.toLocaleString()}, but treasury holds $${balance.toLocaleString()}.`, 'finance');
       return;
     }
     if (!window.confirm(`Proceed with corporate acquisition of ${sub.name}?\n\nAcquisition Cost: $${sub.costUsd.toLocaleString()}\nProjected Daily Dividend: +$${sub.dailyDividendUsd.toLocaleString()} / day`)) {
@@ -166,7 +170,7 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
       notifyUser('Already Active', 'This international trade pact is already ratified.', 'finance');
       return;
     }
-    if (state.balanceUsd < pact.costUsd) {
+    if (balance < pact.costUsd) {
       notifyUser('Insufficient Capital', `Pact ratification cost is $${pact.costUsd.toLocaleString()}.`, 'finance');
       return;
     }
@@ -182,7 +186,7 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
     notifyUser('🌐 Trade Pact Ratified', `Successfully ratified ${pact.name}.`, 'delivery');
   };
 
-  const handlePlaceSpotBid = (auction: typeof state.spotAuctions[0]) => {
+  const handlePlaceSpotBid = (auction: typeof spotAuctions[0]) => {
     const bidAmount = Math.round(auction.currentHighestBidUsd * 1.05);
     if (!window.confirm(`Place competitive spot auction bid of $${bidAmount.toLocaleString()} for ${auction.cargoTitle} (${auction.shipperName})?`)) {
       return;
@@ -190,7 +194,7 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
 
     setState((prev) => ({
       ...prev,
-      spotAuctions: prev.spotAuctions.map((a) => a.id === auction.id ? { ...a, currentHighestBidUsd: bidAmount, bidStatus: 'won' } : a),
+      spotAuctions: (prev.spotAuctions || []).map((a) => a.id === auction.id ? { ...a, currentHighestBidUsd: bidAmount, bidStatus: 'won' } : a),
       balanceUsd: prev.balanceUsd + bidAmount,
       playerXp: prev.playerXp + 800,
     }));
@@ -218,8 +222,8 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
       notifyUser('No Active Balance', 'No revolving credit currently drawn.', 'finance');
       return;
     }
-    if (state.balanceUsd < repayAmount) {
-      notifyUser('Insufficient Treasury', `Treasury holds $${state.balanceUsd.toLocaleString()}, required $${repayAmount.toLocaleString()}.`, 'finance');
+    if (balance < repayAmount) {
+      notifyUser('Insufficient Treasury', `Treasury holds $${balance.toLocaleString()}, required $${repayAmount.toLocaleString()}.`, 'finance');
       return;
     }
     if (!window.confirm(`Repay $${repayAmount.toLocaleString()} to Revolving Credit Facility?`)) return;
@@ -232,8 +236,8 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
     notifyUser('💳 Credit Repaid', `Successfully repaid $${repayAmount.toLocaleString()} to credit facility.`, 'finance');
   };
 
-  const handleAcquireTerminal = (term: typeof state.terminalConcessions[0]) => {
-    if (state.balanceUsd < term.acquisitionCostUsd) {
+  const handleAcquireTerminal = (term: typeof terminalConcessions[0]) => {
+    if (balance < term.acquisitionCostUsd) {
       notifyUser('Insufficient Capital', `Terminal concession cost is $${term.acquisitionCostUsd.toLocaleString()}.`, 'finance');
       return;
     }
@@ -243,7 +247,7 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
 
     setState((prev) => ({
       ...prev,
-      terminalConcessions: prev.terminalConcessions.map((t) => t.id === term.id ? { ...t, isOwned: true } : t),
+      terminalConcessions: (prev.terminalConcessions || []).map((t) => t.id === term.id ? { ...t, isOwned: true } : t),
       balanceUsd: prev.balanceUsd - term.acquisitionCostUsd,
       playerXp: prev.playerXp + 3500,
     }));
@@ -251,8 +255,8 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
   };
 
   const handlePayCarbonTax = () => {
-    const taxDue = Math.round((state.totalCo2EmissionsKg || 12500) * 0.04);
-    if (state.balanceUsd < taxDue) {
+    const taxDue = Math.round((state?.totalCo2EmissionsKg || 12500) * 0.04);
+    if (balance < taxDue) {
       notifyUser('Insufficient Treasury', `Carbon tax due is $${taxDue.toLocaleString()}.`, 'finance');
       return;
     }
@@ -304,7 +308,7 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
                 : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800 border border-slate-700/60'
             }`}
           >
-            <TrendingUp className="w-4 h-4" /> Spot Auctions ({state.spotAuctions.filter(a => a.bidStatus === 'open').length})
+            <TrendingUp className="w-4 h-4" /> Spot Auctions ({spotAuctions.filter(a => a.bidStatus === 'open').length})
           </button>
           <button
             onClick={() => setActiveTab('credit')}
@@ -392,7 +396,7 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
       {/* Tab 1: Spot Freight Auctions */}
       {activeTab === 'spot' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {state.spotAuctions.map((auction) => (
+          {spotAuctions.map((auction) => (
             <div key={auction.id} className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between gap-2 mb-3">
@@ -495,7 +499,7 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
               <p className="text-xs text-slate-400 mt-0.5">Manage fleet liability, cargo all-risk policies, and insurance claim settlements.</p>
             </div>
             <div className="px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono font-bold">
-              Active Tier: {state.insurancePolicy.tierName}
+              Active Tier: {state?.insurancePolicy?.tierName || 'Comprehensive Fleet'}
             </div>
           </div>
 
@@ -511,7 +515,7 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
               </div>
               <button
                 onClick={() => {
-                  setState((prev) => ({ ...prev, insurancePolicy: { policyTier: 'basic_liability', tierName: 'Basic Liability', deductibleUsd: 10000, coverageRatioPercent: 75, dailyPremiumUsd: 120, claimsPaidTotalUsd: prev.insurancePolicy.claimsPaidTotalUsd } }));
+                  setState((prev) => ({ ...prev, insurancePolicy: { policyTier: 'basic_liability', tierName: 'Basic Liability', deductibleUsd: 10000, coverageRatioPercent: 75, dailyPremiumUsd: 120, claimsPaidTotalUsd: prev.insurancePolicy?.claimsPaidTotalUsd || 0 } }));
                   notifyUser('Insurance Updated', 'Switched to Basic Liability policy tier.', 'finance');
                 }}
                 className="mt-4 w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 transition-all cursor-pointer"
@@ -531,7 +535,7 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
               </div>
               <button
                 onClick={() => {
-                  setState((prev) => ({ ...prev, insurancePolicy: { policyTier: 'comprehensive_fleet', tierName: 'Comprehensive Fleet', deductibleUsd: 3500, coverageRatioPercent: 85, dailyPremiumUsd: 350, claimsPaidTotalUsd: prev.insurancePolicy.claimsPaidTotalUsd } }));
+                  setState((prev) => ({ ...prev, insurancePolicy: { policyTier: 'comprehensive_fleet', tierName: 'Comprehensive Fleet', deductibleUsd: 3500, coverageRatioPercent: 85, dailyPremiumUsd: 350, claimsPaidTotalUsd: prev.insurancePolicy?.claimsPaidTotalUsd || 0 } }));
                   notifyUser('Insurance Updated', 'Switched to Comprehensive Fleet policy tier.', 'finance');
                 }}
                 className="mt-4 w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-cyan-500/20 cursor-pointer"
@@ -551,7 +555,7 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
               </div>
               <button
                 onClick={() => {
-                  setState((prev) => ({ ...prev, insurancePolicy: { policyTier: 'platinum_umbrella', tierName: 'Platinum Umbrella All-Risk', deductibleUsd: 500, coverageRatioPercent: 95, dailyPremiumUsd: 750, claimsPaidTotalUsd: prev.insurancePolicy.claimsPaidTotalUsd } }));
+                  setState((prev) => ({ ...prev, insurancePolicy: { policyTier: 'platinum_umbrella', tierName: 'Platinum Umbrella All-Risk', deductibleUsd: 500, coverageRatioPercent: 95, dailyPremiumUsd: 750, claimsPaidTotalUsd: prev.insurancePolicy?.claimsPaidTotalUsd || 0 } }));
                   notifyUser('Insurance Updated', 'Switched to Platinum Umbrella policy tier.', 'finance');
                 }}
                 className="mt-4 w-full py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-amber-500/20 cursor-pointer"
@@ -566,7 +570,7 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
       {/* Tab 4: Port & Rail Terminals */}
       {activeTab === 'terminals' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {state.terminalConcessions.map((term) => (
+          {terminalConcessions.map((term) => (
             <div key={term.id} className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -591,15 +595,15 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
               </div>
 
               <button
-                disabled={term.isOwned || state.balanceUsd < term.acquisitionCostUsd}
+                disabled={term.isOwned || balance < term.acquisitionCostUsd}
                 onClick={() => handleAcquireTerminal(term)}
                 className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  !term.isOwned && state.balanceUsd >= term.acquisitionCostUsd
+                  !term.isOwned && balance >= term.acquisitionCostUsd
                     ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20'
                     : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
                 }`}
               >
-                {term.isOwned ? 'Concession Owned' : state.balanceUsd < term.acquisitionCostUsd ? 'Insufficient Capital' : 'Acquire Terminal Concession'}
+                {term.isOwned ? 'Concession Owned' : balance < term.acquisitionCostUsd ? 'Insufficient Capital' : 'Acquire Terminal Concession'}
               </button>
             </div>
           ))}
@@ -615,7 +619,7 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
               <p className="text-xs text-slate-400 mt-0.5">Track fleet carbon footprint and settle environmental compliance taxes.</p>
             </div>
             <div className="px-3 py-1.5 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-xs font-mono font-bold">
-              Total CO2 Emitted: {Math.round(state.totalCo2EmissionsKg || 12500).toLocaleString()} kg
+              Total CO2 Emitted: {Math.round(state?.totalCo2EmissionsKg || 12500).toLocaleString()} kg
             </div>
           </div>
 
@@ -625,7 +629,7 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
               <p className="text-xs text-slate-400 leading-relaxed">
                 Governments levy a strict carbon tax of $0.04 per kg of CO2 emitted during freight transport. Settling taxes ensures ESG compliance and prevents audit penalties.
               </p>
-              <div className="text-lg font-black text-rose-400">Tax Due: ${Math.round((state.totalCo2EmissionsKg || 12500) * 0.04).toLocaleString()}</div>
+              <div className="text-lg font-black text-rose-400">Tax Due: ${Math.round((state?.totalCo2EmissionsKg || 12500) * 0.04).toLocaleString()}</div>
               <button
                 onClick={handlePayCarbonTax}
                 className="w-full py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-cyan-500/20 cursor-pointer"
@@ -639,7 +643,7 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
               <p className="text-xs text-slate-400 leading-relaxed">
                 Equipping trucks with aerodynamic packages and eco-tires qualifies your enterprise for government green fleet subsidies and tax rebates.
               </p>
-              <div className="text-lg font-black text-emerald-400">Subsidies Earned: ${(state.greenSubsidiesEarnedUsd || 45000).toLocaleString()}</div>
+              <div className="text-lg font-black text-emerald-400">Subsidies Earned: ${(state?.greenSubsidiesEarnedUsd || 45000).toLocaleString()}</div>
               <button
                 onClick={() => {
                   setState((prev) => ({ ...prev, balanceUsd: prev.balanceUsd + 15000, greenSubsidiesEarnedUsd: (prev.greenSubsidiesEarnedUsd || 45000) + 15000 }));
@@ -658,7 +662,7 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
       {activeTab === 'b2b' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {b2bDeals.map((deal) => {
-            const isUnlocked = state.playerRank >= deal.minRank;
+            const isUnlocked = (state?.playerRank || 1) >= deal.minRank;
             return (
               <div key={deal.id} className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
                 <div>
@@ -742,7 +746,7 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
       {activeTab === 'ma' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {subsidiaryTargets.map((sub) => {
-            const isUnlocked = state.playerRank >= sub.minRank;
+            const isUnlocked = (state?.playerRank || 1) >= sub.minRank;
             return (
               <div key={sub.id} className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
                 <div>
@@ -767,15 +771,15 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
                 </div>
 
                 <button
-                  disabled={!isUnlocked || state.balanceUsd < sub.costUsd}
+                  disabled={!isUnlocked || balance < sub.costUsd}
                   onClick={() => handleAcquireSubsidiary(sub)}
                   className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    isUnlocked && state.balanceUsd >= sub.costUsd
+                    isUnlocked && balance >= sub.costUsd
                       ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20'
                       : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
                   }`}
                 >
-                  {!isUnlocked ? `Requires Rank ${sub.minRank}` : state.balanceUsd < sub.costUsd ? 'Insufficient Capital' : 'Execute M&A Acquisition'}
+                  {!isUnlocked ? `Requires Rank ${sub.minRank}` : balance < sub.costUsd ? 'Insufficient Capital' : 'Execute M&A Acquisition'}
                 </button>
               </div>
             );
@@ -803,15 +807,15 @@ export const EnterpriseExchangePage: React.FC<EnterpriseExchangePageProps> = ({ 
                 </div>
 
                 <button
-                  disabled={isRatified || state.balanceUsd < pact.costUsd}
+                  disabled={isRatified || balance < pact.costUsd}
                   onClick={() => handlePurchasePact(pact)}
                   className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    !isRatified && state.balanceUsd >= pact.costUsd
+                    !isRatified && balance >= pact.costUsd
                       ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20'
                       : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
                   }`}
                 >
-                  {isRatified ? 'Pact Active' : state.balanceUsd < pact.costUsd ? 'Insufficient Capital' : 'Ratify Trade Pact'}
+                  {isRatified ? 'Pact Active' : balance < pact.costUsd ? 'Insufficient Capital' : 'Ratify Trade Pact'}
                 </button>
               </div>
             );

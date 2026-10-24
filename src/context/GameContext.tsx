@@ -967,6 +967,50 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ];
           }
 
+          if (!parsed.spotAuctions) {
+            parsed.spotAuctions = [
+              {
+                id: 'spot-01',
+                shipperName: 'Maersk Global Container Logistics',
+                cargoTitle: 'Urgent Port-to-Hub Intermodal Freight',
+                weightTons: 22,
+                originName: 'Los Angeles Hub',
+                destinationName: 'Denver Primary Base',
+                distanceKm: 1450,
+                baseBidUsd: 11500,
+                currentHighestBidUsd: 12200,
+                expiresSimMinutes: 720,
+                category: 'General Cargo',
+                isHazardous: false,
+                temperatureControlled: false,
+                bidStatus: 'open',
+              },
+              {
+                id: 'spot-02',
+                shipperName: 'Amazon Prime Fulfillment Network',
+                cargoTitle: 'Priority High-Value E-Commerce Consignment',
+                weightTons: 16,
+                originName: 'Chicago Logistics Center',
+                destinationName: 'Dallas Mega Terminal',
+                distanceKm: 1200,
+                baseBidUsd: 9800,
+                currentHighestBidUsd: 10400,
+                expiresSimMinutes: 960,
+                category: 'Electronics',
+                isHazardous: false,
+                temperatureControlled: false,
+                bidStatus: 'open',
+              },
+            ];
+          }
+          if (!parsed.terminalConcessions) {
+            parsed.terminalConcessions = [
+              { id: 'term-lax', name: 'Port of Los Angeles Container Terminal', type: 'port_container', location: 'Los Angeles, CA', acquisitionCostUsd: 2500000, weeklyRevenueUsd: 85000, isOwned: false },
+              { id: 'term-chi', name: 'Chicago Intermodal Rail-Bridge Yard', type: 'rail_bridge', location: 'Chicago, IL', acquisitionCostUsd: 1800000, weeklyRevenueUsd: 62000, isOwned: false },
+              { id: 'term-rot', name: 'Port of Rotterdam Deep-Water Container Pier', type: 'port_container', location: 'Rotterdam, Netherlands', acquisitionCostUsd: 4500000, weeklyRevenueUsd: 165000, isOwned: false },
+            ];
+          }
+
           const now = Date.now();
           const lastTime = parsed.lastRealTimeTimestamp || now;
           const realElapsedMs = now - lastTime;
