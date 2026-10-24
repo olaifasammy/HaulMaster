@@ -51,11 +51,11 @@ export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ o
   const companyNetWorth = state.balanceUsd + totalTruckValue + totalHubValue;
 
   const totalActiveDebt = state.loans.reduce((acc, l) => acc + l.remainingBalanceUsd, 0);
-  const maxDebtLimit = Math.min(750000, Math.max(100000, companyNetWorth * 2.5));
+  const maxDebtLimit = Math.max(1000000, companyNetWorth * 4.5);
   const availableCredit = Math.max(0, maxDebtLimit - totalActiveDebt);
   const creditUtilizationPct = Math.round((totalActiveDebt / maxDebtLimit) * 100);
 
-  const creditRating = companyNetWorth > 300000 ? 'AAA (Prime)' : companyNetWorth > 150000 ? 'AA (Investment Grade)' : companyNetWorth > 50000 ? 'A (Stable)' : 'BBB (Speculative)';
+  const creditRating = companyNetWorth > 3000000 ? 'AAA (Prime)' : companyNetWorth > 1500000 ? 'AA (Investment Grade)' : companyNetWorth > 500000 ? 'A (Stable)' : 'BBB (Speculative)';
 
   // Operational metrics for recursive grants
   const totalKm = state.totalKilometersDriven;
@@ -186,10 +186,10 @@ export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ o
           <div>
             <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 font-mono flex items-center gap-2">
               <Percent className="w-4 h-4 text-amber-400" />
-              <span>Available Corporate Debt Facilities</span>
+              <span>Available Corporate Debt Facilities (Scaled by Enterprise Valuation)</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Strictly regulated corporate loan products with transparent amortization and interest rates.
+              Strictly regulated institutional corporate credit facilities scaling dynamically with your fleet value and net worth.
             </p>
           </div>
           {totalActiveDebt >= maxDebtLimit && (
@@ -200,48 +200,17 @@ export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ o
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Facility 1 */}
           <div className="p-5 bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-2xl flex flex-col justify-between space-y-4">
             <div>
               <div className="flex items-center justify-between text-xs font-mono mb-2">
                 <span className="text-amber-400 font-bold">Revolving Line</span>
-                <span className="px-2 py-0.5 bg-amber-500/10 text-amber-300 rounded font-bold">6.5% APR</span>
+                <span className="px-2 py-0.5 bg-amber-500/10 text-amber-300 rounded font-bold">6.2% APR</span>
               </div>
               <h4 className="text-base font-bold text-white">Working Capital Revolver</h4>
               <p className="text-xs text-slate-400 mt-1">
-                Short-term liquidity for fuel reserves, driver payroll, and routine depot maintenance.
-              </p>
-            </div>
-            <div className="space-y-3 pt-3 border-t border-slate-800 font-mono text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Principal Amount:</span>
-                <span className="text-white font-bold">$50,000</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Repayment Term:</span>
-                <span className="text-slate-200">30 Sim Days</span>
-              </div>
-              <button
-                onClick={() => handleApplyLoan(50000, 30, 6.5, 'Working Capital Revolver ($50k)')}
-                disabled={totalActiveDebt + 50000 > maxDebtLimit}
-                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-bold rounded-xl transition-colors cursor-pointer"
-              >
-                Draw $50,000 Facility
-              </button>
-            </div>
-          </div>
-
-          {/* Facility 2 */}
-          <div className="p-5 bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-2xl flex flex-col justify-between space-y-4">
-            <div>
-              <div className="flex items-center justify-between text-xs font-mono mb-2">
-                <span className="text-amber-400 font-bold">Equipment Loan</span>
-                <span className="px-2 py-0.5 bg-amber-500/10 text-amber-300 rounded font-bold">7.0% APR</span>
-              </div>
-              <h4 className="text-base font-bold text-white">Heavy Fleet Financing</h4>
-              <p className="text-xs text-slate-400 mt-1">
-                Medium-term capital dedicated strictly to purchasing new trucks, trailers, and specialized units.
+                Short-term liquidity for fuel reserves, driver payroll, and AI subscriber billing.
               </p>
             </div>
             <div className="space-y-3 pt-3 border-t border-slate-800 font-mono text-xs">
@@ -251,14 +220,45 @@ export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ o
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Repayment Term:</span>
+                <span className="text-slate-200">30 Sim Days</span>
+              </div>
+              <button
+                onClick={() => handleApplyLoan(150000, 30, 6.2, 'Working Capital Revolver ($150k)')}
+                disabled={totalActiveDebt + 150000 > maxDebtLimit}
+                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-bold rounded-xl transition-colors cursor-pointer shadow-lg shadow-amber-500/20"
+              >
+                Draw $150,000 Facility
+              </button>
+            </div>
+          </div>
+
+          {/* Facility 2 */}
+          <div className="p-5 bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-2xl flex flex-col justify-between space-y-4">
+            <div>
+              <div className="flex items-center justify-between text-xs font-mono mb-2">
+                <span className="text-amber-400 font-bold">Equipment Syndicate</span>
+                <span className="px-2 py-0.5 bg-amber-500/10 text-amber-300 rounded font-bold">6.8% APR</span>
+              </div>
+              <h4 className="text-base font-bold text-white">Heavy Fleet Financing Note</h4>
+              <p className="text-xs text-slate-400 mt-1">
+                Medium-term capital dedicated to scaling heavy semi-tractor fleets and specialized trailers.
+              </p>
+            </div>
+            <div className="space-y-3 pt-3 border-t border-slate-800 font-mono text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Principal Amount:</span>
+                <span className="text-white font-bold">$500,000</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Repayment Term:</span>
                 <span className="text-slate-200">60 Sim Days</span>
               </div>
               <button
-                onClick={() => handleApplyLoan(150000, 60, 7.0, 'Heavy Fleet Financing ($150k)')}
-                disabled={totalActiveDebt + 150000 > maxDebtLimit}
-                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-bold rounded-xl transition-colors cursor-pointer"
+                onClick={() => handleApplyLoan(500000, 60, 6.8, 'Heavy Fleet Financing Note ($500k)')}
+                disabled={totalActiveDebt + 500000 > maxDebtLimit}
+                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-bold rounded-xl transition-colors cursor-pointer shadow-lg shadow-amber-500/20"
               >
-                Draw $150,000 Facility
+                Draw $500,000 Facility
               </button>
             </div>
           </div>
@@ -267,29 +267,60 @@ export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ o
           <div className="p-5 bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-2xl flex flex-col justify-between space-y-4">
             <div>
               <div className="flex items-center justify-between text-xs font-mono mb-2">
-                <span className="text-amber-400 font-bold">Terminal Mortgage</span>
-                <span className="px-2 py-0.5 bg-amber-500/10 text-amber-300 rounded font-bold">5.8% APR</span>
+                <span className="text-amber-400 font-bold">Enterprise Syndicate</span>
+                <span className="px-2 py-0.5 bg-amber-500/10 text-amber-300 rounded font-bold">7.2% APR</span>
               </div>
-              <h4 className="text-base font-bold text-white">Infrastructure & Hub Mortgage</h4>
+              <h4 className="text-base font-bold text-white">Global Logistics Expansion Note</h4>
               <p className="text-xs text-slate-400 mt-1">
-                Long-term capital for acquiring gateway hubs, spoke terminals, and workshop bay expansions.
+                High-volume capital for acquiring regional hubs, port concessions, and scaling operations.
               </p>
             </div>
             <div className="space-y-3 pt-3 border-t border-slate-800 font-mono text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-400">Principal Amount:</span>
-                <span className="text-white font-bold">$300,000</span>
+                <span className="text-white font-bold">$1,500,000</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Repayment Term:</span>
+                <span className="text-slate-200">90 Sim Days</span>
+              </div>
+              <button
+                onClick={() => handleApplyLoan(1500000, 90, 7.2, 'Global Logistics Expansion Note ($1.5M)')}
+                disabled={totalActiveDebt + 1500000 > maxDebtLimit}
+                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-bold rounded-xl transition-colors cursor-pointer shadow-lg shadow-amber-500/20"
+              >
+                Draw $1,500,000 Facility
+              </button>
+            </div>
+          </div>
+
+          {/* Facility 4 */}
+          <div className="p-5 bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-2xl flex flex-col justify-between space-y-4">
+            <div>
+              <div className="flex items-center justify-between text-xs font-mono mb-2">
+                <span className="text-cyan-400 font-bold">Sovereign Syndicate</span>
+                <span className="px-2 py-0.5 bg-cyan-500/10 text-cyan-300 rounded font-bold">7.8% APR</span>
+              </div>
+              <h4 className="text-base font-bold text-white">AI Fleet & Infrastructure Note</h4>
+              <p className="text-xs text-slate-400 mt-1">
+                Massive institutional debt facility for multi-year AI suites, terminal ports, and mega-fleets.
+              </p>
+            </div>
+            <div className="space-y-3 pt-3 border-t border-slate-800 font-mono text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Principal Amount:</span>
+                <span className="text-white font-bold">$5,000,000</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Repayment Term:</span>
                 <span className="text-slate-200">120 Sim Days</span>
               </div>
               <button
-                onClick={() => handleApplyLoan(300000, 120, 5.8, 'Infrastructure & Hub Mortgage ($300k)')}
-                disabled={totalActiveDebt + 300000 > maxDebtLimit}
-                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-bold rounded-xl transition-colors cursor-pointer"
+                onClick={() => handleApplyLoan(5000000, 120, 7.8, 'AI Fleet & Infrastructure Note ($5.0M)')}
+                disabled={totalActiveDebt + 5000000 > maxDebtLimit}
+                className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-bold rounded-xl transition-colors cursor-pointer shadow-lg shadow-cyan-500/20"
               >
-                Draw $300,000 Facility
+                Draw $5,000,000 Facility
               </button>
             </div>
           </div>
@@ -299,14 +330,14 @@ export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ o
       {/* Active Loans & Repayment Panel */}
       {state.loans.length > 0 && (
         <div className="space-y-4 pt-4 border-t border-slate-800">
-          <div>
+          <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 font-mono flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-400" />
+              <FileText className="w-4 h-4 text-amber-400" />
               <span>Active Corporate Debt Portfolio ({state.loans.length})</span>
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Daily installments are automatically debited at midnight rollover. Accelerate principal payments at any time.
-            </p>
+            <span className="text-xs font-mono text-slate-400">
+              Total Remaining Balance: <strong className="text-rose-400">${Math.round(totalActiveDebt).toLocaleString()}</strong>
+            </span>
           </div>
 
           <div className="grid grid-cols-1 gap-3">
@@ -316,35 +347,35 @@ export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ o
                 className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs"
               >
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-white font-bold text-sm">Loan #{idx + 1}</span>
-                    <span className="px-2 py-0.5 bg-amber-500/10 text-amber-400 rounded text-[10px]">
+                  <div className="flex items-center gap-3">
+                    <span className="text-amber-400 font-bold">Loan ID: {loan.id.slice(0, 12)}</span>
+                    <span className="px-2 py-0.5 bg-slate-800 text-slate-300 rounded text-[10px]">
                       {loan.daysRemaining} Days Remaining
                     </span>
                   </div>
                   <div className="text-slate-400 text-[11px]">
-                    Daily Amortization Installment: <span className="text-white font-bold">${loan.dailyPaymentUsd}/day</span>
+                    Daily Amortization Installment: <span className="text-white font-bold">${loan.dailyPaymentUsd}/day</span> ({(loan.annualInterestRate * 100).toFixed(1)}% APR)
                   </div>
                 </div>
 
                 <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <span className="text-[10px] text-slate-500 block uppercase">Outstanding Principal</span>
-                    <span className="text-white font-bold text-sm">${Math.round(loan.remainingBalanceUsd).toLocaleString()}</span>
+                    <div className="text-[10px] text-slate-400 uppercase">Remaining Principal</div>
+                    <div className="text-white font-bold text-sm">${Math.round(loan.remainingBalanceUsd).toLocaleString()}</div>
                   </div>
 
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => repayLoan(loan.id, 25000)}
-                      className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-semibold transition-colors cursor-pointer"
+                      onClick={() => repayLoan(loan.id, 50000)}
+                      className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-lg transition-colors cursor-pointer"
                     >
-                      Repay $25k
+                      Repay $50k
                     </button>
                     <button
                       onClick={() => repayLoan(loan.id, loan.remainingBalanceUsd)}
-                      className="px-3 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-lg font-semibold transition-colors cursor-pointer"
+                      className="px-3 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg transition-colors cursor-pointer"
                     >
-                      Full Payoff
+                      Settle Full Loan
                     </button>
                   </div>
                 </div>
@@ -354,104 +385,80 @@ export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ o
         </div>
       )}
 
-      {/* 2. Actively Recursive Government & Industry Subsidies (Grants) */}
-      <div className="space-y-4 pt-4 border-t border-slate-800">
+      {/* 2. Recursive Government & Industry Grants */}
+      <div className="space-y-6 pt-6 border-t border-slate-800">
         <div>
           <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 font-mono flex items-center gap-2">
             <Award className="w-4 h-4 text-emerald-400" />
-            <span>Actively Recursive Government Subsidies & Grants</span>
+            <span>Recursive Government & Industry Subvention Grants</span>
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            Non-repayable corporate grants awarded upon achieving logistics milestones. As your enterprise scales, new tiers unlock recursively!
+            Non-repayable government subventions that scale recursively as your logistics enterprise expands operations.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {grantPrograms.map((prog) => {
-            const activeTierIndex = prog.tiers.findIndex((t) => !claimedGrantTiers.includes(`${prog.id}_tier_${t.tier}`));
-            const isFullyCompleted = activeTierIndex === -1;
-            const currentTier = isFullyCompleted ? prog.tiers[prog.tiers.length - 1] : prog.tiers[activeTierIndex];
-            const previousTierTarget = activeTierIndex > 0 ? prog.tiers[activeTierIndex - 1].target : 0;
-            
-            const currentValue = prog.currentValue;
-            const targetValue = currentTier.target;
-            const isCompleted = currentValue >= targetValue;
-            const grantKey = `${prog.id}_tier_${currentTier.tier}`;
-            const progressPct = isFullyCompleted ? 100 : Math.min(100, Math.max(0, Math.round(((currentValue - previousTierTarget) / (targetValue - previousTierTarget)) * 100)));
-            const IconComp = prog.icon;
-
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {grantPrograms.map((program) => {
+            const Icon = program.icon;
             return (
-              <div
-                key={prog.id}
-                className={`p-5 rounded-2xl border transition-all flex flex-col justify-between space-y-4 ${
-                  isFullyCompleted
-                    ? 'bg-slate-950/70 border-emerald-500/30'
-                    : isCompleted
-                    ? 'bg-slate-900/90 border-amber-500/50 ring-1 ring-amber-500/20'
-                    : 'bg-slate-900/60 border-slate-800'
-                }`}
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
-                        <IconComp className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-white">{prog.title}</h4>
-                        <span className="text-[10px] font-mono text-emerald-400 font-bold">
-                          Tier {currentTier.tier} Subvention: ${currentTier.reward.toLocaleString()}
-                        </span>
-                      </div>
+              <div key={program.id} className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <Icon className="w-5 h-5" />
                     </div>
-
-                    {isFullyCompleted ? (
-                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                        <Star className="w-3 h-3 fill-emerald-400 text-emerald-400" />
-                        <span>Max Tiers</span>
-                      </span>
-                    ) : isCompleted ? (
-                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1 animate-pulse">
-                        <Sparkles className="w-3 h-3" />
-                        <span>Ready to Claim</span>
-                      </span>
-                    ) : (
-                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-mono text-slate-400 bg-slate-950 border border-slate-800">
-                        Tier {currentTier.tier}
-                      </span>
-                    )}
+                    <span className="text-xs font-mono text-slate-400">
+                      Progress: <strong className="text-emerald-400">{Math.round(program.currentValue).toLocaleString()} {program.unit || program.units}</strong>
+                    </span>
                   </div>
 
-                  <p className="text-xs text-slate-400">{prog.description}</p>
+                  <h4 className="text-base font-bold text-white mb-1">{program.title}</h4>
+                  <p className="text-xs text-slate-400 mb-4">{program.description}</p>
 
-                  {/* Progress bar */}
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-xs font-mono">
-                      <span className="text-slate-400">Progress</span>
-                      <span className="text-white font-bold">
-                        {Math.round(currentValue).toLocaleString()} / {targetValue.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
-                      <div
-                        className="bg-gradient-to-r from-emerald-500 to-amber-400 h-full transition-all duration-300"
-                        style={{ width: `${progressPct}%` }}
-                      />
-                    </div>
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-2 scrollbar-none">
+                    {program.tiers.map((t) => {
+                      const grantKey = `${program.id}_tier_${t.tier}`;
+                      const isClaimed = claimedGrantTiers.includes(grantKey);
+                      const isUnlocked = program.currentValue >= t.target;
+
+                      return (
+                        <div
+                          key={t.tier}
+                          className={`p-3 rounded-xl border flex items-center justify-between text-xs font-mono ${
+                            isClaimed
+                              ? 'bg-emerald-950/20 border-emerald-800/60 text-slate-400'
+                              : isUnlocked
+                              ? 'bg-slate-950/80 border-amber-500/40 text-white'
+                              : 'bg-slate-950/40 border-slate-800/60 text-slate-500'
+                          }`}
+                        >
+                          <div>
+                            <span className="font-bold text-white">Tier {t.tier}</span>
+                            <div className="text-[10px] text-slate-400 mt-0.5">
+                              Target: {t.target.toLocaleString()} {program.unit || program.units}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <span className="text-emerald-400 font-bold">+${t.reward.toLocaleString()}</span>
+                            <button
+                              disabled={!isUnlocked || isClaimed}
+                              onClick={() => handleClaimGrantTier(program.title, grantKey, t.reward, t.tier)}
+                              className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-colors cursor-pointer ${
+                                isClaimed
+                                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                                  : isUnlocked
+                                  ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md'
+                                  : 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                              }`}
+                            >
+                              {isClaimed ? 'Claimed' : isUnlocked ? 'Claim Grant' : 'Locked'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
-
-                <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
-                  <span className="text-[11px] font-mono text-slate-400">
-                    {isFullyCompleted ? 'All recursive tiers claimed' : isCompleted ? 'Subvention funds authorized' : 'In progress...'}
-                  </span>
-                  <button
-                    onClick={() => handleClaimGrantTier(prog.title, grantKey, currentTier.reward, currentTier.tier)}
-                    disabled={!isCompleted || isFullyCompleted || claimedGrantTiers.includes(grantKey)}
-                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-bold text-xs font-mono rounded-xl transition-colors cursor-pointer shadow-md"
-                  >
-                    {claimedGrantTiers.includes(grantKey) ? 'Claimed' : `Claim $${currentTier.reward.toLocaleString()}`}
-                  </button>
                 </div>
               </div>
             );
