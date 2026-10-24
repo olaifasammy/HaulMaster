@@ -9,6 +9,8 @@ import {
   RotateCcw,
   AlertTriangle,
   ChevronRight,
+  Brain,
+  Database,
 } from 'lucide-react';
 
 interface CompanyProfilePageProps {
@@ -165,11 +167,47 @@ export const CompanyProfilePage: React.FC<CompanyProfilePageProps> = ({ onOpenAc
         <ChevronRight className="w-5 h-5 text-cyan-400 group-hover:translate-x-1 transition-transform" />
       </button>
 
-      {/* Quick Links: DB & AI */}
-      <div className="flex gap-4">
-        <a href="#" onClick={(e) => { e.preventDefault(); onOpenDatabase?.(); }} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold text-xs rounded-xl transition-colors">DB Page</a>
-        <a href="#" onClick={(e) => { e.preventDefault(); onOpenAiPage?.(); }} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold text-xs rounded-xl transition-colors">AI Page</a>
-      </div>
+      {/* AI Dispatcher Intelligence Suite Banner */}
+      <button
+        onClick={onOpenAiPage}
+        className="w-full p-6 bg-gradient-to-r from-teal-500/20 via-teal-500/10 to-slate-950 border border-teal-500/40 hover:border-teal-400 rounded-2xl flex items-center justify-between group transition-all cursor-pointer shadow-xl"
+      >
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-xl bg-teal-400 text-slate-950 font-bold">
+            <Brain className="w-6 h-6" />
+          </div>
+          <div className="text-left">
+            <div className="text-base font-bold text-white group-hover:text-teal-300 transition-colors">
+              AI Neural Dispatcher & Autonomous Fleet Suite
+            </div>
+            <div className="text-xs text-slate-300 mt-0.5">
+              Configure autonomous AI auto-dispatches, automated maintenance bay overhauls, and subscription tiers
+            </div>
+          </div>
+        </div>
+        <ChevronRight className="w-5 h-5 text-teal-400 group-hover:translate-x-1 transition-transform" />
+      </button>
+
+      {/* Database & Phone Memory Manager Banner */}
+      <button
+        onClick={onOpenDatabase}
+        className="w-full p-6 bg-gradient-to-r from-purple-500/20 via-purple-500/10 to-slate-950 border border-purple-500/40 hover:border-purple-400 rounded-2xl flex items-center justify-between group transition-all cursor-pointer shadow-xl"
+      >
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-xl bg-purple-400 text-slate-950 font-bold">
+            <Database className="w-6 h-6" />
+          </div>
+          <div className="text-left">
+            <div className="text-base font-bold text-white group-hover:text-purple-300 transition-colors">
+              Phone Memory Database & Storage Manager
+            </div>
+            <div className="text-xs text-slate-300 mt-0.5">
+              Inspect IndexedDB persistent storage, export SQL database dumps, and manage game memory backup states
+            </div>
+          </div>
+        </div>
+        <ChevronRight className="w-5 h-5 text-purple-400 group-hover:translate-x-1 transition-transform" />
+      </button>
 
       {/* Section 3: Executive Reset / New Game */}
       <div className="p-6 bg-slate-900 border border-rose-500/30 rounded-2xl space-y-4 shadow-xl">

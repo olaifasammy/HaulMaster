@@ -49,7 +49,6 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'hubs', label: 'Hubs' },
     { id: 'drivers', label: 'Drivers' },
     { id: 'ledger', label: 'Financials' },
-    { id: 'ai', label: 'AI Dispatcher' },
     { id: 'events', label: 'Risk Bureau' },
     { id: 'profile', label: 'Profile' },
   ];
@@ -165,30 +164,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             {activeEvents.length > 0 && (
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
             )}
-          </button>
-
-          {/* Database & Phone Memory Manager */}
-          <button
-            onClick={onOpenDatabaseModal}
-            className="p-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-all flex items-center gap-1 cursor-pointer shadow-sm shadow-cyan-500/10 min-h-[36px]"
-            title="Database & Phone Memory Manager"
-          >
-            <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span className="hidden md:inline text-[11px] font-mono font-semibold">DB</span>
-          </button>
-
-          {/* AI Dispatcher Intelligence Hub */}
-          <button
-            onClick={() => onSelectTab('ai')}
-            className={`p-1.5 rounded-lg border transition-all duration-300 relative cursor-pointer flex items-center gap-1 px-2 min-h-[36px] ${
-              currentTab === 'ai'
-                ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow-[0_0_15px_rgba(34,211,238,0.4)]'
-                : 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40 shadow-[0_0_10px_rgba(34,211,238,0.2)] hover:bg-cyan-500/30'
-            }`}
-            title="Open Neural AI Dispatcher Core"
-          >
-            <Brain className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-pulse" />
-            <span className="hidden md:inline text-[11px] font-mono font-semibold">AI</span>
           </button>
 
           {/* Guide / Field Manual */}
