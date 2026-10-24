@@ -2273,6 +2273,18 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const trailerInstance = trailerId ? state.trailers.find((tr) => tr.id === trailerId) : null;
     const trailerModel = trailerInstance ? TRAILER_MODELS.find((tm) => tm.id === trailerInstance.modelId) : null;
 
+    // Heavy Machinery Realism Check
+    if (contract.category === 'Heavy Machinery') {
+      if (truckModel?.isRigid) {
+        notifyUser('Incompatible Vehicle', 'Rigid trucks are not rated for Heavy Machinery transport. A heavy semi-tractor is required.', 'breakdown');
+        return false;
+      }
+      if (!trailerModel || trailerModel.id !== 'lowboy-heavy') {
+        notifyUser('Incompatible Trailer', 'Heavy Machinery requires a Lowboy / Lowbed heavy transport trailer.', 'breakdown');
+        return false;
+      }
+    }
+
     const truckMaxTons = (truckModel?.specs.maxPayloadKg || 24000) / 1000;
     let maxAllowedPayloadTons = truckMaxTons;
     if (trailerModel) {
@@ -5074,10 +5086,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const driver = readyDrivers[0];
       if (!truck || !driver) continue;
 
+      const truckModel = TRUCK_MODELS.find(m => m.id === truck.modelId);
+
       const truckHub = hubs.find(h => h.id === truck.currentHubId);
 
       // 1. First prioritize contracts originating directly at the truck's current hub
-      let matchingContractIdx = remainingContracts.findIndex(c => c.originHubId === truck.currentHubId);
+      let matchingContractIdx = remainingContracts.findIndex(c => c.originHubId === truck.currentHubId && (c.category !== 'Heavy Machinery' || !truckModel?.isRigid));
 
       // 2. If no contract exists directly at the truck's hub, adapt any available listed contract in the same region
       if (matchingContractIdx === -1 && truckHub) {
@@ -5186,7 +5200,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       let chosenTrailerId: string | null = null;
-      const truckModel = TRUCK_MODELS.find(m => m.id === truck.modelId);
       if (!truckModel?.isRigid) {
         let bestTr = truck.assignedTrailerId ? updatedTrailers.find(tr => tr.id === truck.assignedTrailerId && tr.status === 'idle') : null;
         if (!bestTr) {

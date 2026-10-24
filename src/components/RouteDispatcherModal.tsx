@@ -111,6 +111,11 @@ export const RouteDispatcherModal: React.FC<RouteDispatcherModalProps> = ({
   const hasHazmatTrailer = Boolean(selectedTrailerModel?.supportsHazmatADR);
   const isHazmatTrailerMismatch = requiresHazmat && Boolean(selectedTrailerId) && !hasHazmatTrailer;
 
+  const isHeavyMachinery = contract?.category === 'Heavy Machinery';
+  const isRigidTruck = Boolean(selectedTruckModel?.isRigid);
+  const isLowboyTrailer = selectedTrailerModel?.id === 'lowboy-heavy';
+  const isHeavyMachineryMismatch = isHeavyMachinery && (isRigidTruck || !isLowboyTrailer);
+
   const hasHazmatCert = !contract?.isHazardous || selectedDriver?.stats.hazmatCert;
   const hasEnoughFuel = Boolean(selectedTruck && selectedTruck.fuelCurrentLiters >= 120);
 
@@ -123,7 +128,8 @@ export const RouteDispatcherModal: React.FC<RouteDispatcherModalProps> = ({
     hasEnoughFuel &&
     !isOverweight &&
     !isReeferMismatch &&
-    !isHazmatTrailerMismatch
+    !isHazmatTrailerMismatch &&
+    !isHeavyMachineryMismatch
   );
 
   const handleDispatch = () => {
@@ -469,6 +475,18 @@ export const RouteDispatcherModal: React.FC<RouteDispatcherModalProps> = ({
               <div className="p-2.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
                 <span>ADR Hazmat Consignment: Requires a certified stainless chemical tanker.</span>
+              </div>
+            )}
+
+            {isHeavyMachineryMismatch && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300 space-y-1">
+                <div className="flex items-center gap-2 font-bold text-rose-400">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>HEAVY MACHINERY EQUIPMENT MISMATCH</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-slate-300">
+                  Heavy industrial machinery (e.g. Jet Engine Turbine Castings) cannot be hauled by rigid trucks or box vans. This category strictly requires a heavy semi-tractor (non-rigid) and a Lowboy / Lowbed transport trailer.
+                </p>
               </div>
             )}
 
