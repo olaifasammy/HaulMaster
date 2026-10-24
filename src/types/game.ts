@@ -468,6 +468,33 @@ export interface CommercialInsurancePolicy {
   claimsPaidTotalUsd: number;
 }
 
+export interface SpotAuctionLoad {
+  id: string;
+  shipperName: string;
+  cargoTitle: string;
+  weightTons: number;
+  originName: string;
+  destinationName: string;
+  distanceKm: number;
+  baseBidUsd: number;
+  currentHighestBidUsd: number;
+  expiresSimMinutes: number;
+  category: string;
+  isHazardous: boolean;
+  temperatureControlled: boolean;
+  bidStatus: 'open' | 'won' | 'lost';
+}
+
+export interface TerminalConcession {
+  id: string;
+  name: string;
+  type: 'port_container' | 'rail_bridge' | 'air_freight';
+  location: string;
+  acquisitionCostUsd: number;
+  weeklyRevenueUsd: number;
+  isOwned: boolean;
+}
+
 export interface GameState {
   companyName: string;
   balanceUsd: number;
@@ -521,6 +548,14 @@ export interface GameState {
   aiAutoRenew?: boolean;
   aiAutoDispatchEnabled?: boolean;
   claimedGrantIds: string[];
+  creditScore: string;
+  revolvingCreditLimitUsd: number;
+  revolvingCreditUsedUsd: number;
+  spotAuctions: SpotAuctionLoad[];
+  terminalConcessions: TerminalConcession[];
+  totalCo2EmissionsKg: number;
+  carbonTaxPaidUsd: number;
+  greenSubsidiesEarnedUsd: number;
 }
 
 export type MechanicalAssemblyCategory = 'engine' | 'transmission' | 'drivetrain' | 'brakes' | 'cooling' | 'suspension' | 'emissions' | 'exhaust' | 'tires';
