@@ -163,7 +163,7 @@ export const INITIAL_TRAILERS: TrailerInstance[] = [
     serialNumber: 'AH53-99214',
     currentHubId: 'hub-seattle',
     status: 'idle',
-    odometerKm: 28400,
+    odometerKm: 0,
     hasAeroSkirts: true,
     hasReeferUnit: false,
     reeferFuelCurrentLiters: 0,
