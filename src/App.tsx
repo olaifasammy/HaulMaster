@@ -22,7 +22,7 @@ import { DatabaseManagerModal } from './components/DatabaseManagerModal';
 import { AiDispatcherPage } from './components/AiDispatcherPage';
 import { RepairWorkshopPage } from './components/RepairWorkshopPage';
 import { AiQuickActionModal } from './components/AiQuickActionModal';
-import { IncidentsAndEventsModal } from './components/IncidentsAndEventsModal';
+import { IncidentsAndEventsPage } from './components/IncidentsAndEventsPage';
 import {
   Activity,
   Truck,
@@ -40,6 +40,7 @@ import {
   Trophy,
   Wrench,
   Brain,
+  Radio,
 } from 'lucide-react';
 
 const DashboardContent: React.FC = () => {
@@ -51,7 +52,6 @@ const DashboardContent: React.FC = () => {
   const [isCompanyProfileOpen, setIsCompanyProfileOpen] = useState<boolean>(false);
   const [isDbModalOpen, setIsDbModalOpen] = useState<boolean>(false);
   const [isAiQuickModalOpen, setIsAiQuickModalOpen] = useState<boolean>(false);
-  const [isEventsModalOpen, setIsEventsModalOpen] = useState<boolean>(false);
   const [eventsInitialTab, setEventsInitialTab] = useState<'events' | 'incidents' | 'insurance' | 'gold'>('events');
   const [preselectedContractId, setPreselectedContractId] = useState<string | undefined>(undefined);
 
@@ -62,7 +62,7 @@ const DashboardContent: React.FC = () => {
 
   const handleOpenEventsModal = (tab: 'events' | 'incidents' | 'insurance' | 'gold' = 'events') => {
     setEventsInitialTab(tab);
-    setIsEventsModalOpen(true);
+    setCurrentTab('events');
   };
 
   const isSubActive = !!(state?.aiDispatcherActive && (state?.simTimeMinutes || 0) < (state?.aiSubscriptionExpiresSimMinutes || 0));
@@ -75,6 +75,7 @@ const DashboardContent: React.FC = () => {
     { id: 'hubs', label: 'Hubs', icon: MapPin },
     { id: 'drivers', label: 'Crew', icon: Users },
     { id: 'ledger', label: 'P&L', icon: DollarSign },
+    { id: 'events', label: 'Risk', icon: Radio },
   ];
 
   // Latest notification toast
@@ -193,6 +194,18 @@ const DashboardContent: React.FC = () => {
         {/* AI Dispatcher Full Page View */}
         {currentTab === 'ai' && <AiDispatcherPage onOpenDispatch={(contractId) => handleOpenDispatch(contractId)} />}
 
+        {/* Global Events & Commercial Risk Bureau Full Page View */}
+        {currentTab === 'events' && (
+          <IncidentsAndEventsPage
+            initialTab={eventsInitialTab}
+            onOpenWorkshop={(truckId) => {
+              setWorkshopTruckId(truckId);
+              setCurrentTab('repair');
+            }}
+            onSelectTab={setCurrentTab}
+          />
+        )}
+
         {/* Company Profile Full Page View */}
         {currentTab === 'profile' && <CompanyProfilePage onOpenAchievements={() => setCurrentTab('achievements')} onOpenDatabase={() => setIsDbModalOpen(true)} onOpenAiPage={() => setCurrentTab('ai')} />}
       </main>
@@ -213,7 +226,7 @@ const DashboardContent: React.FC = () => {
       {/* Fixed Mobile Bottom Tab Bar (375px - 1024px) */}
       <nav
         aria-label="Mobile Navigation"
-        className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 border-t border-slate-800/90 backdrop-blur-md lg:hidden h-16 px-1 flex items-center justify-around"
+        className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 border-t border-slate-800/90 backdrop-blur-md lg:hidden h-16 px-1 flex items-center justify-around overflow-x-auto no-scrollbar"
       >
         {mobileNavItems.map((item) => {
           const Icon = item.icon;
@@ -278,13 +291,6 @@ const DashboardContent: React.FC = () => {
         isOpen={isDbModalOpen}
         onClose={() => setIsDbModalOpen(false)}
       />
-
-      {isEventsModalOpen && (
-        <IncidentsAndEventsModal
-          initialTab={eventsInitialTab}
-          onClose={() => setIsEventsModalOpen(false)}
-        />
-      )}
 
 
 

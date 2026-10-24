@@ -50,6 +50,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'drivers', label: 'Drivers' },
     { id: 'ledger', label: 'Financials' },
     { id: 'ai', label: 'AI Dispatcher' },
+    { id: 'events', label: 'Risk Bureau' },
     { id: 'profile', label: 'Profile' },
   ];
 
@@ -151,7 +152,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* World Events & Incidents Bureau Quick Button */}
           <button
-            onClick={() => onOpenEventsModal?.('events')}
+            onClick={() => onSelectTab('events')}
             className={`p-1.5 rounded-lg border transition-all flex items-center gap-1 cursor-pointer min-h-[36px] ${
               activeEvents.length > 0
                 ? 'bg-amber-500/15 border-amber-500/50 text-amber-400 hover:bg-amber-500/25 shadow-sm shadow-amber-500/10'
@@ -160,7 +161,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             title="Open Global Events, Incidents & Insurance Bureau"
           >
             <span className="text-xs">⚡</span>
-            <span className="hidden md:inline text-[11px] font-mono font-semibold">Events</span>
+            <span className="hidden md:inline text-[11px] font-mono font-semibold">Risk</span>
             {activeEvents.length > 0 && (
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
             )}
