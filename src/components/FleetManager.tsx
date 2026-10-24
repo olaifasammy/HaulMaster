@@ -29,7 +29,7 @@ export const FleetManager: React.FC<FleetManagerProps> = ({ onInspectTruck, onOp
   const [inventoryTab, setInventoryTab] = useState<'trucks' | 'trailers'>('trucks');
 
   // Stationed Hub Filter
-  const [selectedStationedHub, setSelectedStationedHub] = useState<string>('all');
+  const [selectedStationedHub, setSelectedStationedHub] = useState<string>(() => ownedHubs[0]?.id || '');
   const [ferryTargetTruckId, setFerryTargetTruckId] = useState<string | null>(null);
   const [ferryDestHubId, setFerryDestHubId] = useState<string>('');
 
@@ -46,14 +46,14 @@ export const FleetManager: React.FC<FleetManagerProps> = ({ onInspectTruck, onOp
 
   // Filtered trucks by stationed hub
   const filteredTrucks = state.trucks.filter((t) => {
-    if (selectedStationedHub !== 'all' && t.currentHubId !== selectedStationedHub) {
+    if (selectedStationedHub && t.currentHubId !== selectedStationedHub) {
       return false;
     }
     return true;
   });
 
   const filteredTrailers = trailers.filter((tr) => {
-    if (selectedStationedHub !== 'all' && tr.currentHubId !== selectedStationedHub) {
+    if (selectedStationedHub && tr.currentHubId !== selectedStationedHub) {
       return false;
     }
     return true;
@@ -108,16 +108,6 @@ export const FleetManager: React.FC<FleetManagerProps> = ({ onInspectTruck, onOp
               <MapPin className="w-3.5 h-3.5 text-amber-400" />
               <span>Yard:</span>
             </span>
-            <button
-              onClick={() => setSelectedStationedHub('all')}
-              className={`px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap text-xs ${
-                selectedStationedHub === 'all'
-                  ? 'bg-amber-400 text-slate-950 font-bold'
-                  : 'text-slate-400 hover:text-white bg-slate-900 border border-slate-800'
-              }`}
-            >
-              All Yards
-            </button>
             {ownedHubs.map((hub) => (
               <button
                 key={hub.id}
