@@ -51,6 +51,12 @@ export function processAiFleetMaintenance(state: GameState, deltaSimMinutes: num
   const newLedgerEntries: LedgerEntry[] = [];
   const newNotifications: GameEventNotification[] = [];
 
+  const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+  const hours = Math.floor((state.simTimeMinutes % 1440) / 60);
+  const mins = state.simTimeMinutes % 60;
+  const timeFormatted = `Day ${simDay} ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+  const simTimeFormatted = timeFormatted;
+
   if (!isMaintenanceActive) {
     // If maintenance subscription is inactive, ensure any stuck maintenance trucks are released to idle
     let released = false;
@@ -75,11 +81,6 @@ export function processAiFleetMaintenance(state: GameState, deltaSimMinutes: num
       newNotifications,
     };
   }
-
-  const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
-  const hours = Math.floor((state.simTimeMinutes % 1440) / 60);
-  const mins = state.simTimeMinutes % 60;
-  const timeFormatted = `Day ${simDay} ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
 
   for (let i = 0; i < updatedTrucks.length; i++) {
     const truck = updatedTrucks[i];
