@@ -173,7 +173,7 @@ interface GameContextType {
   clearDTCs: (truckId: string) => void;
   activateAiDispatcher: (tier: '7d' | '1m' | 'auto', useGold?: boolean) => boolean;
   activateAiFleetMaintenance: (tier: '7d' | '1m' | 'auto', useGold?: boolean) => boolean;
-  activateAiSuite: (options: { planTier: '7d' | '1m' | 'auto' | 'year'; includeMaintenance: boolean; useGold: boolean; autoRenew: boolean }) => boolean;
+  activateAiSuite: (options: { planTier: '7d' | '1m' | 'auto' | 'year'; includeMaintenance: boolean; includeOfflineDispatch: boolean; useGold: boolean; autoRenew: boolean }) => boolean;
   toggleAiFleetMaintenance: () => void;
   executeAiAutoDispatch: () => { dispatchedCount: number; message: string };
   dispatchRoadsideMechanic: (tripId: string, repairType: 'mobile' | 'heavy_tow') => { success: boolean; message: string };
@@ -299,6 +299,8 @@ const createInitialState = (): GameState => {
     aiSubscriptionExpiresSimMinutes: 0,
     aiFleetMaintenanceActive: false,
     aiFleetMaintenanceExpiresSimMinutes: 0,
+    aiOfflineDispatchActive: false,
+    aiOfflineDispatchExpiresSimMinutes: 0,
     aiAutoRenew: false,
   };
 };
@@ -493,10 +495,10 @@ const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameS
     }
   }
 
-  // Autonomous Offline AI Dispatcher: if AI Dispatcher subscription is active, automatically redispatch idle trucks and drivers while away
-  const isAiSubActive = prevState.aiDispatcherActive && prevState.simTimeMinutes < prevState.aiSubscriptionExpiresSimMinutes;
+  // Autonomous Offline AI Dispatcher: if AI Offline Dispatch add-on subscription is active, automatically redispatch idle trucks and drivers while away
+  const isAiOfflineSubActive = prevState.aiOfflineDispatchActive && prevState.simTimeMinutes < prevState.aiOfflineDispatchExpiresSimMinutes;
   let offlineAiDispatchedCount = 0;
-  if (isAiSubActive) {
+  if (isAiOfflineSubActive) {
     let availableContracts = [...prevState.availableContracts];
     if (availableContracts.length === 0) {
       const unlockedRoutes = prevState.routes.filter(r => r.isUnlocked);

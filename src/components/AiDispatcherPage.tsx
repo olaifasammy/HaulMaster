@@ -17,6 +17,7 @@ export const AiDispatcherPage: React.FC<AiDispatcherPageProps> = ({ onOpenDispat
   // Unified Form State
   const [selectedPlan, setSelectedPlan] = useState<'7d' | '1m' | 'auto' | 'year'>('1m');
   const [includeMaintenance, setIncludeMaintenance] = useState<boolean>(true);
+  const [includeOfflineDispatch, setIncludeOfflineDispatch] = useState<boolean>(true);
   const [autoRenew, setAutoRenew] = useState<boolean>(false);
 
   const isSubActive = !!(state?.aiDispatcherActive && (state?.simTimeMinutes || 0) < (state?.aiSubscriptionExpiresSimMinutes || 0));
@@ -26,6 +27,10 @@ export const AiDispatcherPage: React.FC<AiDispatcherPageProps> = ({ onOpenDispat
   const isMaintActive = !!(state?.aiFleetMaintenanceActive && (state?.simTimeMinutes || 0) < (state?.aiFleetMaintenanceExpiresSimMinutes || 0));
   const maintRemainingMinutes = Math.max(0, (state?.aiFleetMaintenanceExpiresSimMinutes || 0) - (state?.simTimeMinutes || 0));
   const maintRemainingDays = Math.ceil(maintRemainingMinutes / 1440);
+
+  const isOfflineActive = !!(state?.aiOfflineDispatchActive && (state?.simTimeMinutes || 0) < (state?.aiOfflineDispatchExpiresSimMinutes || 0));
+  const offlineRemainingMinutes = Math.max(0, (state?.aiOfflineDispatchExpiresSimMinutes || 0) - (state?.simTimeMinutes || 0));
+  const offlineRemainingDays = Math.ceil(offlineRemainingMinutes / 1440);
 
   // Pricing Matrix
   const plans = {
@@ -40,11 +45,18 @@ export const AiDispatcherPage: React.FC<AiDispatcherPageProps> = ({ onOpenDispat
     'auto': { usd: 350000, gold: 280 },
     'year': { usd: 650000, gold: 500 },
   };
+  const offlineDispatchPlans = {
+    '7d': { usd: 35000, gold: 35 },
+    '1m': { usd: 120000, gold: 100 },
+    'auto': { usd: 350000, gold: 280 },
+    'year': { usd: 650000, gold: 500 },
+  };
 
   const currentPlan = plans[selectedPlan];
   const currentMaint = includeMaintenance ? maintPlans[selectedPlan] : { usd: 0, gold: 0 };
-  const totalUsd = currentPlan.usd + currentMaint.usd;
-  const totalGold = currentPlan.gold + currentMaint.gold;
+  const currentOffline = includeOfflineDispatch ? offlineDispatchPlans[selectedPlan] : { usd: 0, gold: 0 };
+  const totalUsd = currentPlan.usd + currentMaint.usd + currentOffline.usd;
+  const totalGold = currentPlan.gold + currentMaint.gold + currentOffline.gold;
 
   const handleCheckout = (useGold: boolean) => {
     const costStr = useGold ? `${totalGold} Gold coins` : `$${totalUsd.toLocaleString()} USD`;
@@ -58,6 +70,7 @@ export const AiDispatcherPage: React.FC<AiDispatcherPageProps> = ({ onOpenDispat
     const success = activateAiSuite({
       planTier: selectedPlan,
       includeMaintenance,
+      includeOfflineDispatch,
       useGold,
       autoRenew,
     });
@@ -116,6 +129,33 @@ export const AiDispatcherPage: React.FC<AiDispatcherPageProps> = ({ onOpenDispat
           <span>{successMsg}</span>
         </div>
       )}
+
+      {/* Autonomous Offline Dispatcher & Maintenance Feature Highlights */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex items-start gap-3 shadow-md">
+          <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400 shrink-0 mt-0.5">
+            <Zap className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-white">Autonomous Offline Fleet Redispatch</h4>
+            <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+              When active, the AI neural core automatically detects when trucks complete their hauls and become idle, instantly pairing them with lucrative regional consignments even while you are offline.
+            </p>
+          </div>
+        </div>
+
+        <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex items-start gap-3 shadow-md">
+          <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0 mt-0.5">
+            <ShieldCheck className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-white">Autonomous Fleet Maintenance Add-on</h4>
+            <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+              Works harmoniously alongside auto-dispatching to continuously monitor component wear, execute B-Services, and maintain 100% fleet reliability without human intervention.
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Compacted vs Expanded Subscription & Checkout Card */}
       {isSubActive && !isExpanded ? (
@@ -220,6 +260,25 @@ export const AiDispatcherPage: React.FC<AiDispatcherPageProps> = ({ onOpenDispat
                     </span>
                     <p className="text-[11px] text-slate-400 leading-snug">
                       Automatically monitors fleet health and executes preventive servicing & overhauls (+${maintPlans[selectedPlan].usd.toLocaleString()} or {maintPlans[selectedPlan].gold} Gold).
+                    </p>
+                  </div>
+                </label>
+
+                {/* Autonomous Offline Dispatch Add-on Checkbox */}
+                <label className="flex items-start gap-3 cursor-pointer pt-2 border-t border-slate-800/80">
+                  <input
+                    type="checkbox"
+                    checked={includeOfflineDispatch}
+                    onChange={(e) => setIncludeOfflineDispatch(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-0 cursor-pointer"
+                  />
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Zap className="w-4 h-4 text-cyan-400" />
+                      <span>Autonomous Offline AI Dispatcher Add-on</span>
+                    </span>
+                    <p className="text-[11px] text-slate-400 leading-snug">
+                      Continuously detects idle trucks and redispatches them to lucrative regional consignments while you are offline (+${offlineDispatchPlans[selectedPlan].usd.toLocaleString()} or {offlineDispatchPlans[selectedPlan].gold} Gold).
                     </p>
                   </div>
                 </label>

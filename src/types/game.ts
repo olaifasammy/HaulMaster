@@ -420,6 +420,8 @@ export interface GameState {
   aiSubscriptionExpiresSimMinutes: number;
   aiFleetMaintenanceActive: boolean;
   aiFleetMaintenanceExpiresSimMinutes: number;
+  aiOfflineDispatchActive: boolean;
+  aiOfflineDispatchExpiresSimMinutes: number;
   aiAutoRenew?: boolean;
 }
 
