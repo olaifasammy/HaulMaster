@@ -1551,7 +1551,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             updatedFuelBurned += physics.fuelBurnedLiters;
 
             const tankCap = model.specs.fuelTankCapacityLiters || 600;
-            const lowFuelThreshold = tankCap * 0.4;
+            const lowFuelThreshold = tankCap * 0.65;
             if (nextFuel <= lowFuelThreshold && nextFuel > 0 && truck.fuelCurrentLiters > lowFuelThreshold) {
               const buyLiters = Math.min(tankCap - nextFuel, tankCap * 0.6);
               const roadFuelCost = Math.round(buyLiters * 1.65); // highway pump price
