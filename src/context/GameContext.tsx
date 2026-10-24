@@ -1505,6 +1505,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               trailerEmptyWeightKg: trailerModel?.emptyWeightKg || 0,
               deltaSeconds,
               currentSpeedKmh: trip.telemetry.currentSpeedKmh,
+              driverId: driver.id,
+              simTimeMinutes: newSimMinutes,
             });
 
             // Fuel depletion check & roadside emergency fill

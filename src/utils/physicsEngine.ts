@@ -29,6 +29,21 @@ export interface StepPhysicsParams {
   trailerEmptyWeightKg?: number;
   deltaSeconds: number; // e.g. 60s per sim minute
   currentSpeedKmh: number;
+  driverId?: string;
+  simTimeMinutes?: number;
+}
+
+export function getDriverPersonality(driverId: string) {
+  let hash = 0;
+  for (let i = 0; i < driverId.length; i++) {
+    hash = (hash << 5) - hash + driverId.charCodeAt(i);
+    hash |= 0;
+  }
+  const positiveHash = Math.abs(hash);
+  const speedMultiplier = 0.92 + (positiveHash % 23) * 0.01; // 0.92 to 1.14 (cautious vs speed demon)
+  const throttleResponsiveness = 0.85 + ((positiveHash >> 3) % 40) * 0.01; // 0.85 to 1.25
+  const cruiseVariance = 3.5 + ((positiveHash >> 6) % 6); // 3.5 to 9.5 km/h fluctuation
+  return { speedMultiplier, throttleResponsiveness, cruiseVariance };
 }
 
 export interface StepPhysicsResult {
@@ -59,13 +74,14 @@ export function computePhysicsStep(params: StepPhysicsParams): StepPhysicsResult
     trailerEmptyWeightKg,
     deltaSeconds,
     currentSpeedKmh,
+    driverId,
+    simTimeMinutes,
   } = params;
 
   // 1. Total Gross Combination Weight (GCW) in kg
   const totalMassKg = specs.curbWeightKg + (trailerEmptyWeightKg || 0) + payloadKg;
 
-  // 2. Road & Weather friction and speed targeting
-  // Tire compound adjusts wet/snow grip: severe_snow provides +25% grip on snow/ice
+  // 2. Road & Weather friction and speed targeting with Driver Personality
   let compoundGripFactor = 1.0;
   if (tireCompound === 'severe_snow' && weather.type.includes('Snow')) {
     compoundGripFactor = 1.25;
@@ -75,16 +91,29 @@ export function computePhysicsStep(params: StepPhysicsParams): StepPhysicsResult
 
   const effectiveRoadFriction = Math.min(1.0, weather.roadFrictionCoeff * compoundGripFactor);
   const frictionLimitSpeedKmh = 120 * Math.sqrt(effectiveRoadFriction / 0.85);
-  const targetSpeedKmh = Math.min(speedLimitKmh, frictionLimitSpeedKmh);
 
-  // Smooth acceleration / cruise adjustment
+  const personality = getDriverPersonality(driverId || 'drv-default');
+  const fatiguePenalty = driverStats.fatigueLevel > 50 ? (driverStats.fatigueLevel - 50) * 0.002 : 0;
+  const effectiveSpeedMultiplier = Math.max(0.85, personality.speedMultiplier - fatiguePenalty);
+
+  const weatherCautionFactor = weather.type.includes('Snow') || weather.type.includes('Rain') || weather.type.includes('Blizzard')
+    ? (driverStats.safetyRating > 75 ? 0.92 : 0.97)
+    : 1.0;
+
+  const timeSec = simTimeMinutes !== undefined ? simTimeMinutes * 60 : Date.now() / 1000;
+  const microFluctuation = Math.sin(timeSec * 0.03 + (driverId ? driverId.charCodeAt(0) : 1)) * personality.cruiseVariance;
+
+  const baseTarget = Math.min(speedLimitKmh * effectiveSpeedMultiplier * weatherCautionFactor, frictionLimitSpeedKmh);
+  const targetSpeedKmh = Math.max(15, baseTarget + microFluctuation);
+
+  // Smooth acceleration / braking adjustment with driver responsiveness
   let speedKmh = currentSpeedKmh;
   if (speedKmh <= 0) {
     speedKmh = Math.min(targetSpeedKmh, 25);
   } else {
-    // If approaching target speed
     const diff = targetSpeedKmh - speedKmh;
-    speedKmh = speedKmh + diff * 0.15;
+    const rate = diff > 0 ? 0.12 * personality.throttleResponsiveness : 0.22 * personality.throttleResponsiveness; // braking sharper than acceleration
+    speedKmh = speedKmh + diff * rate;
   }
   const speedMs = speedKmh / 3.6;
 
