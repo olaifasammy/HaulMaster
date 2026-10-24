@@ -12,6 +12,7 @@ import {
   Fuel,
   Wrench,
   Activity,
+  Globe,
 } from 'lucide-react';
 
 interface FleetManagerProps {
@@ -28,10 +29,27 @@ export const FleetManager: React.FC<FleetManagerProps> = ({ onInspectTruck, onOp
   // Fleet Inventory Sub-Tabs
   const [inventoryTab, setInventoryTab] = useState<'trucks' | 'trailers'>('trucks');
 
+  // Unique regions of owned hubs
+  const activeRegions = Array.from(new Set(ownedHubs.map((h) => h.region)));
+  const [selectedRegion, setSelectedRegion] = useState<string>(() => activeRegions[0] || 'North America');
+
+  // Hubs filtered by selected region (if multiple regions active)
+  const regionHubs = activeRegions.length > 1 
+    ? ownedHubs.filter((h) => h.region === selectedRegion)
+    : ownedHubs;
+
   // Stationed Hub Filter
-  const [selectedStationedHub, setSelectedStationedHub] = useState<string>(() => ownedHubs[0]?.id || '');
+  const [selectedStationedHub, setSelectedStationedHub] = useState<string>(() => regionHubs[0]?.id || '');
   const [ferryTargetTruckId, setFerryTargetTruckId] = useState<string | null>(null);
   const [ferryDestHubId, setFerryDestHubId] = useState<string>('');
+
+  const handleRegionSelect = (region: string) => {
+    setSelectedRegion(region);
+    const firstHubInRegion = ownedHubs.find(h => h.region === region);
+    if (firstHubInRegion) {
+      setSelectedStationedHub(firstHubInRegion.id);
+    }
+  };
 
   // Expanded truck cards state for toggling detailed view
   const [expandedTruckIds, setExpandedTruckIds] = useState<string[]>([]);
@@ -102,25 +120,49 @@ export const FleetManager: React.FC<FleetManagerProps> = ({ onInspectTruck, onOp
             </button>
           </div>
 
-          {/* Stationed Yard Filter */}
-          <div className="flex items-center gap-2 overflow-x-auto text-xs font-mono py-1">
-            <span className="text-slate-400 font-bold flex items-center gap-1 shrink-0">
-              <MapPin className="w-3.5 h-3.5 text-amber-400" />
-              <span>Yard:</span>
-            </span>
-            {ownedHubs.map((hub) => (
-              <button
-                key={hub.id}
-                onClick={() => setSelectedStationedHub(hub.id)}
-                className={`px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap text-xs ${
-                  selectedStationedHub === hub.id
-                    ? 'bg-amber-400 text-slate-950 font-bold'
-                    : 'text-slate-400 hover:text-white bg-slate-900 border border-slate-800'
-                }`}
-              >
-                {hub.name.split(' ')[0]} ({hub.code})
-              </button>
-            ))}
+          {/* Stationed Region & Yard Filter */}
+          <div className="flex flex-col gap-2">
+            {activeRegions.length > 1 && (
+              <div className="flex items-center gap-2 overflow-x-auto text-xs font-mono py-1">
+                <span className="text-slate-400 font-bold flex items-center gap-1 shrink-0">
+                  <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Region:</span>
+                </span>
+                {activeRegions.map((region) => (
+                  <button
+                    key={region}
+                    onClick={() => handleRegionSelect(region)}
+                    className={`px-3 py-1 rounded-lg transition-colors whitespace-nowrap text-xs font-semibold ${
+                      selectedRegion === region
+                        ? 'bg-cyan-500 text-slate-950 font-bold'
+                        : 'text-slate-400 hover:text-white bg-slate-900 border border-slate-800'
+                    }`}
+                  >
+                    {region}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 overflow-x-auto text-xs font-mono py-1">
+              <span className="text-slate-400 font-bold flex items-center gap-1 shrink-0">
+                <MapPin className="w-3.5 h-3.5 text-amber-400" />
+                <span>Yard:</span>
+              </span>
+              {regionHubs.map((hub) => (
+                <button
+                  key={hub.id}
+                  onClick={() => setSelectedStationedHub(hub.id)}
+                  className={`px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap text-xs ${
+                    selectedStationedHub === hub.id
+                      ? 'bg-amber-400 text-slate-950 font-bold'
+                      : 'text-slate-400 hover:text-white bg-slate-900 border border-slate-800'
+                  }`}
+                >
+                  {hub.name.split(' ')[0]} ({hub.code})
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
