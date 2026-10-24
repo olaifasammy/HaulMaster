@@ -1493,7 +1493,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             uniqueNotifications.unshift(...maintResult.newNotifications);
           }
 
-          return {
+          let baseSimState = {
             ...prevState,
             balanceUsd: currentBalance,
             simTimeMinutes: newSimMinutes,
@@ -1513,6 +1513,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             rankTitle: updatedRankTitle,
             gold: updatedGold,
           };
+
+          // Independent AI Auto-Dispatch: if AI Dispatcher subscription is active, automatically dispatch idle trucks every 15 sim minutes
+          const isAiSubActive = baseSimState.aiDispatcherActive && baseSimState.simTimeMinutes < baseSimState.aiSubscriptionExpiresSimMinutes;
+          if (isAiSubActive && (newSimMinutes % 15 === 0)) {
+            const { nextState: autoDispatchedState } = runAutoDispatchOnState(baseSimState);
+            baseSimState = autoDispatchedState;
+          }
+
+          return baseSimState;
         });
       });
     }, intervalMs);
@@ -3966,24 +3975,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const executeAiAutoDispatch = (): { dispatchedCount: number; message: string } => {
-    const currentState = stateRef.current;
-    const isSubActive = currentState.aiDispatcherActive && currentState.simTimeMinutes < currentState.aiSubscriptionExpiresSimMinutes;
-    if (!isSubActive) {
-      return { dispatchedCount: 0, message: 'AI Dispatcher subscription is inactive or expired. Activate subscription in the AI Hub.' };
-    }
-
+  const runAutoDispatchOnState = (currentState: GameState): { nextState: GameState; dispatchedCount: number } => {
     let idleTrucks = [...currentState.trucks.filter(t => t.status === 'idle')];
-    let readyDrivers = [...currentState.drivers.filter(d => d.hosStatus !== 'driving' && d.hosStatus !== 'resting')];
+    let readyDrivers = [...currentState.drivers.filter(d => !d.assignedTruckId && d.hosStatus !== 'driving' && d.hosStatus !== 'resting')];
     let trailers = [...(currentState.trailers || [])];
     let routes = [...currentState.routes];
     let hubs = [...currentState.hubs];
 
-    if (idleTrucks.length === 0) {
-      return { dispatchedCount: 0, message: 'No idle trucks available for dispatch. Acquire or wait for trucks to return to terminals.' };
-    }
-    if (readyDrivers.length === 0) {
-      return { dispatchedCount: 0, message: 'No rested drivers available. Hire or wait for crew members to finish rest.' };
+    if (idleTrucks.length === 0 || readyDrivers.length === 0) {
+      return { nextState: currentState, dispatchedCount: 0 };
     }
 
     let contracts = [...currentState.availableContracts];
@@ -3991,8 +3991,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const unlockedRoutes = routes.filter(r => r.isUnlocked);
       contracts = generateContractsForRoutes(unlockedRoutes.length > 0 ? unlockedRoutes : routes, hubs, 15, idleTrucks);
     }
-
-    // Sort contracts by payout descending
     contracts.sort((a, b) => b.payoutUsd - a.payoutUsd);
 
     let dispatchedCount = 0;
@@ -4020,7 +4018,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return c.originHubId === truck.currentHubId && oHub.region === truckHub.region && dHub.region === truckHub.region;
       });
       if (matchingContractIdx === -1) {
-        // No local consignment starts at this truck's hub; skip so Munich trucks stay in Europe!
         continue;
       }
 
@@ -4151,8 +4148,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       readyDrivers.shift();
     }
 
-    const dispatchedContractIds = new Set(activeTrips.map(t => t.contract.id));
-    const remainingContractsAfterAi = remainingContracts;
+    if (dispatchedCount === 0) {
+      return { nextState: currentState, dispatchedCount: 0 };
+    }
 
     const nextState = {
       ...currentState,
@@ -4161,7 +4159,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       drivers: updatedDrivers,
       trailers: updatedTrailers,
       routes: updatedRoutes,
-      availableContracts: remainingContractsAfterAi,
+      availableContracts: remainingContracts,
       notifications: deduplicateNotifications([
         {
           id: `notif-ai-auto-${Date.now()}`,
@@ -4174,6 +4172,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...newNotifications,
       ]),
     };
+
+    return { nextState, dispatchedCount };
+  };
+
+  const executeAiAutoDispatch = (): { dispatchedCount: number; message: string } => {
+    const currentState = stateRef.current;
+    const isSubActive = currentState.aiDispatcherActive && currentState.simTimeMinutes < currentState.aiSubscriptionExpiresSimMinutes;
+    if (!isSubActive) {
+      return { dispatchedCount: 0, message: 'AI Dispatcher subscription is inactive or expired. Activate subscription in the AI Hub.' };
+    }
+
+    const { nextState, dispatchedCount } = runAutoDispatchOnState(currentState);
+    if (dispatchedCount === 0) {
+      return { dispatchedCount: 0, message: 'No idle trucks or rested drivers available for dispatch, or no matching local consignments found.' };
+    }
 
     setState(nextState);
     stateRef.current = nextState;
