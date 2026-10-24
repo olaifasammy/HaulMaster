@@ -451,6 +451,9 @@ const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameS
     return { ...prevState, lastRealTimeTimestamp: Date.now() };
   }
 
+  const simDay = Math.floor(prevState.simTimeMinutes / 1440) + 1;
+  const timeFormatted = `Day ${simDay}`;
+
   let currentBalance = prevState.balanceUsd;
   let updatedCargoTons = prevState.totalCargoDeliveredTons;
   let updatedFuelBurned = prevState.totalFuelBurnedLiters;
@@ -507,8 +510,6 @@ const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameS
   const updatedDrivers = [...prevState.drivers];
   const newLedgerEntries: LedgerEntry[] = [];
   const newNotifications: GameEventNotification[] = [];
-  const simDay = Math.floor(prevState.simTimeMinutes / 1440) + 1;
-  const timeFormatted = `Day ${simDay}`;
 
   for (const finished of finishedTrips) {
     completedCount++;
