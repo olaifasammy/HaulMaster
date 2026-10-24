@@ -23,6 +23,7 @@ import { AiDispatcherPage } from './components/AiDispatcherPage';
 import { RepairWorkshopPage } from './components/RepairWorkshopPage';
 import { AiQuickActionModal } from './components/AiQuickActionModal';
 import { IncidentsAndEventsPage } from './components/IncidentsAndEventsPage';
+import { EnterpriseExchangePage } from './components/EnterpriseExchangePage';
 import {
   Activity,
   Truck,
@@ -205,8 +206,13 @@ const DashboardContent: React.FC = () => {
           />
         )}
 
+        {/* Enterprise Exchange & International Trade Full Page View */}
+        {currentTab === 'exchange' && (
+          <EnterpriseExchangePage onOpenLedger={() => setCurrentTab('ledger')} />
+        )}
+
         {/* Company Profile Full Page View */}
-        {currentTab === 'profile' && <CompanyProfilePage onOpenAchievements={() => setCurrentTab('achievements')} onOpenDatabase={() => setIsDbModalOpen(true)} onOpenAiPage={() => setCurrentTab('ai')} />}
+        {currentTab === 'profile' && <CompanyProfilePage onOpenAchievements={() => setCurrentTab('achievements')} onOpenDatabase={() => setIsDbModalOpen(true)} onOpenAiPage={() => setCurrentTab('ai')} onOpenExchange={() => setCurrentTab('exchange')} />}
       </main>
 
       {/* Floating Mobile AI Quick Action Button (only displayed when AI subscription is active) */}

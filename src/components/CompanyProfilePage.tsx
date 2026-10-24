@@ -15,9 +15,10 @@ interface CompanyProfilePageProps {
   onOpenAchievements: () => void;
   onOpenDatabase?: () => void;
   onOpenAiPage?: () => void;
+  onOpenExchange: () => void;
 }
 
-export const CompanyProfilePage: React.FC<CompanyProfilePageProps> = ({ onOpenAchievements, onOpenDatabase, onOpenAiPage }) => {
+export const CompanyProfilePage: React.FC<CompanyProfilePageProps> = ({ onOpenAchievements, onOpenDatabase, onOpenAiPage, onOpenExchange }) => {
   const { state, resetGame } = useGame();
   const [companyNameInput, setCompanyNameInput] = useState<string>(state.companyName);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
@@ -141,6 +142,27 @@ export const CompanyProfilePage: React.FC<CompanyProfilePageProps> = ({ onOpenAc
           </div>
         </div>
         <ChevronRight className="w-5 h-5 text-amber-400 group-hover:translate-x-1 transition-transform" />
+      </button>
+
+      {/* Enterprise Exchange & International Trade Banner */}
+      <button
+        onClick={onOpenExchange}
+        className="w-full p-6 bg-gradient-to-r from-cyan-500/20 via-cyan-500/10 to-slate-950 border border-cyan-500/40 hover:border-cyan-400 rounded-2xl flex items-center justify-between group transition-all cursor-pointer shadow-xl"
+      >
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-xl bg-cyan-400 text-slate-950 font-bold">
+            <Building2 className="w-6 h-6" />
+          </div>
+          <div className="text-left">
+            <div className="text-base font-bold text-white group-hover:text-cyan-300 transition-colors">
+              Enterprise Exchange & International Trade Hub
+            </div>
+            <div className="text-xs text-slate-300 mt-0.5">
+              Negotiate multi-week B2B supply accords, issue corporate bonds, execute M&A subsidiary acquisitions, and ratify customs trade pacts
+            </div>
+          </div>
+        </div>
+        <ChevronRight className="w-5 h-5 text-cyan-400 group-hover:translate-x-1 transition-transform" />
       </button>
 
       {/* Quick Links: DB & AI */}
