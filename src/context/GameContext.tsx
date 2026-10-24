@@ -62,6 +62,14 @@ export const deduplicateNotifications = (list: GameEventNotification[]): GameEve
   return result;
 };
 
+export const getCommercialPayoutMultiplier = (truckId: string, trailerId: string | null, trucks: TruckInstance[]): number => {
+  const haulingTruck = trucks.find(t => t.id === truckId);
+  const haulingModel = TRUCK_MODELS.find(m => m.id === haulingTruck?.modelId);
+  const hpBonus = haulingModel ? Math.max(1.0, 1.0 + (haulingModel.specs.horsepower - 400) * 0.0005) : 1.0;
+  const trailerBonus = trailerId ? 1.25 : 1.0;
+  return hpBonus * trailerBonus;
+};
+
 export const generateContractsForRoutes = (
   unlockedRoutes: RouteCorridor[],
   hubs: Hub[],
@@ -460,7 +468,11 @@ const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameS
     completedCount++;
     const destHub = prevState.hubs.find((h) => h.id === finished.contract.destinationHubId);
     const isOnTime = finished.elapsedMinutes <= finished.contract.deadlineMinutes;
-    const grossPayout = finished.contract.payoutUsd + (isOnTime ? finished.contract.bonusOnTimeUsd : -finished.contract.penaltyLateUsd);
+    const commMultiplier = getCommercialPayoutMultiplier(finished.truckId, finished.trailerId, prevState.trucks);
+    const adjPayout = Math.round(finished.contract.payoutUsd * commMultiplier);
+    const adjBonus = Math.round(finished.contract.bonusOnTimeUsd * commMultiplier);
+    const adjPenalty = Math.round(finished.contract.penaltyLateUsd * commMultiplier);
+    const grossPayout = adjPayout + (isOnTime ? adjBonus : -adjPenalty);
     const finalRevenue = Math.max(0, grossPayout);
     revenueEarned += finalRevenue;
 
@@ -1842,7 +1854,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           for (const finished of completedTrips) {
             const destHub = prevState.hubs.find((h) => h.id === finished.contract.destinationHubId);
             const isOnTime = finished.elapsedMinutes <= finished.contract.deadlineMinutes;
-            const grossPayout = finished.contract.payoutUsd + (isOnTime ? finished.contract.bonusOnTimeUsd : -finished.contract.penaltyLateUsd);
+            const commMultiplier = getCommercialPayoutMultiplier(finished.truckId, finished.trailerId, updatedTrucks);
+            const adjPayout = Math.round(finished.contract.payoutUsd * commMultiplier);
+            const adjBonus = Math.round(finished.contract.bonusOnTimeUsd * commMultiplier);
+            const adjPenalty = Math.round(finished.contract.penaltyLateUsd * commMultiplier);
+            const grossPayout = adjPayout + (isOnTime ? adjBonus : -adjPenalty);
             const finalRevenue = Math.max(0, grossPayout);
 
             // Driver distance wage
