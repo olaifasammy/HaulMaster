@@ -401,7 +401,8 @@ const createInitialState = (): GameState => {
 };
 
 const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameState => {
-  if (simMinutesToAdd <= 0 || prevState.activeTrips.length === 0) {
+  const isAiOfflineSubActive = prevState.aiOfflineDispatchActive && prevState.simTimeMinutes < prevState.aiOfflineDispatchExpiresSimMinutes;
+  if (simMinutesToAdd <= 0 || (prevState.activeTrips.length === 0 && !isAiOfflineSubActive)) {
     return { ...prevState, lastRealTimeTimestamp: Date.now() };
   }
 
@@ -596,7 +597,6 @@ const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameS
   }
 
   // Autonomous Offline AI Dispatcher: if AI Offline Dispatch add-on subscription is active, automatically redispatch idle trucks and drivers while away
-  const isAiOfflineSubActive = prevState.aiOfflineDispatchActive && prevState.simTimeMinutes < prevState.aiOfflineDispatchExpiresSimMinutes;
   let offlineAiDispatchedCount = 0;
   if (isAiOfflineSubActive) {
     let availableContracts = [...prevState.availableContracts];
@@ -903,8 +903,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const now = Date.now();
           const lastTime = parsed.lastRealTimeTimestamp || now;
           const realElapsedMs = now - lastTime;
-          // Only calculate offline progress if away for > 5 minutes (300,000 ms) and active trips exist
-          if (realElapsedMs > 300000 && parsed.activeTrips && parsed.activeTrips.length > 0) {
+          const isAiOfflineSubActive = parsed.aiOfflineDispatchActive && parsed.simTimeMinutes < parsed.aiOfflineDispatchExpiresSimMinutes;
+          // Only calculate offline progress if away for > 5 minutes (300,000 ms) and (active trips exist OR offline AI dispatch subscription is active)
+          if (realElapsedMs > 300000 && ((parsed.activeTrips && parsed.activeTrips.length > 0) || isAiOfflineSubActive)) {
             const realSeconds = Math.floor(realElapsedMs / 1000);
             const simMinutesToAdd = Math.min(realSeconds * 1, 43200); // cap at max 30 sim days
             const updated = runOfflineCatchUp(parsed, simMinutesToAdd);
@@ -960,7 +961,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const now = Date.now();
           const lastTime = dbState.lastRealTimeTimestamp || now;
           const realElapsedMs = now - lastTime;
-          if (realElapsedMs > 300000 && dbState.activeTrips && dbState.activeTrips.length > 0) {
+          const isAiOfflineSubActive = dbState.aiOfflineDispatchActive && dbState.simTimeMinutes < dbState.aiOfflineDispatchExpiresSimMinutes;
+          if (realElapsedMs > 300000 && ((dbState.activeTrips && dbState.activeTrips.length > 0) || isAiOfflineSubActive)) {
             const realSeconds = Math.floor(realElapsedMs / 1000);
             const simMinutesToAdd = Math.min(realSeconds * 1, 43200);
             const updated = runOfflineCatchUp(dbState, simMinutesToAdd);
