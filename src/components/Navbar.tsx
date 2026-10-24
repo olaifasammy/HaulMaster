@@ -9,6 +9,7 @@ interface NavbarProps {
   onOpenCompanyProfile: () => void;
   onOpenDatabaseModal: () => void;
   onOpenAiDispatcher: () => void;
+  onOpenEventsModal?: (tab?: 'events' | 'incidents' | 'insurance' | 'gold') => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -18,6 +19,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenCompanyProfile,
   onOpenDatabaseModal,
   onOpenAiDispatcher,
+  onOpenEventsModal,
 }) => {
   const { state, setSimSpeed, setShowGuide, restartOnboarding } = useGame();
   const [aiActive, setAiActive] = useState(true);
@@ -31,8 +33,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   const currentExp = state.playerXp;
   const nextLevelExp = currentLevel * 2500;
   const expPercent = Math.min(100, (currentExp / Math.max(1, nextLevelExp)) * 100);
-  const circleCircumference = 2 * Math.PI * 13;
   const isSubActive = !!(state?.aiDispatcherActive && (state?.simTimeMinutes || 0) < (state?.aiSubscriptionExpiresSimMinutes || 0));
+
+  const spotGold = state.goldMarket?.spotPriceUsd || 2540;
+  const spotChange = state.goldMarket?.dayChangePercent || 1.0;
+  const activeEvents = state.activeEvents || [];
+  const primaryEvent = activeEvents[0];
 
   const navLinks = [
     { id: 'operations', label: 'Operations' },
@@ -46,13 +52,6 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'ai', label: 'AI Dispatcher' },
     { id: 'profile', label: 'Profile' },
   ];
-
-  const handleNewGame = () => {
-    const confirmed = window.confirm(
-      "Start a new game? Your current company progress will be replaced when you finish the new setup."
-    );
-    if (confirmed) restartOnboarding();
-  };
 
   return (
     <header className="sticky top-0 z-40 w-full bg-slate-950/95 border-b border-slate-800/80 backdrop-blur-xl">
@@ -128,8 +127,12 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Zone 3: Financial Balances & Action Buttons */}
         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           
-          {/* Capital & Gold Reserves */}
-          <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1">
+          {/* Capital & Gold Reserves (Clickable to open Gold Valuation Desk) */}
+          <button
+            onClick={() => onOpenEventsModal?.('gold')}
+            title="Open Gold Valuation & Bullion Exchange Desk"
+            className="flex items-center gap-1.5 sm:gap-2 bg-slate-900 hover:bg-slate-800/90 border border-slate-800 hover:border-amber-500/50 rounded-lg px-2 py-1 cursor-pointer transition-all text-left"
+          >
             <div className="flex flex-col items-end">
               <span className="text-[8px] sm:text-[9px] uppercase font-mono tracking-wider text-slate-500 hidden sm:block">Treasury</span>
               <span className="text-[11px] sm:text-xs font-mono font-bold text-emerald-400 tabular-nums">
@@ -144,7 +147,24 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span>{state.gold.toLocaleString()}</span>
               </span>
             </div>
-          </div>
+          </button>
+
+          {/* World Events & Incidents Bureau Quick Button */}
+          <button
+            onClick={() => onOpenEventsModal?.('events')}
+            className={`p-1.5 rounded-lg border transition-all flex items-center gap-1 cursor-pointer min-h-[36px] ${
+              activeEvents.length > 0
+                ? 'bg-amber-500/15 border-amber-500/50 text-amber-400 hover:bg-amber-500/25 shadow-sm shadow-amber-500/10'
+                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+            }`}
+            title="Open Global Events, Incidents & Insurance Bureau"
+          >
+            <span className="text-xs">⚡</span>
+            <span className="hidden md:inline text-[11px] font-mono font-semibold">Events</span>
+            {activeEvents.length > 0 && (
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+            )}
+          </button>
 
           {/* Database & Phone Memory Manager */}
           <button
@@ -193,15 +213,46 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      {/* Sub-Bar: Fuel Price Ticker, Clock & Weather */}
+      {/* Sub-Bar: Fuel Price Ticker, Gold Spot Price, Active Event, Clock & Weather */}
       <div className="bg-slate-950 border-t border-slate-800/80 px-3 py-1 flex items-center justify-between text-[10px] font-medium text-slate-400 gap-2 overflow-x-auto no-scrollbar">
-        <div className="flex items-center space-x-1.5 flex-shrink-0">
-          <Fuel className="w-3 h-3 text-amber-400 animate-pulse" />
-          <span>Diesel Market:</span>
-          <strong className="text-amber-300 font-mono font-bold">$1.45/L</strong>
+        <div className="flex items-center space-x-3 flex-shrink-0">
+          <div className="flex items-center space-x-1.5">
+            <Fuel className="w-3 h-3 text-amber-400" />
+            <span>Diesel Market:</span>
+            <strong className="text-amber-300 font-mono font-bold">$1.45/L</strong>
+          </div>
+
+          <button
+            onClick={() => onOpenEventsModal?.('gold')}
+            className="flex items-center space-x-1 hover:text-amber-300 cursor-pointer transition-colors"
+            title="Click to open Gold Valuation & Exchange Desk"
+          >
+            <Coins className="w-3 h-3 text-amber-400" />
+            <span>Gold Spot:</span>
+            <strong className="text-amber-300 font-mono font-bold">${spotGold.toLocaleString()}/oz</strong>
+            <span className="text-[9px] text-emerald-400 font-mono">({spotChange >= 0 ? '+' : ''}{spotChange}%)</span>
+          </button>
+
+          {primaryEvent && (
+            <button
+              onClick={() => onOpenEventsModal?.('events')}
+              className="flex items-center space-x-1 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 cursor-pointer transition-all animate-pulse"
+              title="Click to view full world event details"
+            >
+              <span>⚡</span>
+              <span className="font-bold truncate max-w-[160px] sm:max-w-xs">{primaryEvent.title}</span>
+            </button>
+          )}
         </div>
 
         <div className="flex items-center space-x-3 flex-shrink-0">
+          <button
+            onClick={() => onOpenEventsModal?.('incidents')}
+            className="flex items-center space-x-1 text-slate-400 hover:text-rose-300 cursor-pointer transition-colors"
+            title="Open Incidents & Safety Bureau"
+          >
+            <span>🚨 Risk Bureau</span>
+          </button>
           <div className="font-mono font-bold text-slate-200">
             <span>{formattedTime}</span>
           </div>

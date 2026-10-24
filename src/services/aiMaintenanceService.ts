@@ -72,7 +72,7 @@ export function processAiFleetMaintenance(state: GameState, deltaSimMinutes: num
 
     const needsService =
       truck.status === 'idle' &&
-      (truck.health < 75 ||
+      ((truck.health ?? 100) < 75 ||
         truck.subsystems.engineBlock < 65 ||
         truck.subsystems.brakePads < 65 ||
         truck.subsystems.coolingSystem < 60);

@@ -10,6 +10,8 @@ import {
   RefreshCw,
   Weight,
   Layers,
+  Zap,
+  Brain,
 } from 'lucide-react';
 
 interface FreightMarketProps {
@@ -17,14 +19,19 @@ interface FreightMarketProps {
 }
 
 export const FreightMarket: React.FC<FreightMarketProps> = ({ onDispatchContract }) => {
-  const { state, refreshAvailableContracts } = useGame();
+  const { state, refreshAvailableContracts, executeAiAutoDispatch } = useGame();
   const unlockedRegions = state.unlockedRegions || [];
   const [selectedRegion, setSelectedRegion] = useState<string>(unlockedRegions[0] || '');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isAiDispatching, setIsAiDispatching] = useState(false);
+  const [aiResultMsg, setAiResultMsg] = useState<string | null>(null);
+
+  const isAiActive = (state.aiDispatcherActive && state.simTimeMinutes < state.aiSubscriptionExpiresSimMinutes) ||
+                     (state.aiOfflineDispatchActive && state.simTimeMinutes < state.aiOfflineDispatchExpiresSimMinutes);
 
   React.useEffect(() => {
-    if (unlockedRegions.length > 0 && !unlockedRegions.includes(selectedRegion)) {
+    if (unlockedRegions.length > 0 && !unlockedRegions.includes(selectedRegion as any)) {
       setSelectedRegion(unlockedRegions[0]);
     }
   }, [unlockedRegions, selectedRegion]);
@@ -72,15 +79,36 @@ export const FreightMarket: React.FC<FreightMarketProps> = ({ onDispatchContract
           </p>
         </div>
 
-        {/* Action Controls: Instant Refresh */}
+        {/* Action Controls: Instant Refresh & AI Auto-Dispatch */}
         <div className="flex flex-wrap items-center gap-2.5">
+          {isAiActive && (
+            <button
+              onClick={() => {
+                setIsAiDispatching(true);
+                setAiResultMsg(null);
+                setTimeout(() => {
+                  const res = executeAiAutoDispatch();
+                  setAiResultMsg(res.message);
+                  setIsAiDispatching(false);
+                  setTimeout(() => setAiResultMsg(null), 5000);
+                }, 400);
+              }}
+              disabled={isAiDispatching || state.availableContracts.length === 0}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-md bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 font-mono cursor-pointer"
+              title="Automatically match idle trucks and ready drivers to available freight jobs immediately"
+            >
+              <Zap className={`w-3.5 h-3.5 ${isAiDispatching ? 'animate-bounce' : ''}`} />
+              <span>{isAiDispatching ? 'AI Dispatching...' : 'AI Auto-Dispatch Jobs'}</span>
+            </button>
+          )}
+
           <button
             onClick={handleManualRefresh}
             disabled={isRefreshing || state.balanceUsd < 1500}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-md ${
               state.balanceUsd < 1500
                 ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
-                : 'bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/30 hover:border-amber-400'
+                : 'bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/30 hover:border-amber-400 cursor-pointer'
             }`}
             title="Pay express broker fee ($1,500) to generate a brand new set of tendered freight contracts"
           >
@@ -89,6 +117,23 @@ export const FreightMarket: React.FC<FreightMarketProps> = ({ onDispatchContract
           </button>
         </div>
       </div>
+
+      {/* AI Dispatch Result Notification */}
+      {aiResultMsg && (
+        <div className={`p-3.5 rounded-xl border text-xs font-mono font-bold flex items-center justify-between gap-3 animate-in fade-in ${
+          aiResultMsg.includes('Successfully')
+            ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+            : 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+        }`}>
+          <div className="flex items-center gap-2">
+            <Brain className="w-4 h-4 text-cyan-400 shrink-0" />
+            <span>{aiResultMsg}</span>
+          </div>
+          <button onClick={() => setAiResultMsg(null)} className="text-slate-400 hover:text-white text-xs cursor-pointer">
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Region Filter Tabs */}
       {unlockedRegions.length > 1 && (

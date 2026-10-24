@@ -1,7 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { Hub, ActiveTrip, GeoRegion, RouteCorridor } from '../types/game';
-import { CloudRain, Navigation, MapPin } from 'lucide-react';
+import { CloudRain, Navigation, MapPin, Thermometer, Wind, ShieldAlert, Zap } from 'lucide-react';
+import { getLocalWeather } from '../utils/weatherEngine';
 
 interface GlobalLogisticsMapProps {
   onSelectTruck: (truckId: string) => void;
@@ -16,13 +17,14 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
   const [canvasDimensions, setCanvasDimensions] = useState({ width: 360, height: 320 });
 
   const currentRegion = state.selectedRegion;
+  const sampleHub = state.hubs.find((h) => h.region === currentRegion && h.isUnlocked) || state.hubs.find((h) => h.region === currentRegion);
+  const currentWeather = getLocalWeather(sampleHub?.coord || { x: 250, y: 250 }, 100, state.simTimeMinutes);
 
   // Responsive canvas resizing
   useEffect(() => {
     const updateSize = () => {
       if (containerRef.current) {
         const width = containerRef.current.clientWidth || 360;
-        // Mobile height 320px, tablet 420px, desktop 500px
         const height = width < 640 ? 320 : width < 1024 ? 420 : 500;
         setCanvasDimensions({ width, height });
       }
@@ -40,12 +42,12 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
     if (!ctx) return;
 
     let animationFrameId: number;
+    let particleOffset = 0;
 
     const render = () => {
       const width = canvas.width;
       const height = canvas.height;
 
-      // Coordinate mapping from 0-1000 space to canvas coordinates
       let minX = 40;
       let maxX = 480;
       let minY = 80;
@@ -58,7 +60,6 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
         maxY = 480;
       }
 
-      // Responsive padding: smaller on mobile
       const padX = width < 500 ? 30 : 60;
       const padY = width < 500 ? 25 : 50;
 
@@ -86,11 +87,10 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
         ctx.stroke();
       }
 
-      // 3. Dynamic Weather Radar
+      // 3. Dynamic Weather Radar & Particle Overlay
       if (showWeatherRadar) {
         ctx.save();
         if (currentRegion === 'North America') {
-          // Rockies blizzard area
           const radX = scaleX(190);
           const radY = scaleY(220);
           const rSize = width < 500 ? 80 : 130;
@@ -103,7 +103,6 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
           ctx.arc(radX, radY, rSize, 0, Math.PI * 2);
           ctx.fill();
 
-          // Storm squall around Chicago
           const chiX = scaleX(340);
           const chiY = scaleY(230);
           const cSize = width < 500 ? 75 : 110;
@@ -116,7 +115,6 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
           ctx.arc(chiX, chiY, cSize, 0, Math.PI * 2);
           ctx.fill();
         } else {
-          // Alps snow front
           const alpX = scaleX(740);
           const alpY = scaleY(310);
           const aSize = width < 500 ? 70 : 110;
@@ -129,7 +127,6 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
           ctx.arc(alpX, alpY, aSize, 0, Math.PI * 2);
           ctx.fill();
 
-          // Atlantic rain gale
           const rtmX = scaleX(670);
           const rtmY = scaleY(190);
           const rSize = width < 500 ? 80 : 120;
@@ -142,6 +139,20 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
           ctx.arc(rtmX, rtmY, rSize, 0, Math.PI * 2);
           ctx.fill();
         }
+
+        // Animated falling precipitation / snow particles
+        particleOffset = (particleOffset + 2) % height;
+        ctx.strokeStyle = currentWeather.type.includes('Snow') || currentWeather.type.includes('Blizzard') ? 'rgba(224, 242, 254, 0.6)' : 'rgba(56, 189, 248, 0.4)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        for (let i = 0; i < 40; i++) {
+          const px = (i * 37 + particleOffset * 1.5) % width;
+          const py = (i * 29 + particleOffset * 3) % height;
+          ctx.moveTo(px, py);
+          ctx.lineTo(px - 2, py + 8);
+        }
+        ctx.stroke();
+
         ctx.restore();
       }
 
@@ -174,7 +185,6 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
         }
         ctx.stroke();
 
-        // On larger screens, show distance label
         if (width >= 480) {
           const midIndex = Math.floor(corridor.waypoints.length / 2);
           const midWp = corridor.waypoints[midIndex];
@@ -210,7 +220,6 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
         ctx.fillStyle = '#f59e0b';
         ctx.fill();
 
-        // City code or name
         ctx.font = 'bold 10px Plus Jakarta Sans, sans-serif';
         ctx.fillStyle = '#f8fafc';
         ctx.textAlign = 'left';
@@ -253,13 +262,11 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
         ctx.save();
         ctx.translate(x, y);
 
-        // Pulsing glow
         ctx.beginPath();
         ctx.arc(0, 0, width < 500 ? 11 : 14, 0, Math.PI * 2);
         ctx.fillStyle = trip.isRestingNow ? 'rgba(59, 130, 246, 0.25)' : 'rgba(16, 185, 129, 0.3)';
         ctx.fill();
 
-        // Directional pointer
         ctx.rotate(angle);
         ctx.beginPath();
         ctx.moveTo(8, 0);
@@ -275,7 +282,6 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
 
         ctx.restore();
 
-        // Speed badge
         ctx.save();
         const label = trip.isRestingNow ? 'REST' : `${Math.round(trip.telemetry.currentSpeedKmh)}k`;
         ctx.font = 'bold 9px JetBrains Mono, monospace';
@@ -293,9 +299,8 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [state.selectedRegion, state.routes, state.hubs, state.activeTrips, showWeatherRadar, canvasDimensions]);
+  }, [state.selectedRegion, state.routes, state.hubs, state.activeTrips, showWeatherRadar, canvasDimensions, currentWeather.type]);
 
-  // Click handler
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -324,7 +329,6 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
     const scaleX = (x: number) => ((x - minX) / (maxX - minX)) * (width - padX * 2) + padX;
     const scaleY = (y: number) => ((y - minY) / (maxY - minY)) * (height - padY * 2) + padY;
 
-    // Check click on active trucks
     for (const trip of state.activeTrips) {
       const fraction = Math.min(1.0, trip.progressKm / trip.totalDistanceKm);
       const waypoints = trip.corridor.waypoints;
@@ -348,7 +352,6 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
       }
     }
 
-    // Check click on Hubs
     for (const hub of state.hubs.filter((h) => h.region === currentRegion)) {
       const px = scaleX(hub.coord.x);
       const py = scaleY(hub.coord.y);
@@ -364,7 +367,7 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
       ref={containerRef}
       className="relative w-full bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow-2xl flex flex-col"
     >
-      {/* Top Map Toolbar - Stacked / touch-friendly */}
+      {/* Top Map Toolbar & Weather HUD Overlay */}
       <div className="absolute top-2.5 left-2.5 right-2.5 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
         {/* Region Selector */}
         <div className="flex items-center gap-1 p-1 bg-slate-900/95 border border-slate-800 rounded-lg backdrop-blur-md pointer-events-auto shadow-md">
@@ -372,7 +375,7 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
             <button
               key={region}
               onClick={() => setSelectedRegion(region)}
-              className={`px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-semibold rounded-md transition-colors whitespace-nowrap min-h-[32px] flex items-center ${
+              className={`px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-semibold rounded-md transition-colors whitespace-nowrap min-h-[32px] flex items-center cursor-pointer ${
                 currentRegion === region
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                   : 'text-slate-400 hover:text-slate-200'
@@ -383,19 +386,54 @@ export const GlobalLogisticsMap: React.FC<GlobalLogisticsMapProps> = ({ onSelect
           ))}
         </div>
 
-        {/* Weather Radar Toggle */}
-        <button
-          onClick={() => setShowWeatherRadar(!showWeatherRadar)}
-          className={`flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-lg border backdrop-blur-md pointer-events-auto min-h-[32px] transition-colors shadow-md ${
-            showWeatherRadar
-              ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-              : 'bg-slate-900/95 text-slate-400 border-slate-800 hover:text-slate-200'
-          }`}
-        >
-          <CloudRain className="w-3.5 h-3.5" />
-          <span className="hidden xs:inline">Weather</span> Radar
-        </button>
+        {/* Real-time Weather Effects HUD & Radar Toggle */}
+        <div className="flex items-center gap-2 pointer-events-auto">
+          {showWeatherRadar && (
+            <div className="hidden md:flex items-center gap-3 px-3 py-1.5 bg-slate-900/95 border border-sky-500/30 rounded-lg text-xs font-mono text-sky-300 backdrop-blur-md shadow-md">
+              <div className="flex items-center gap-1.5">
+                <Thermometer className="w-3.5 h-3.5 text-amber-400" />
+                <span>{currentWeather.tempCelsius}°C</span>
+              </div>
+              <span>•</span>
+              <div className="flex items-center gap-1.5">
+                <Wind className="w-3.5 h-3.5 text-sky-400" />
+                <span>{currentWeather.windSpeedKmh} km/h</span>
+              </div>
+              <span>•</span>
+              <span className="text-slate-300 font-bold">{currentWeather.type}</span>
+              <span className="px-1.5 py-0.5 bg-sky-500/10 rounded text-[10px] text-sky-200 border border-sky-500/20">
+                Friction: {currentWeather.roadFrictionCoeff.toFixed(2)}
+              </span>
+            </div>
+          )}
+
+          <button
+            onClick={() => setShowWeatherRadar(!showWeatherRadar)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-lg border backdrop-blur-md min-h-[32px] transition-colors shadow-md cursor-pointer ${
+              showWeatherRadar
+                ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                : 'bg-slate-900/95 text-slate-400 border-slate-800 hover:text-slate-200'
+            }`}
+          >
+            <CloudRain className="w-3.5 h-3.5" />
+            <span className="hidden xs:inline">Weather</span> Radar
+          </button>
+        </div>
       </div>
+
+      {/* Mobile / Tablet Compact Weather HUD Strip */}
+      {showWeatherRadar && (
+        <div className="absolute top-14 left-2.5 right-2.5 z-10 flex md:hidden items-center justify-between px-3 py-1.5 bg-slate-900/95 border border-sky-500/30 rounded-lg text-[10px] font-mono text-sky-300 backdrop-blur-md shadow-md pointer-events-none">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-white">{currentWeather.type}</span>
+            <span>{currentWeather.tempCelsius}°C</span>
+          </div>
+          <div className="flex items-center gap-2 text-slate-300">
+            <span>Friction: {currentWeather.roadFrictionCoeff.toFixed(2)}</span>
+            <span>Wind: {currentWeather.windSpeedKmh}km/h</span>
+          </div>
+        </div>
+      )}
 
       {/* Map Legend Overlay */}
       <div className="absolute bottom-2.5 left-2.5 z-10 hidden sm:flex items-center gap-3 px-3 py-1.5 bg-slate-950/90 border border-slate-800 rounded-lg text-[10px] text-slate-400 backdrop-blur-md">

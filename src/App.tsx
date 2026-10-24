@@ -16,11 +16,13 @@ import { RouteDispatcherModal } from './components/RouteDispatcherModal';
 import { OnboardingWizard } from './components/OnboardingWizard';
 import { UserGuideWalkthrough } from './components/UserGuideWalkthrough';
 import { CompanyProfilePage } from './components/CompanyProfilePage';
+import { CompanyProfileModal } from './components/CompanyProfileModal';
 import { OfflineProgressModal } from './components/OfflineProgressModal';
 import { DatabaseManagerModal } from './components/DatabaseManagerModal';
 import { AiDispatcherPage } from './components/AiDispatcherPage';
 import { RepairWorkshopPage } from './components/RepairWorkshopPage';
 import { AiQuickActionModal } from './components/AiQuickActionModal';
+import { IncidentsAndEventsModal } from './components/IncidentsAndEventsModal';
 import {
   Activity,
   Truck,
@@ -49,11 +51,18 @@ const DashboardContent: React.FC = () => {
   const [isCompanyProfileOpen, setIsCompanyProfileOpen] = useState<boolean>(false);
   const [isDbModalOpen, setIsDbModalOpen] = useState<boolean>(false);
   const [isAiQuickModalOpen, setIsAiQuickModalOpen] = useState<boolean>(false);
+  const [isEventsModalOpen, setIsEventsModalOpen] = useState<boolean>(false);
+  const [eventsInitialTab, setEventsInitialTab] = useState<'events' | 'incidents' | 'insurance' | 'gold'>('events');
   const [preselectedContractId, setPreselectedContractId] = useState<string | undefined>(undefined);
 
   const handleOpenDispatch = (contractId?: string) => {
     setPreselectedContractId(contractId);
     setIsDispatchModalOpen(true);
+  };
+
+  const handleOpenEventsModal = (tab: 'events' | 'incidents' | 'insurance' | 'gold' = 'events') => {
+    setEventsInitialTab(tab);
+    setIsEventsModalOpen(true);
   };
 
   const isSubActive = !!(state?.aiDispatcherActive && (state?.simTimeMinutes || 0) < (state?.aiSubscriptionExpiresSimMinutes || 0));
@@ -81,6 +90,7 @@ const DashboardContent: React.FC = () => {
         onOpenCompanyProfile={() => setIsCompanyProfileOpen(true)}
         onOpenDatabaseModal={() => setIsDbModalOpen(true)}
         onOpenAiDispatcher={() => setIsAiQuickModalOpen(true)}
+        onOpenEventsModal={handleOpenEventsModal}
       />
 
       {/* Floating System Notification Toast (Non-blocking replacement for window.alert) */}
@@ -268,6 +278,13 @@ const DashboardContent: React.FC = () => {
         isOpen={isDbModalOpen}
         onClose={() => setIsDbModalOpen(false)}
       />
+
+      {isEventsModalOpen && (
+        <IncidentsAndEventsModal
+          initialTab={eventsInitialTab}
+          onClose={() => setIsEventsModalOpen(false)}
+        />
+      )}
 
 
 

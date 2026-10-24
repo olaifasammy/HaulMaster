@@ -39,7 +39,7 @@ const generateRecursiveGrantTiers = (baseTarget: number, baseReward: number, mul
 
 export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ onBackToLedger }) => {
   const { state, takeLoan, repayLoan, claimGrant, notifyUser } = useGame();
-  const [claimedGrantTiers, setClaimedGrantTiers] = useState<string[]>([]);
+  const claimedGrantTiers = state.claimedGrantIds || [];
 
   // Corporate financial metrics
   const totalRevenue = state.ledger
@@ -122,8 +122,7 @@ export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ o
     if (claimedGrantTiers.includes(grantKey)) return;
 
     if (window.confirm(`Government & Industry Subsidy Approval:\n\nProgram: ${programTitle} (Tier ${tier})\nSubvention Grant: $${reward.toLocaleString()}\n\nClaim non-repayable grant funds?`)) {
-      setClaimedGrantTiers((prev) => [...prev, grantKey]);
-      claimGrant(reward, `${programTitle} (Tier ${tier} Subsidy)`);
+      claimGrant(reward, `${programTitle} (Tier ${tier} Subsidy)`, grantKey);
     }
   };
 

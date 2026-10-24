@@ -16,12 +16,17 @@ interface HubsManagerProps {
 }
 
 export const HubsManager: React.FC<HubsManagerProps> = ({ onSelectHub }) => {
-  const { state, upgradeHub } = useGame();
+  const { state, upgradeHub, transferFuelBetweenHubs } = useGame();
 
   const ownedHubs = state.hubs.filter((h) => h.isUnlocked);
   const [expandedHubIds, setExpandedHubIds] = useState<Record<string, boolean>>({});
   const [currentPage, setCurrentPage] = useState<number>(1);
   const pageSize = 6;
+
+  // Fuel Transfer Modal state
+  const [transferSourceHubId, setTransferSourceHubId] = useState<string | null>(null);
+  const [transferDestHubId, setTransferDestHubId] = useState<string>('');
+  const [transferLiters, setTransferLiters] = useState<number>(10000);
 
   const toggleHubExpand = (hubId: string) => {
     setExpandedHubIds((prev) => ({
@@ -41,6 +46,14 @@ export const HubsManager: React.FC<HubsManagerProps> = ({ onSelectHub }) => {
     }
   };
 
+  const handleExecuteTransfer = () => {
+    if (!transferSourceHubId || !transferDestHubId) return;
+    const success = transferFuelBetweenHubs(transferSourceHubId, transferDestHubId, transferLiters);
+    if (success) {
+      setTransferSourceHubId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -50,7 +63,7 @@ export const HubsManager: React.FC<HubsManagerProps> = ({ onSelectHub }) => {
           <span>Regional Hub Depots & Terminal Logistics Network ({ownedHubs.length} Owned Hubs)</span>
         </h3>
         <p className="text-xs text-slate-400 mt-0.5">
-          Manage spot diesel wholesale pricing, bulk fuel bunkering storage, and certified maintenance bays for your company-operated terminals. Click any hub card header to toggle details.
+          Manage spot diesel wholesale pricing, bulk fuel bunkering storage, inter-hub fuel transfers, and certified maintenance bays for your company-operated terminals.
         </p>
       </div>
 
@@ -121,8 +134,8 @@ export const HubsManager: React.FC<HubsManagerProps> = ({ onSelectHub }) => {
                       </div>
                     </div>
 
-                    {/* Bulk Fuel Storage Status */}
-                    <div className="p-3 bg-slate-950/50 border border-slate-800/80 rounded-lg space-y-1.5">
+                    {/* Bulk Fuel Storage Status & Transfer Button */}
+                    <div className="p-3 bg-slate-950/50 border border-slate-800/80 rounded-lg space-y-2">
                       <div className="flex items-center justify-between text-xs font-mono">
                         <span className="text-slate-400 flex items-center gap-1.5">
                           <Fuel className="w-3.5 h-3.5 text-amber-400" />
@@ -137,6 +150,19 @@ export const HubsManager: React.FC<HubsManagerProps> = ({ onSelectHub }) => {
                           className="bg-amber-500 h-full rounded-full"
                           style={{ width: `${(hub.bulkFuelStockLiters / hub.bulkFuelCapacityLiters) * 100}%` }}
                         />
+                      </div>
+                      <div className="pt-1 flex items-center justify-between">
+                        <span className="text-[10px] text-slate-500">Hub-to-hub reserve balancing</span>
+                        <button
+                          onClick={() => {
+                            setTransferSourceHubId(hub.id);
+                            const otherHub = ownedHubs.find((h) => h.id !== hub.id);
+                            setTransferDestHubId(otherHub ? otherHub.id : '');
+                          }}
+                          className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded text-[10px] font-bold transition-colors cursor-pointer"
+                        >
+                          Transfer Fuel ⇄
+                        </button>
                       </div>
                     </div>
 
@@ -158,7 +184,7 @@ export const HubsManager: React.FC<HubsManagerProps> = ({ onSelectHub }) => {
                 <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
                   <button
                     onClick={() => handleUpgrade(hub.id, 'workshop')}
-                    className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[11px] font-semibold transition-colors flex items-center justify-center gap-1"
+                    className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[11px] font-semibold transition-colors flex items-center justify-center gap-1 cursor-pointer"
                   >
                     <Wrench className="w-3 h-3 text-amber-400" />
                     <span>Expand Workshop ($35k)</span>
@@ -166,7 +192,7 @@ export const HubsManager: React.FC<HubsManagerProps> = ({ onSelectHub }) => {
 
                   <button
                     onClick={() => handleUpgrade(hub.id, 'bulkFuel')}
-                    className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[11px] font-semibold transition-colors flex items-center justify-center gap-1"
+                    className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[11px] font-semibold transition-colors flex items-center justify-center gap-1 cursor-pointer"
                   >
                     <Fuel className="w-3 h-3 text-amber-400" />
                     <span>Bulk Tanker ($45k)</span>
@@ -178,6 +204,83 @@ export const HubsManager: React.FC<HubsManagerProps> = ({ onSelectHub }) => {
         })}
       </div>
 
+      {/* Fuel Transfer Modal */}
+      {transferSourceHubId && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Fuel className="w-5 h-5 text-amber-400" />
+                <span>Inter-Hub Bulk Fuel Transfer</span>
+              </h3>
+              <button
+                onClick={() => setTransferSourceHubId(null)}
+                className="text-slate-400 hover:text-white text-xs cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs font-mono">
+              <div>
+                <label className="text-slate-400 block mb-1">Source Terminal (Origin):</label>
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-white font-bold">
+                  {state.hubs.find((h) => h.id === transferSourceHubId)?.name} (Available:{' '}
+                  {Math.round(state.hubs.find((h) => h.id === transferSourceHubId)?.bulkFuelStockLiters || 0).toLocaleString()}L)
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-400 block mb-1">Destination Terminal:</label>
+                <select
+                  value={transferDestHubId}
+                  onChange={(e) => setTransferDestHubId(e.target.value)}
+                  className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-amber-500 cursor-pointer"
+                >
+                  {ownedHubs
+                    .filter((h) => h.id !== transferSourceHubId)
+                    .map((h) => (
+                      <option key={h.id} value={h.id}>
+                        {h.name} (Capacity Space:{' '}
+                        {Math.round(h.bulkFuelCapacityLiters - h.bulkFuelStockLiters).toLocaleString()}L)
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-slate-400 block mb-1">Transfer Volume (Liters):</label>
+                <input
+                  type="number"
+                  min="1000"
+                  max="100000"
+                  step="1000"
+                  value={transferLiters}
+                  onChange={(e) => setTransferLiters(Number(e.target.value))}
+                  className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-amber-500"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">Logistics transport fee: $0.08 per liter transferred.</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+              <button
+                onClick={() => setTransferSourceHubId(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleExecuteTransfer}
+                className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl transition-colors cursor-pointer shadow-lg"
+              >
+                Authorize Transfer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Pagination Controls */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-4 border-t border-slate-800 text-xs font-mono text-slate-400">
@@ -188,7 +291,7 @@ export const HubsManager: React.FC<HubsManagerProps> = ({ onSelectHub }) => {
             <button
               onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
               disabled={currentPage === 1}
-              className="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors"
+              className="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -198,7 +301,7 @@ export const HubsManager: React.FC<HubsManagerProps> = ({ onSelectHub }) => {
             <button
               onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
               disabled={currentPage === totalPages}
-              className="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors"
+              className="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" />
             </button>

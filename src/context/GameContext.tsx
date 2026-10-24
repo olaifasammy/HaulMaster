@@ -17,6 +17,10 @@ import {
   Hub,
   RouteCorridor,
   OnboardingConfig,
+  GoldMarketState,
+  CommercialInsurancePolicy,
+  MacroWorldEvent,
+  FleetIncidentRecord,
 } from '../types/game';
 import {
   INITIAL_HUBS,
@@ -62,7 +66,7 @@ export const generateContractsForRoutes = (
   unlockedRoutes: RouteCorridor[],
   hubs: Hub[],
   count: number = 20,
-  ownedTrucks?: Truck[]
+  ownedTrucks?: TruckInstance[]
 ): CargoContract[] => {
   if (unlockedRoutes.length === 0) return [];
 
@@ -142,9 +146,10 @@ interface GameContextType {
   renewDriverContract: (driverId: string) => boolean;
   upgradeHub: (hubId: string, upgradeType: 'workshop' | 'bulkFuel') => boolean;
   refuelTruckAtHub: (truckId: string, liters: number) => boolean;
+  transferFuelBetweenHubs: (sourceHubId: string, destHubId: string, liters: number) => boolean;
   takeLoan: (amount: number, termDays: number) => boolean;
   repayLoan: (loanId: string, amount: number) => void;
-  claimGrant: (amount: number, description: string) => void;
+  claimGrant: (amount: number, description: string, grantId?: string) => void;
   dismissNotification: (id: string) => void;
   resetGame: () => void;
   // New onboarding, guide, and marketplace capabilities
@@ -171,13 +176,18 @@ interface GameContextType {
     componentKey: 'engine' | 'turbo' | 'transmission' | 'clutch' | 'brakes' | 'cooling' | 'suspension' | 'emissions' | 'steerTires' | 'driveTires'
   ) => boolean;
   clearDTCs: (truckId: string) => void;
-  activateAiDispatcher: (tier: '7d' | '1m' | 'auto', useGold?: boolean) => boolean;
-  activateAiFleetMaintenance: (tier: '7d' | '1m' | 'auto', useGold?: boolean) => boolean;
-  activateAiSuite: (options: { planTier: '7d' | '1m' | 'auto' | 'year'; includeMaintenance: boolean; includeOfflineDispatch: boolean; useGold: boolean; autoRenew: boolean }) => boolean;
+  activateAiDispatcher: (tier: '7d' | '1m' | 'auto', useGold?: boolean, allowExtension?: boolean) => boolean;
+  activateAiFleetMaintenance: (tier: '7d' | '1m' | 'auto', useGold?: boolean, allowExtension?: boolean) => boolean;
+  activateAiSuite: (options: { planTier: '7d' | '1m' | 'auto' | 'year'; includeMaintenance: boolean; includeOfflineDispatch: boolean; useGold: boolean; autoRenew: boolean; allowExtension?: boolean }) => boolean;
   toggleAiFleetMaintenance: () => void;
+  toggleAiAutoDispatch: () => void;
   executeAiAutoDispatch: () => { dispatchedCount: number; message: string };
   dispatchRoadsideMechanic: (tripId: string, repairType: 'mobile' | 'heavy_tow') => { success: boolean; message: string };
   recallTrip: (tripId: string) => void;
+  buyGold: (amount: number) => boolean;
+  sellGold: (amount: number) => boolean;
+  upgradeInsurancePolicy: (tier: 'basic_liability' | 'comprehensive_fleet' | 'platinum_umbrella') => boolean;
+  fileInsuranceClaim: (incidentId: string) => boolean;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -285,11 +295,87 @@ const createInitialState = (): GameState => {
     playerRank: 1,
     playerXp: 0,
     gold: 15,
+    goldMarket: {
+      spotPriceUsd: 2540,
+      previousDaySpotPriceUsd: 2515,
+      dayChangePercent: 0.99,
+      dayHighUsd: 2560,
+      dayLowUsd: 2510,
+      brokerFeePercent: 1.5,
+      totalGoldReserveUsd: 15 * 2540,
+      history: [{ simDay: 1, price: 2540 }],
+    },
+    insurancePolicy: {
+      policyTier: 'comprehensive_fleet',
+      tierName: 'Comprehensive Commercial Fleet Policy',
+      deductibleUsd: 2500,
+      coverageRatioPercent: 85,
+      dailyPremiumUsd: 120,
+      claimsPaidTotalUsd: 0,
+    },
+    activeEvents: [
+      {
+        id: 'evt-safety-blitz-01',
+        type: 'dot_safety_blitz',
+        title: 'DOT Commercial Vehicle Safety Blitz',
+        category: 'regulatory',
+        description: 'Federal DOT and state highway patrol units are conducting intensive mechanical safety inspections at scale stations. Ensure brakes, tires, and lights are maintained.',
+        region: 'Global',
+        simStartMinutes: 0,
+        durationMinutes: 4320,
+        expiresSimMinutes: 4320,
+        inspectionFrequencyMultiplier: 2.5,
+        accidentRiskMultiplier: 0.9,
+        severity: 'moderate',
+        icon: 'ShieldAlert',
+      },
+      {
+        id: 'evt-oil-disruption-01',
+        type: 'oil_refinery_disruption',
+        title: 'Refinery Disruption & Diesel Spot Surcharge',
+        category: 'economic',
+        description: 'Temporary refinery maintenance outage has tightened diesel distribution reserves. Wholesale terminal fuel rates are elevated by +18%.',
+        region: 'Global',
+        simStartMinutes: 0,
+        durationMinutes: 2880,
+        expiresSimMinutes: 2880,
+        fuelPriceMultiplier: 1.18,
+        severity: 'high',
+        icon: 'Fuel',
+      },
+    ],
+    incidentHistory: [
+      {
+        id: 'inc-init-01',
+        simDay: 1,
+        simTimeFormatted: 'Day 1 07:15',
+        timestamp: Date.now() - 3600000,
+        severity: 'minor_incident',
+        title: 'Pre-Trip Terminal PrePass Inspection',
+        type: 'dot_inspection_clean',
+        truckId: 'trk-01',
+        truckPlate: 'CO-320-RG',
+        truckModelName: 'MetroFreight Rigid 320',
+        driverId: 'drv-01',
+        driverName: 'Marcus Vance',
+        corridorName: 'I-25 Front Range Terminal Approach',
+        locationKm: 12,
+        weatherCondition: 'Clear',
+        rootCause: 'Routine Commercial Vehicle Safety Alliance (CVSA) decal inspection passed flawlessly.',
+        directCostUsd: 0,
+        insuranceClaimUsd: 0,
+        netExpenseUsd: 0,
+        downtimeMinutes: 15,
+        isResolved: true,
+        citationDetails: 'Clean bill of health - Level 1 Inspection passed (CVSA decal issued).',
+      },
+    ],
     rankTitle: 'Novice Carrier',
     ownedHubIds,
     ownedRouteIds,
     ownedSpokeConnections: [],
     claimedAchievementIds: [],
+    claimedGrantIds: [],
     hasCompletedOnboarding: false,
     showGuide: false,
     unlockedRegions: ['North America'],
@@ -302,6 +388,7 @@ const createInitialState = (): GameState => {
     aiOfflineDispatchActive: false,
     aiOfflineDispatchExpiresSimMinutes: 0,
     aiAutoRenew: false,
+    aiAutoDispatchEnabled: true,
   };
 };
 
@@ -575,17 +662,27 @@ const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameS
       if (!truckModel?.isRigid) {
         let trailer = updatedTrailers.find(tr => tr.status === 'idle' && tr.currentHubId === contract.originHubId);
         if (!trailer) {
+          const trailerModelId: TrailerModelId = contract.temperatureControlled
+            ? 'reefer-temp'
+            : contract.isHazardous
+            ? 'adr-chemical'
+            : contract.category === 'Heavy Machinery'
+            ? 'lowboy-heavy'
+            : 'dry-van-53';
+
           const newTr: TrailerInstance = {
             id: `trl-offai-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-            modelId: contract.temperatureControlled ? 'trailer-reefer' : contract.isHazardous ? 'trailer-cistern' : 'trailer-dry-van',
-            plate: `AI-${Math.floor(1000 + Math.random() * 9000)}`,
-            status: 'en_route',
+            modelId: trailerModelId,
+            serialNumber: `AH-${Math.floor(10000 + Math.random() * 90000)}`,
             currentHubId: contract.originHubId,
+            status: 'en_route',
+            odometerKm: 0,
+            hasAeroSkirts: true,
+            hasReeferUnit: !!contract.temperatureControlled,
+            reeferFuelCurrentLiters: contract.temperatureControlled ? 100 : 0,
+            tireCompound: 'highway_eco',
             assignedTruckId: truck.id,
             assignedTripId: null,
-            conditionPct: 100,
-            odometerKm: 0,
-            purchaseDateSimDay: simDay,
           };
           updatedTrailers.push(newTr);
           trailer = newTr;
@@ -706,6 +803,89 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           parsed.notifications = deduplicateNotifications(parsed.notifications || []);
           if (!parsed.trailers || parsed.trailers.length === 0) {
             parsed.trailers = INITIAL_TRAILERS;
+          }
+          if (!parsed.goldMarket) {
+            parsed.goldMarket = {
+              spotPriceUsd: 2540,
+              previousDaySpotPriceUsd: 2515,
+              dayChangePercent: 0.99,
+              dayHighUsd: 2560,
+              dayLowUsd: 2510,
+              brokerFeePercent: 1.5,
+              totalGoldReserveUsd: (parsed.gold || 15) * 2540,
+              history: [{ simDay: 1, price: 2540 }],
+            };
+          }
+          if (!parsed.insurancePolicy) {
+            parsed.insurancePolicy = {
+              policyTier: 'comprehensive_fleet',
+              tierName: 'Comprehensive Commercial Fleet Policy',
+              deductibleUsd: 2500,
+              coverageRatioPercent: 85,
+              dailyPremiumUsd: 120,
+              claimsPaidTotalUsd: 0,
+            };
+          }
+          if (!parsed.activeEvents || parsed.activeEvents.length === 0) {
+            parsed.activeEvents = [
+              {
+                id: 'evt-safety-blitz-01',
+                type: 'dot_safety_blitz',
+                title: 'DOT Commercial Vehicle Safety Blitz',
+                category: 'regulatory',
+                description: 'Federal DOT and state highway patrol units are conducting intensive mechanical safety inspections at scale stations. Ensure brakes, tires, and lights are maintained.',
+                region: 'Global',
+                simStartMinutes: 0,
+                durationMinutes: 4320,
+                expiresSimMinutes: 4320,
+                inspectionFrequencyMultiplier: 2.5,
+                accidentRiskMultiplier: 0.9,
+                severity: 'moderate',
+                icon: 'ShieldAlert',
+              },
+              {
+                id: 'evt-oil-disruption-01',
+                type: 'oil_refinery_disruption',
+                title: 'Refinery Disruption & Diesel Spot Surcharge',
+                category: 'economic',
+                description: 'Temporary refinery maintenance outage has tightened diesel distribution reserves. Wholesale terminal fuel rates are elevated by +18%.',
+                region: 'Global',
+                simStartMinutes: 0,
+                durationMinutes: 2880,
+                expiresSimMinutes: 2880,
+                fuelPriceMultiplier: 1.18,
+                severity: 'high',
+                icon: 'Fuel',
+              },
+            ];
+          }
+          if (!parsed.incidentHistory) {
+            parsed.incidentHistory = [
+              {
+                id: 'inc-init-01',
+                simDay: 1,
+                simTimeFormatted: 'Day 1 07:15',
+                timestamp: Date.now() - 3600000,
+                severity: 'minor_incident',
+                title: 'Pre-Trip Terminal PrePass Inspection',
+                type: 'dot_inspection_clean',
+                truckId: 'trk-01',
+                truckPlate: 'CO-320-RG',
+                truckModelName: 'MetroFreight Rigid 320',
+                driverId: 'drv-01',
+                driverName: 'Marcus Vance',
+                corridorName: 'I-25 Front Range Terminal Approach',
+                locationKm: 12,
+                weatherCondition: 'Clear',
+                rootCause: 'Routine Commercial Vehicle Safety Alliance (CVSA) decal inspection passed flawlessly.',
+                directCostUsd: 0,
+                insuranceClaimUsd: 0,
+                netExpenseUsd: 0,
+                downtimeMinutes: 15,
+                isResolved: true,
+                citationDetails: 'Clean bill of health - Level 1 Inspection passed (CVSA decal issued).',
+              },
+            ];
           }
 
           const now = Date.now();
@@ -869,11 +1049,170 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           let updatedCargoTons = prevState.totalCargoDeliveredTons;
           let updatedFuelBurned = prevState.totalFuelBurnedLiters;
           let updatedKmDriven = prevState.totalKilometersDriven;
+          let updatedPlayerXp = prevState.playerXp;
+          let updatedPlayerRank = prevState.playerRank;
+          let updatedRankTitle = prevState.rankTitle;
+          let updatedGold = prevState.gold;
 
-          // 1. Process Midnight Rollover (Daily loan payments, driver retainers, hub depot maintenance)
+          let updatedGoldMarket: GoldMarketState = prevState.goldMarket || {
+            spotPriceUsd: 2540,
+            previousDaySpotPriceUsd: 2515,
+            dayChangePercent: 0.99,
+            dayHighUsd: 2560,
+            dayLowUsd: 2510,
+            brokerFeePercent: 1.5,
+            totalGoldReserveUsd: (prevState.gold || 15) * 2540,
+            history: [{ simDay: 1, price: 2540 }],
+          };
+          let updatedInsurance: CommercialInsurancePolicy = prevState.insurancePolicy || {
+            policyTier: 'comprehensive_fleet',
+            tierName: 'Comprehensive Commercial Fleet Policy',
+            deductibleUsd: 2500,
+            coverageRatioPercent: 85,
+            dailyPremiumUsd: 120,
+            claimsPaidTotalUsd: 0,
+          };
+          let updatedEvents: MacroWorldEvent[] = [...(prevState.activeEvents || [])];
+          let updatedIncidents: FleetIncidentRecord[] = [...(prevState.incidentHistory || [])];
+
+          // 1. Process Midnight Rollover (Daily loan payments, driver retainers, hub depot maintenance, insurance, gold spot, events)
           let updatedLoans = prevState.loans;
           let updatedDrivers = [...prevState.drivers];
           if (isMidnightRollover) {
+            // Commercial Fleet Insurance daily premium
+            if (updatedInsurance.dailyPremiumUsd > 0) {
+              currentBalance -= updatedInsurance.dailyPremiumUsd;
+              newLedgerEntries.push({
+                id: `led-ins-${newSimMinutes}`,
+                simDay: currentDay,
+                simTimeFormatted: timeFormatted,
+                type: 'broker_fee',
+                description: `Commercial Fleet Insurance daily underwriter premium (${updatedInsurance.tierName})`,
+                amountUsd: -updatedInsurance.dailyPremiumUsd,
+                runningBalanceUsd: currentBalance,
+              });
+            }
+
+            // Real Valuation: Fluctuate Gold Spot Price (COMEX benchmark)
+            const curSpot = updatedGoldMarket.spotPriceUsd || 2540;
+            const deltaSpot = Math.round((Math.random() - 0.48) * 32);
+            const newSpot = Math.max(2200, Math.min(3200, curSpot + deltaSpot));
+            const changePct = Number((((newSpot - curSpot) / curSpot) * 100).toFixed(2));
+            updatedGoldMarket = {
+              ...updatedGoldMarket,
+              spotPriceUsd: newSpot,
+              previousDaySpotPriceUsd: curSpot,
+              dayChangePercent: changePct,
+              dayHighUsd: Math.max(newSpot, newSpot + Math.round(Math.random() * 25)),
+              dayLowUsd: Math.min(newSpot, newSpot - Math.round(Math.random() * 25)),
+              totalGoldReserveUsd: prevState.gold * newSpot,
+              history: [...(updatedGoldMarket.history || []), { simDay: currentDay, price: newSpot }].slice(-30),
+            };
+
+            // Macro Real-World Events Lifecycle
+            updatedEvents = updatedEvents.filter(e => e.expiresSimMinutes > newSimMinutes);
+            if (updatedEvents.length < 2 && Math.random() < 0.45) {
+              const eventPool: Omit<MacroWorldEvent, 'id' | 'simStartMinutes' | 'expiresSimMinutes'>[] = [
+                {
+                  type: 'dot_safety_blitz',
+                  title: 'DOT Commercial Vehicle Safety Blitz',
+                  category: 'regulatory',
+                  description: 'Federal DOT and state highway patrol units are conducting intensive mechanical safety inspections at scale stations. Ensure brakes, tires, and lights are maintained.',
+                  region: 'Global',
+                  durationMinutes: 4320,
+                  inspectionFrequencyMultiplier: 2.5,
+                  accidentRiskMultiplier: 0.9,
+                  severity: 'moderate',
+                  icon: 'ShieldAlert',
+                },
+                {
+                  type: 'oil_refinery_disruption',
+                  title: 'Refinery Disruption & Diesel Spot Surcharge',
+                  category: 'economic',
+                  description: 'Temporary refinery maintenance outage has tightened diesel distribution reserves. Wholesale terminal fuel rates are elevated by +18%.',
+                  region: 'Global',
+                  durationMinutes: 2880,
+                  fuelPriceMultiplier: 1.18,
+                  severity: 'high',
+                  icon: 'Fuel',
+                },
+                {
+                  type: 'polar_vortex_blizzard',
+                  title: 'Polar Vortex & Mountain Blizzard Warning',
+                  category: 'weather',
+                  description: 'Severe arctic blast dropping temperatures across corridors. Road friction severely reduced; hazard risk elevated for unequipped rigs.',
+                  region: 'Global',
+                  durationMinutes: 2880,
+                  roadFrictionPenalty: -0.22,
+                  accidentRiskMultiplier: 2.2,
+                  severity: 'critical',
+                  icon: 'CloudLightning',
+                },
+                {
+                  type: 'port_dockworker_congestion',
+                  title: 'Intermodal Port Congestion & Peak Surcharge',
+                  category: 'logistics',
+                  description: 'Container terminals experiencing massive inbound cargo surges. Shippers are paying an extra +35% spot rate for immediate hauling.',
+                  region: 'Global',
+                  durationMinutes: 4320,
+                  freightPayoutMultiplier: 1.35,
+                  severity: 'moderate',
+                  icon: 'Package',
+                },
+                {
+                  type: 'infrastructure_corridor_subsidy',
+                  title: 'Highway Trust Fund Corridor Toll Subsidy',
+                  category: 'economic',
+                  description: 'Federal transport agency grant active: Highway tolls are subsidized by 50% across all commercial interstate corridors.',
+                  region: 'Global',
+                  durationMinutes: 2880,
+                  tollMultiplier: 0.50,
+                  severity: 'low',
+                  icon: 'DollarSign',
+                },
+                {
+                  type: 'just_in_time_shortage',
+                  title: 'Critical Industrial Just-In-Time Supply Shortage',
+                  category: 'logistics',
+                  description: 'Manufacturing plants in critical need of freight. Rush bonuses of +40% available for prompt delivery.',
+                  region: 'Global',
+                  durationMinutes: 2880,
+                  freightPayoutMultiplier: 1.40,
+                  severity: 'high',
+                  icon: 'Zap',
+                },
+                {
+                  type: 'summer_heatwave_buckling',
+                  title: 'Interstate Pavement Heatwave Warning',
+                  category: 'weather',
+                  description: 'Roadway surface temperatures exceeding 50°C. High risk of tire delamination and overheating engines.',
+                  region: 'Global',
+                  durationMinutes: 2880,
+                  accidentRiskMultiplier: 1.6,
+                  severity: 'moderate',
+                  icon: 'Flame',
+                },
+              ];
+              const cand = eventPool[Math.floor(Math.random() * eventPool.length)];
+              if (!updatedEvents.some(e => e.type === cand.type)) {
+                const newEvt: MacroWorldEvent = {
+                  ...cand,
+                  id: `evt-${cand.type}-${Date.now()}`,
+                  simStartMinutes: newSimMinutes,
+                  expiresSimMinutes: newSimMinutes + cand.durationMinutes,
+                };
+                updatedEvents.push(newEvt);
+                newNotifications.push({
+                  id: `notif-evt-${newEvt.id}`,
+                  simTimeFormatted: timeFormatted,
+                  title: `🌐 Global Market Event: ${newEvt.title}`,
+                  message: newEvt.description,
+                  type: 'event',
+                  timestamp: Date.now(),
+                });
+              }
+            }
+
             // Driver contract days countdown
             updatedDrivers = prevState.drivers.map((drv) => {
               const remaining = Math.max(0, (drv.contractDaysRemaining || 45) - 1);
@@ -930,11 +1269,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               })
               .filter((loan) => loan.remainingBalanceUsd > 0);
 
-            // Fluctuate hub fuel spot prices by +/- 3%
+            // Fluctuate hub fuel spot prices by +/- 3% (influenced by active events)
+            const fuelEventMultiplier = updatedEvents.reduce((acc, ev) => acc * (ev.fuelPriceMultiplier || 1), 1);
             const updatedHubs = prevState.hubs.map((h) => {
               const delta = (Math.random() - 0.5) * 0.08;
-              const newPrice = Math.max(0.85, Math.min(2.4, Number((h.fuelPricePerLiter + delta).toFixed(2))));
-              return { ...h, fuelPricePerLiter: newPrice };
+              const baseNew = Math.max(0.85, Math.min(2.4, Number((h.fuelPricePerLiter + delta).toFixed(2))));
+              const finalPrice = Number((baseNew * fuelEventMultiplier).toFixed(2));
+              return { ...h, fuelPricePerLiter: finalPrice };
             });
 
             // Restock fresh available contracts for unlocked routes across all unlocked regions simultaneously
@@ -1015,7 +1356,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   updatedTrucks = updatedTrucks.map(t => t.id === truck.id ? {
                     ...t,
                     status: 'en_route',
-                    health: isHeavy ? 100 : Math.max(70, t.health),
+                    health: isHeavy ? 100 : Math.max(70, t.health || 70),
                     subsystems: {
                       ...t.subsystems,
                       engineBlock: repairedEngine,
@@ -1166,14 +1507,41 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               currentSpeedKmh: trip.telemetry.currentSpeedKmh,
             });
 
-            // Fuel depletion check
-            const nextFuel = Math.max(0, truck.fuelCurrentLiters - physics.fuelBurnedLiters);
+            // Fuel depletion check & roadside emergency fill
+            let nextFuel = Math.max(0, truck.fuelCurrentLiters - physics.fuelBurnedLiters);
             const nextAdBlue = Math.max(0, truck.adBlueCurrentLiters - physics.adBlueBurnedLiters);
             updatedFuelBurned += physics.fuelBurnedLiters;
+
+            if (nextFuel <= 35 && nextFuel > 0 && truck.fuelCurrentLiters > 35) {
+              const emergencyBuyLiters = Math.min(200, (model.specs.fuelTankCapacityLiters || 600) - nextFuel);
+              const roadsideCost = Math.round(emergencyBuyLiters * 2.85);
+              currentBalance -= roadsideCost;
+              nextFuel += emergencyBuyLiters;
+
+              newLedgerEntries.push({
+                id: `led-roadside-fuel-${trip.id}-${newSimMinutes}-${Math.random().toString(36).substring(2, 7)}`,
+                simDay: currentDay,
+                simTimeFormatted: timeFormatted,
+                type: 'fuel_expense',
+                description: `Roadside emergency fuel purchase (${Math.round(emergencyBuyLiters)}L) for ${truck.plate}`,
+                amountUsd: -roadsideCost,
+                runningBalanceUsd: currentBalance,
+              });
+
+              newNotifications.push({
+                id: `notif-roadside-fuel-${trip.id}-${newSimMinutes}-${Math.random().toString(36).substring(2, 7)}`,
+                simTimeFormatted: timeFormatted,
+                title: '⛽ Roadside Emergency Fuel Purchase',
+                message: `${truck.plate} ran low on fuel en route. Emergency roadside tanker delivered ${Math.round(emergencyBuyLiters)}L of diesel ($${roadsideCost.toLocaleString()}).`,
+                type: 'breakdown',
+                timestamp: Date.now(),
+              });
+            }
 
             if (nextFuel <= 0) {
               // Run out of fuel! Emergency dispatch recovery
               currentBalance -= 2200;
+              nextFuel = 150; // refill to limp home
               newLedgerEntries.push({
                 id: `led-fuel-empty-${trip.id}`,
                 simDay: currentDay,
@@ -1215,6 +1583,169 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 type: 'breakdown',
                 timestamp: Date.now(),
               });
+            }
+
+            // Real-World Incident & Accident Simulation
+            const tripProgressFrac = trip.totalDistanceKm > 0 ? trip.progressKm / trip.totalDistanceKm : 0;
+            const hasHadIncidentAlready = (trip.eventLogs || []).some((log) => log.includes('[INCIDENT]') || log.includes('[ACCIDENT]'));
+
+            // 1. DOT Weigh Station Roadside Inspection (Triggered along highway routes between 25% and 65% progress)
+            const inspectionEventActive = updatedEvents.some((e) => e.type === 'dot_safety_blitz');
+            const inspectionChance = inspectionEventActive ? 0.012 : 0.003;
+            if (!hasHadIncidentAlready && tripProgressFrac > 0.25 && tripProgressFrac < 0.65 && Math.random() < inspectionChance) {
+              const brakesOk = (truck.subsystems.brakePads || 100) >= 55;
+              const tiresOk = (truck.subsystems.steerTires?.wearPercentage || 100) >= 45;
+              const noCriticalDtc = !truck.activeDTCs.some((d) => d.severity === 'critical');
+
+              if (brakesOk && tiresOk && noCriticalDtc) {
+                // Passed inspection with CVSA decal
+                newNotifications.push({
+                  id: `notif-dot-pass-${trip.id}-${Date.now()}`,
+                  simTimeFormatted: timeFormatted,
+                  title: '🟢 CVSA Weigh Station Inspection Passed',
+                  message: `${truck.plate} passed Level 1 roadside safety inspection cleanly. Decal issued (+20 XP).`,
+                  type: 'incident',
+                  timestamp: Date.now(),
+                });
+                updatedPlayerXp += 20;
+                updatedIncidents.unshift({
+                  id: `inc-pass-${Date.now()}`,
+                  simDay: currentDay,
+                  simTimeFormatted: timeFormatted,
+                  timestamp: Date.now(),
+                  severity: 'minor_incident',
+                  title: 'Clean DOT Safety Inspection',
+                  type: 'dot_inspection_clean',
+                  truckId: truck.id,
+                  truckPlate: truck.plate,
+                  truckModelName: model.name,
+                  driverId: driver.id,
+                  driverName: driver.name,
+                  corridorName: trip.corridor.name,
+                  locationKm: Math.round(trip.progressKm),
+                  weatherCondition: weather.type,
+                  rootCause: 'Passed comprehensive brake, tire tread, and logbook CVSA Level 1 inspection with zero defects.',
+                  directCostUsd: 0,
+                  insuranceClaimUsd: 0,
+                  netExpenseUsd: 0,
+                  downtimeMinutes: 15,
+                  isResolved: true,
+                });
+                trip.eventLogs = [...(trip.eventLogs || []), `[${timeFormatted}] [INCIDENT] Passed DOT roadside safety inspection cleanly (+20 XP)`];
+              } else {
+                // Out-of-service citation!
+                const fine = 1250;
+                currentBalance -= fine;
+                newLedgerEntries.push({
+                  id: `led-dot-cite-${trip.id}-${Date.now()}`,
+                  simDay: currentDay,
+                  simTimeFormatted: timeFormatted,
+                  type: 'broker_fee',
+                  description: `DOT Highway Safety Out-of-Service citation for ${truck.plate}`,
+                  amountUsd: -fine,
+                  runningBalanceUsd: currentBalance,
+                });
+                newNotifications.push({
+                  id: `notif-dot-fail-${trip.id}-${Date.now()}`,
+                  simTimeFormatted: timeFormatted,
+                  title: '⚠️ DOT Highway Inspection Citation',
+                  message: `Inspection violation on ${truck.plate} for degraded brakes/tires. Fined $${fine.toLocaleString()} USD and delayed 45 minutes.`,
+                  type: 'incident',
+                  timestamp: Date.now(),
+                });
+                updatedIncidents.unshift({
+                  id: `inc-fail-${Date.now()}`,
+                  simDay: currentDay,
+                  simTimeFormatted: timeFormatted,
+                  timestamp: Date.now(),
+                  severity: 'moderate_delay',
+                  title: 'DOT Inspection Citation & Brake Adjustment',
+                  type: 'dot_inspection_citation',
+                  truckId: truck.id,
+                  truckPlate: truck.plate,
+                  truckModelName: model.name,
+                  driverId: driver.id,
+                  driverName: driver.name,
+                  corridorName: trip.corridor.name,
+                  locationKm: Math.round(trip.progressKm),
+                  weatherCondition: weather.type,
+                  rootCause: `Safety defect identified: degraded brake pads (${Math.round(truck.subsystems.brakePads || 0)}%) or worn tires below CVSA minimums.`,
+                  directCostUsd: fine,
+                  insuranceClaimUsd: 0,
+                  netExpenseUsd: fine,
+                  downtimeMinutes: 45,
+                  isResolved: true,
+                  citationDetails: '49 CFR § 393 - Brake system out of adjustment violation issued.',
+                });
+                trip.eventLogs = [...(trip.eventLogs || []), `[${timeFormatted}] [INCIDENT] DOT roadside inspection citation (-$${fine})`];
+              }
+            }
+
+            // 2. Severe Highway Accident Risk (Jackknife or Collision)
+            const isHazardousRoad = weather.roadFrictionCoeff < 0.45 || Math.abs(gradePct) > 3.5;
+            const highSpeed = trip.telemetry.currentSpeedKmh > 75;
+            const lackEquipment = !truck.hasRetarder && (truck.subsystems.brakePads || 100) < 45;
+            const driverExhausted = driver.stats.fatiguePercent > 70;
+            const accidentMulti = updatedEvents.reduce((acc, ev) => acc * (ev.accidentRiskMultiplier || 1), 1);
+
+            if (!hasHadIncidentAlready && isHazardousRoad && (lackEquipment || driverExhausted) && Math.random() < 0.003 * accidentMulti) {
+              isBreakdown = true;
+              const directDamageCost = 9500;
+              const deductible = updatedInsurance.deductibleUsd;
+              const claimable = Math.max(0, directDamageCost - deductible);
+              const insurancePayout = Math.round(claimable * (updatedInsurance.coverageRatioPercent / 100));
+              const netLoss = directDamageCost - insurancePayout;
+
+              currentBalance -= netLoss;
+              updatedInsurance = {
+                ...updatedInsurance,
+                claimsPaidTotalUsd: updatedInsurance.claimsPaidTotalUsd + insurancePayout,
+              };
+
+              newLedgerEntries.push({
+                id: `led-acc-${trip.id}-${Date.now()}`,
+                simDay: currentDay,
+                simTimeFormatted: timeFormatted,
+                type: 'breakdown_recovery',
+                description: `Accident damage & heavy recovery net expense for ${truck.plate} (Insurance covered +$${insurancePayout.toLocaleString()})`,
+                amountUsd: -netLoss,
+                runningBalanceUsd: currentBalance,
+              });
+
+              newNotifications.push({
+                id: `notif-acc-${trip.id}-${Date.now()}`,
+                simTimeFormatted: timeFormatted,
+                title: '🚨 Severe Highway Incident: Jackknife Accident',
+                message: `${truck.plate} lost traction on ${trip.corridor.name}. Guardrail impact sustained. Commercial insurance covered $${insurancePayout.toLocaleString()} (Net loss: $${netLoss.toLocaleString()}).`,
+                type: 'accident',
+                timestamp: Date.now(),
+              });
+
+              updatedIncidents.unshift({
+                id: `acc-${Date.now()}`,
+                simDay: currentDay,
+                simTimeFormatted: timeFormatted,
+                timestamp: Date.now(),
+                severity: 'severe_accident',
+                title: 'Corridor Jackknife & Guardrail Collision',
+                type: 'jackknife_accident',
+                truckId: truck.id,
+                truckPlate: truck.plate,
+                truckModelName: model.name,
+                driverId: driver.id,
+                driverName: driver.name,
+                corridorName: trip.corridor.name,
+                locationKm: Math.round(trip.progressKm),
+                weatherCondition: weather.type,
+                rootCause: `Loss of vehicle directional control on ${weather.type} road (friction ${weather.roadFrictionCoeff}). Compounded by brake fade and lack of retarder on ${gradePct.toFixed(1)}% grade.`,
+                directCostUsd: directDamageCost,
+                insuranceClaimUsd: insurancePayout,
+                netExpenseUsd: netLoss,
+                downtimeMinutes: 180,
+                isResolved: false,
+              });
+
+              trip.eventLogs = [...(trip.eventLogs || []), `[${timeFormatted}] [ACCIDENT] Severe jackknife accident on ${trip.corridor.name}`];
             }
 
             // Advance Driver Tachograph
@@ -1306,11 +1837,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
 
           // 3. Process Completed Trips & Financial Payouts
-          let updatedPlayerXp = prevState.playerXp;
-          let updatedPlayerRank = prevState.playerRank;
-          let updatedRankTitle = prevState.rankTitle;
-          let updatedGold = prevState.gold;
-
           for (const finished of completedTrips) {
             const destHub = prevState.hubs.find((h) => h.id === finished.contract.destinationHubId);
             const isOnTime = finished.elapsedMinutes <= finished.contract.deadlineMinutes;
@@ -1514,13 +2040,24 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             playerXp: updatedPlayerXp,
             rankTitle: updatedRankTitle,
             gold: updatedGold,
+            goldMarket: updatedGoldMarket,
+            insurancePolicy: updatedInsurance,
+            activeEvents: updatedEvents,
+            incidentHistory: updatedIncidents,
           };
 
-          // Independent AI Auto-Dispatch: if AI Dispatcher subscription is active, automatically dispatch idle trucks every 15 sim minutes
-          const isAiSubActive = baseSimState.aiDispatcherActive && baseSimState.simTimeMinutes < baseSimState.aiSubscriptionExpiresSimMinutes;
-          if (isAiSubActive && (newSimMinutes % 15 === 0)) {
-            const { nextState: autoDispatchedState } = runAutoDispatchOnState(baseSimState);
-            baseSimState = autoDispatchedState;
+          // Autonomous AI Auto-Dispatch: Automatically and continuously dispatches idle trucks and ready drivers to available freight jobs
+          const isAiDispatcherSubActive = baseSimState.aiDispatcherActive && baseSimState.simTimeMinutes < baseSimState.aiSubscriptionExpiresSimMinutes;
+          const isAiAddonActive = baseSimState.aiOfflineDispatchActive && baseSimState.simTimeMinutes < baseSimState.aiOfflineDispatchExpiresSimMinutes;
+          const isAiAutoDispatchActive = (isAiDispatcherSubActive || isAiAddonActive) && (baseSimState.aiAutoDispatchEnabled !== false);
+
+          if (isAiAutoDispatchActive) {
+            const hasIdleTrucks = baseSimState.trucks.some((t) => t.status === 'idle');
+            const hasReadyDrivers = baseSimState.drivers.some((d) => d.hosStatus !== 'driving' && d.hosStatus !== 'resting');
+            if (hasIdleTrucks && hasReadyDrivers) {
+              const { nextState: autoDispatchedState } = runAutoDispatchOnState(baseSimState);
+              baseSimState = autoDispatchedState;
+            }
           }
 
           return baseSimState;
@@ -1558,9 +2095,36 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // Check truck fuel capacity & range
-    if (truck.fuelCurrentLiters < 100) {
-      notifyUser('Low Fuel Warning', `Truck ${truck.plate} has low fuel (${Math.round(truck.fuelCurrentLiters)}L). Please refuel at hub depot before departure.`, 'maintenance');
+    // Pre-dispatch refueling check & auto-bunker from stationed hub
+    const truckHub = state.hubs.find((h) => h.id === truck.currentHubId);
+    const truckModelSpec = TRUCK_MODELS.find((m) => m.id === truck.modelId);
+    let finalFuelLiters = truck.fuelCurrentLiters;
+    let hubRefuelCost = 0;
+    let hubBulkUsed = 0;
+
+    if (truckModelSpec && truckHub) {
+      const maxCap = truckModelSpec.specs.fuelTankCapacityLiters;
+      if (finalFuelLiters < maxCap) {
+        const needed = maxCap - finalFuelLiters;
+        const availableHubFuel = truckHub.bulkFuelStockLiters;
+        if (availableHubFuel > 0) {
+          const toPump = Math.min(needed, availableHubFuel);
+          hubRefuelCost = Math.round(toPump * truckHub.fuelPricePerLiter);
+          if (state.balanceUsd >= hubRefuelCost) {
+            finalFuelLiters += toPump;
+            hubBulkUsed = toPump;
+          } else {
+            notifyUser('Insufficient Treasury', `Pre-dispatch bunkering at ${truckHub.name} requires $${hubRefuelCost.toLocaleString()} USD.`, 'finance');
+            return false;
+          }
+        } else if (finalFuelLiters < 80) {
+          notifyUser('Station Depot Empty', `Station ${truckHub.name} has no bulk fuel. Truck departed with ${Math.round(finalFuelLiters)}L and will purchase emergency fuel on the roadside if required.`, 'maintenance');
+        }
+      }
+    }
+
+    if (finalFuelLiters < 60) {
+      notifyUser('Low Fuel Warning', `Truck ${truck.plate} has low fuel (${Math.round(finalFuelLiters)}L).`, 'maintenance');
       return false;
     }
 
@@ -1630,27 +2194,47 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isStalledBreakdown: false,
     };
 
-    setState((prev) => ({
-      ...prev,
-      availableContracts: prev.availableContracts.filter((c) => c.id !== contractId),
-      activeTrips: [...prev.activeTrips, newTrip],
-      trucks: prev.trucks.map((t) => (t.id === truckId ? { ...t, status: 'en_route', activeTripId: newTripId, assignedTrailerId: trailerId || t.assignedTrailerId } : t)),
-      trailers: trailerId
-        ? prev.trailers.map((tr) => (tr.id === trailerId ? { ...tr, status: 'en_route', assignedTruckId: truckId, assignedTripId: newTripId } : tr))
-        : prev.trailers,
-      drivers: prev.drivers.map((d) => (d.id === driverId ? { ...d, hosStatus: 'driving', assignedTruckId: truckId } : d)),
-      notifications: deduplicateNotifications([
+    setState((prev) => {
+      const simDay = Math.floor(prev.simTimeMinutes / 1440) + 1;
+      const nextBalance = prev.balanceUsd - hubRefuelCost;
+      const newLedgerEntries = hubRefuelCost > 0 ? [
         {
-          id: `notif-disp-${newTripId}-${Date.now()}`,
-          simTimeFormatted: `Day ${Math.floor(prev.simTimeMinutes / 1440) + 1}`,
-          title: 'Haul Dispatched',
-          message: `${contract.title} dispatched via ${corridor.name} with truck ${truck.plate}${trailerId ? ' & trailer' : ''} & driver ${driver.name}.`,
-          type: 'delivery',
-          timestamp: Date.now(),
+          id: `led-refuel-disp-${Date.now()}`,
+          simDay,
+          simTimeFormatted: `Day ${simDay}`,
+          type: 'fuel_expense' as const,
+          description: `Pre-dispatch bunkering: ${Math.round(hubBulkUsed)}L diesel at ${truckHub?.name || 'Hub'}`,
+          amountUsd: -hubRefuelCost,
+          runningBalanceUsd: nextBalance,
         },
-        ...prev.notifications,
-      ]),
-    }));
+        ...prev.ledger,
+      ] : prev.ledger;
+
+      return {
+        ...prev,
+        balanceUsd: nextBalance,
+        hubs: hubBulkUsed > 0 && truckHub ? prev.hubs.map((h) => h.id === truckHub.id ? { ...h, bulkFuelStockLiters: Math.max(0, h.bulkFuelStockLiters - hubBulkUsed) } : h) : prev.hubs,
+        availableContracts: prev.availableContracts.filter((c) => c.id !== contractId),
+        activeTrips: [...prev.activeTrips, newTrip],
+        trucks: prev.trucks.map((t) => (t.id === truckId ? { ...t, status: 'en_route', activeTripId: newTripId, fuelCurrentLiters: finalFuelLiters, assignedTrailerId: trailerId || t.assignedTrailerId } : t)),
+        trailers: trailerId
+          ? prev.trailers.map((tr) => (tr.id === trailerId ? { ...tr, status: 'en_route', assignedTruckId: truckId, assignedTripId: newTripId } : tr))
+          : prev.trailers,
+        drivers: prev.drivers.map((d) => (d.id === driverId ? { ...d, hosStatus: 'driving', assignedTruckId: truckId } : d)),
+        ledger: newLedgerEntries,
+        notifications: deduplicateNotifications([
+          {
+            id: `notif-disp-${newTripId}-${Date.now()}`,
+            simTimeFormatted: `Day ${Math.floor(prev.simTimeMinutes / 1440) + 1}`,
+            title: 'Haul Dispatched',
+            message: `${contract.title} dispatched via ${corridor.name} with truck ${truck.plate}${hubBulkUsed > 0 ? ` (bunkered ${Math.round(hubBulkUsed)}L)` : ''} & driver ${driver.name}.`,
+            type: 'delivery',
+            timestamp: Date.now(),
+          },
+          ...prev.notifications,
+        ]),
+      };
+    });
 
     return true;
   };
@@ -2629,6 +3213,74 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
+  const transferFuelBetweenHubs = (sourceHubId: string, destHubId: string, liters: number): boolean => {
+    if (sourceHubId === destHubId || liters <= 0) return false;
+    const srcHub = state.hubs.find((h) => h.id === sourceHubId);
+    const dstHub = state.hubs.find((h) => h.id === destHubId);
+    if (!srcHub || !dstHub) return false;
+
+    if (srcHub.bulkFuelStockLiters < liters) {
+      notifyUser('Insufficient Bulk Fuel', `Source hub ${srcHub.name} only has ${Math.round(srcHub.bulkFuelStockLiters)}L available for transfer.`, 'maintenance');
+      return false;
+    }
+
+    const availableSpace = dstHub.bulkFuelCapacityLiters - dstHub.bulkFuelStockLiters;
+    const toTransfer = Math.min(liters, availableSpace);
+    if (toTransfer <= 0) {
+      notifyUser('Destination Depot Full', `Destination hub ${dstHub.name} bulk fuel storage is at maximum capacity.`, 'maintenance');
+      return false;
+    }
+
+    const transportCost = Math.round(toTransfer * 0.08);
+    if (state.balanceUsd < transportCost) {
+      notifyUser('Insufficient Treasury', `Fuel transfer logistics cost requires $${transportCost.toLocaleString()} USD.`, 'finance');
+      return false;
+    }
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd - transportCost;
+
+    setState((prev) => ({
+      ...prev,
+      balanceUsd: nextBal,
+      hubs: prev.hubs.map((h) => {
+        if (h.id === sourceHubId) {
+          return { ...h, bulkFuelStockLiters: h.bulkFuelStockLiters - toTransfer };
+        }
+        if (h.id === destHubId) {
+          return { ...h, bulkFuelStockLiters: h.bulkFuelStockLiters + toTransfer };
+        }
+        return h;
+      }),
+      ledger: [
+        {
+          id: `led-fuel-transfer-${Date.now()}`,
+          simDay,
+          simTimeFormatted: `Day ${simDay}`,
+          type: 'fuel_expense',
+          description: `Transferred ${Math.round(toTransfer)}L fuel from ${srcHub.name} to ${dstHub.name}`,
+          amountUsd: -transportCost,
+          runningBalanceUsd: nextBal,
+        },
+        ...prev.ledger,
+      ],
+      notifications: deduplicateNotifications([
+        {
+          id: `notif-fuel-transfer-${Date.now()}`,
+          simTimeFormatted: `Day ${simDay}`,
+          title: '⛽ Bulk Fuel Transfer Completed',
+          message: `Successfully transferred ${Math.round(toTransfer)}L diesel from ${srcHub.name} to ${dstHub.name} (-$${transportCost.toLocaleString()} USD transport fee).`,
+          type: 'delivery',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ]),
+    }));
+
+    notifyUser('Fuel Transferred Successfully', `Transferred ${Math.round(toTransfer)}L diesel from ${srcHub.name} to ${dstHub.name}!`, 'delivery');
+    return true;
+  };
+
   const takeLoan = (amount: number, termDays: number): boolean => {
     const interestRate = 0.07; // 7% flat term interest
     const totalRepay = amount * (1 + interestRate);
@@ -2667,11 +3319,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
-  const claimGrant = (amount: number, description: string) => {
+  const claimGrant = (amount: number, description: string, grantId?: string) => {
+    if (grantId && state.claimedGrantIds?.includes(grantId)) {
+      notifyUser('Already Claimed', 'This subsidy tier has already been claimed.', 'maintenance');
+      return;
+    }
     const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
     setState((prev) => ({
       ...prev,
       balanceUsd: prev.balanceUsd + amount,
+      claimedGrantIds: grantId ? Array.from(new Set([...(prev.claimedGrantIds || []), grantId])) : (prev.claimedGrantIds || []),
       ledger: [
         {
           id: `led-grant-${Date.now()}`,
@@ -2730,6 +3387,221 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...prev.ledger,
       ],
     }));
+  };
+
+  const buyGold = (amount: number): boolean => {
+    if (amount <= 0) return false;
+    const spot = state.goldMarket?.spotPriceUsd || 2540;
+    const fee = state.goldMarket?.brokerFeePercent || 1.5;
+    const unitPrice = Math.round(spot * (1 + fee / 100));
+    const totalCost = unitPrice * amount;
+
+    if (state.balanceUsd < totalCost) {
+      notifyUser('Insufficient Treasury', `Purchasing ${amount} Gold requires $${totalCost.toLocaleString()} USD. Treasury: $${state.balanceUsd.toLocaleString()} USD.`, 'finance');
+      return false;
+    }
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd - totalCost;
+    const nextGold = state.gold + amount;
+
+    setState((prev) => ({
+      ...prev,
+      balanceUsd: nextBal,
+      gold: nextGold,
+      goldMarket: {
+        ...prev.goldMarket,
+        totalGoldReserveUsd: nextGold * (prev.goldMarket?.spotPriceUsd || spot),
+      },
+      ledger: [
+        {
+          id: `led-gold-buy-${Date.now()}`,
+          simDay,
+          simTimeFormatted: `Day ${simDay}`,
+          type: 'equipment_purchase',
+          description: `Acquired ${amount} Troy Ounces Gold Bullion at $${unitPrice.toLocaleString()}/oz (${fee}% spread)`,
+          amountUsd: -totalCost,
+          runningBalanceUsd: nextBal,
+        },
+        ...prev.ledger,
+      ],
+      notifications: deduplicateNotifications([
+        {
+          id: `notif-gold-buy-${Date.now()}`,
+          simTimeFormatted: `Day ${simDay}`,
+          title: '🪙 Gold Bullion Acquired',
+          message: `Acquired ${amount} Troy Ounces of allocated Gold (+${amount} Gold, -$${totalCost.toLocaleString()} USD).`,
+          type: 'finance',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ]),
+    }));
+
+    return true;
+  };
+
+  const sellGold = (amount: number): boolean => {
+    if (amount <= 0 || state.gold < amount) {
+      notifyUser('Insufficient Gold', `You hold ${state.gold} Gold. Cannot sell ${amount}.`, 'finance');
+      return false;
+    }
+    const spot = state.goldMarket?.spotPriceUsd || 2540;
+    const fee = state.goldMarket?.brokerFeePercent || 1.5;
+    const unitProceeds = Math.round(spot * (1 - fee / 100));
+    const totalProceeds = unitProceeds * amount;
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd + totalProceeds;
+    const nextGold = state.gold - amount;
+
+    setState((prev) => ({
+      ...prev,
+      balanceUsd: nextBal,
+      gold: nextGold,
+      goldMarket: {
+        ...prev.goldMarket,
+        totalGoldReserveUsd: nextGold * (prev.goldMarket?.spotPriceUsd || spot),
+      },
+      ledger: [
+        {
+          id: `led-gold-sell-${Date.now()}`,
+          simDay,
+          simTimeFormatted: `Day ${simDay}`,
+          type: 'freight_revenue',
+          description: `Liquidated ${amount} Troy Ounces Gold Bullion for working capital at $${unitProceeds.toLocaleString()}/oz`,
+          amountUsd: totalProceeds,
+          runningBalanceUsd: nextBal,
+        },
+        ...prev.ledger,
+      ],
+      notifications: deduplicateNotifications([
+        {
+          id: `notif-gold-sell-${Date.now()}`,
+          simTimeFormatted: `Day ${simDay}`,
+          title: '💵 Gold Reserves Liquidated',
+          message: `Liquidated ${amount} Troy Ounces of Gold (-${amount} Gold, +$${totalProceeds.toLocaleString()} USD).`,
+          type: 'finance',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ]),
+    }));
+
+    return true;
+  };
+
+  const upgradeInsurancePolicy = (tier: 'basic_liability' | 'comprehensive_fleet' | 'platinum_umbrella'): boolean => {
+    const tiers = {
+      basic_liability: {
+        tierName: 'Basic Carrier Liability Policy',
+        deductibleUsd: 5000,
+        coverageRatioPercent: 70,
+        dailyPremiumUsd: 50,
+      },
+      comprehensive_fleet: {
+        tierName: 'Comprehensive Commercial Fleet Policy',
+        deductibleUsd: 2500,
+        coverageRatioPercent: 85,
+        dailyPremiumUsd: 120,
+      },
+      platinum_umbrella: {
+        tierName: 'Platinum Umbrella Motor Carrier Policy',
+        deductibleUsd: 1000,
+        coverageRatioPercent: 95,
+        dailyPremiumUsd: 280,
+      },
+    };
+
+    const cfg = tiers[tier];
+    if (!cfg) return false;
+
+    setState((prev) => ({
+      ...prev,
+      insurancePolicy: {
+        ...prev.insurancePolicy,
+        policyTier: tier,
+        tierName: cfg.tierName,
+        deductibleUsd: cfg.deductibleUsd,
+        coverageRatioPercent: cfg.coverageRatioPercent,
+        dailyPremiumUsd: cfg.dailyPremiumUsd,
+      },
+      notifications: deduplicateNotifications([
+        {
+          id: `notif-ins-up-${Date.now()}`,
+          simTimeFormatted: `Day ${Math.floor(prev.simTimeMinutes / 1440) + 1}`,
+          title: '🛡️ Commercial Insurance Underwritten',
+          message: `Updated fleet policy to ${cfg.tierName} (${cfg.coverageRatioPercent}% collision/incident coverage, $${cfg.deductibleUsd} deductible).`,
+          type: 'finance',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ]),
+    }));
+
+    notifyUser('Policy Updated', `Fleet now covered by ${cfg.tierName}.`, 'finance');
+    return true;
+  };
+
+  const fileInsuranceClaim = (incidentId: string): boolean => {
+    const inc = state.incidentHistory?.find((i) => i.id === incidentId);
+    if (!inc || inc.isResolved || inc.directCostUsd <= 0) return false;
+
+    const policy = state.insurancePolicy || {
+      coverageRatioPercent: 85,
+      deductibleUsd: 2500,
+    };
+
+    const claimable = Math.max(0, inc.directCostUsd - policy.deductibleUsd);
+    const payout = Math.round(claimable * (policy.coverageRatioPercent / 100));
+
+    if (payout <= 0) {
+      notifyUser('Under Deductible', `Incident damages ($${inc.directCostUsd.toLocaleString()}) are below deductible ($${policy.deductibleUsd.toLocaleString()}).`, 'finance');
+      return false;
+    }
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd + payout;
+
+    setState((prev) => ({
+      ...prev,
+      balanceUsd: nextBal,
+      insurancePolicy: {
+        ...prev.insurancePolicy,
+        claimsPaidTotalUsd: prev.insurancePolicy.claimsPaidTotalUsd + payout,
+      },
+      incidentHistory: prev.incidentHistory.map((i) => (i.id === incidentId ? {
+        ...i,
+        insuranceClaimUsd: payout,
+        netExpenseUsd: i.directCostUsd - payout,
+        isResolved: true,
+      } : i)),
+      ledger: [
+        {
+          id: `led-claim-${Date.now()}`,
+          simDay,
+          simTimeFormatted: `Day ${simDay}`,
+          type: 'freight_revenue',
+          description: `Commercial insurance indemnity settlement: ${inc.title} (${inc.truckPlate})`,
+          amountUsd: payout,
+          runningBalanceUsd: nextBal,
+        },
+        ...prev.ledger,
+      ],
+      notifications: deduplicateNotifications([
+        {
+          id: `notif-claim-${Date.now()}`,
+          simTimeFormatted: `Day ${simDay}`,
+          title: '🛡️ Insurance Settlement Disbursed',
+          message: `Commercial underwriter disbursed +$${payout.toLocaleString()} USD for ${inc.title}.`,
+          type: 'finance',
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ]),
+    }));
+
+    return true;
   };
 
   const completeOnboarding = (config: OnboardingConfig) => {
@@ -3695,39 +4567,56 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const activateAiSuite = (options: {
     planTier: '7d' | '1m' | 'auto' | 'year';
     includeMaintenance: boolean;
+    includeOfflineDispatch: boolean;
     useGold: boolean;
     autoRenew: boolean;
+    allowExtension?: boolean;
   }): boolean => {
     const plans = {
-      '7d': { days: 14, usd: 45000, gold: 40, label: '14-Day Express' },
-      '1m': { days: 60, usd: 165000, gold: 120, label: '2-Month Corporate' },
-      'auto': { days: 180, usd: 500000, gold: 350, label: '180-Day Enterprise' },
-      'year': { days: 365, usd: 950000, gold: 650, label: '365-Day Annual Enterprise' },
+      '7d': { days: 7, usd: 45000, gold: 40, label: '7-Day Express License' },
+      '1m': { days: 30, usd: 165000, gold: 120, label: '1-Month Corporate License' },
+      'auto': { days: 30, usd: 145000, gold: 100, label: 'Monthly Auto-Renewal Enterprise' },
+      'year': { days: 365, usd: 950000, gold: 650, label: '1-Year Annual Fleet License' },
     };
     const maintPlans = {
-      '7d': { usd: 35000, gold: 35 },
-      '1m': { usd: 120000, gold: 100 },
-      'auto': { usd: 350000, gold: 280 },
-      'year': { usd: 650000, gold: 500 },
+      '7d': { usd: 25000, gold: 20 },
+      '1m': { usd: 85000, gold: 60 },
+      'auto': { usd: 75000, gold: 50 },
+      'year': { usd: 550000, gold: 400 },
     };
+    const offlineDispatchPlans = {
+      '7d': { usd: 25000, gold: 20 },
+      '1m': { usd: 85000, gold: 60 },
+      'auto': { usd: 75000, gold: 50 },
+      'year': { usd: 550000, gold: 400 },
+    };
+
+    const currentState = stateRef.current;
+    const isAlreadySubscribed = currentState.aiDispatcherActive && currentState.simTimeMinutes < currentState.aiSubscriptionExpiresSimMinutes;
+    if (isAlreadySubscribed && !options.allowExtension) {
+      notifyUser('Active Subscription in Effect', `AI Dispatcher is already active until Day ${Math.floor(currentState.aiSubscriptionExpiresSimMinutes / 1440) + 1}. Multiple deductions prevented.`, 'maintenance');
+      return false;
+    }
 
     const plan = plans[options.planTier];
     const maint = options.includeMaintenance ? maintPlans[options.planTier] : { usd: 0, gold: 0 };
-    const totalUsd = plan.usd + maint.usd;
-    const totalGold = plan.gold + maint.gold;
+    const offline = options.includeOfflineDispatch ? offlineDispatchPlans[options.planTier] : { usd: 0, gold: 0 };
+    const totalUsd = plan.usd + maint.usd + offline.usd;
+    const totalGold = plan.gold + maint.gold + offline.gold;
 
-    const currentState = stateRef.current;
     const simDay = Math.floor(currentState.simTimeMinutes / 1440) + 1;
     const timeFormatted = `Day ${simDay}`;
+    const addonsSummary = `${options.includeMaintenance ? ' + Fleet Maintenance' : ''}${options.includeOfflineDispatch ? ' + Auto-Dispatch' : ''}`;
 
     if (options.useGold) {
       if (currentState.gold < totalGold) {
-        notifyUser('Insufficient Gold', `AI Suite (${plan.label}${options.includeMaintenance ? ' + Fleet Maintenance' : ''}) requires ${totalGold} Gold. You have ${currentState.gold}.`, 'finance');
+        notifyUser('Insufficient Gold', `AI Suite (${plan.label}${addonsSummary}) requires ${totalGold} Gold. You have ${currentState.gold}.`, 'finance');
         return false;
       }
       setState((prev) => {
         const baseTimeDisp = Math.max(prev.simTimeMinutes, prev.aiSubscriptionExpiresSimMinutes || 0);
         const baseTimeMaint = Math.max(prev.simTimeMinutes, prev.aiFleetMaintenanceExpiresSimMinutes || 0);
+        const baseTimeOffline = Math.max(prev.simTimeMinutes, prev.aiOfflineDispatchExpiresSimMinutes || 0);
         const durationMins = plan.days * 1440;
 
         const nextState = {
@@ -3737,13 +4626,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           aiSubscriptionExpiresSimMinutes: baseTimeDisp + durationMins,
           aiFleetMaintenanceActive: options.includeMaintenance ? true : prev.aiFleetMaintenanceActive,
           aiFleetMaintenanceExpiresSimMinutes: options.includeMaintenance ? baseTimeMaint + durationMins : prev.aiFleetMaintenanceExpiresSimMinutes,
+          aiOfflineDispatchActive: options.includeOfflineDispatch ? true : prev.aiOfflineDispatchActive,
+          aiOfflineDispatchExpiresSimMinutes: options.includeOfflineDispatch ? baseTimeOffline + durationMins : prev.aiOfflineDispatchExpiresSimMinutes,
           aiAutoRenew: options.autoRenew,
+          aiAutoDispatchEnabled: true,
           notifications: deduplicateNotifications([
             {
               id: `notif-ai-suite-${Date.now()}`,
               simTimeFormatted: timeFormatted,
-              title: '🤖 AI Suite & Add-on Activated',
-              message: `Subscribed to ${plan.label}${options.includeMaintenance ? ' + Fleet Maintenance' : ''} (-${totalGold} Gold). Auto-renew: ${options.autoRenew ? 'ON' : 'OFF'}.`,
+              title: isAlreadySubscribed ? '🤖 AI Suite License Extended' : '🤖 AI Suite & Add-on Activated',
+              message: `Subscribed to ${plan.label}${addonsSummary} (-${totalGold} Gold). Auto-renew: ${options.autoRenew ? 'ON' : 'OFF'}.`,
               type: 'ai',
               timestamp: Date.now(),
             },
@@ -3763,6 +4655,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setState((prev) => {
         const baseTimeDisp = Math.max(prev.simTimeMinutes, prev.aiSubscriptionExpiresSimMinutes || 0);
         const baseTimeMaint = Math.max(prev.simTimeMinutes, prev.aiFleetMaintenanceExpiresSimMinutes || 0);
+        const baseTimeOffline = Math.max(prev.simTimeMinutes, prev.aiOfflineDispatchExpiresSimMinutes || 0);
         const durationMins = plan.days * 1440;
 
         const nextState = {
@@ -3772,14 +4665,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           aiSubscriptionExpiresSimMinutes: baseTimeDisp + durationMins,
           aiFleetMaintenanceActive: options.includeMaintenance ? true : prev.aiFleetMaintenanceActive,
           aiFleetMaintenanceExpiresSimMinutes: options.includeMaintenance ? baseTimeMaint + durationMins : prev.aiFleetMaintenanceExpiresSimMinutes,
+          aiOfflineDispatchActive: options.includeOfflineDispatch ? true : prev.aiOfflineDispatchActive,
+          aiOfflineDispatchExpiresSimMinutes: options.includeOfflineDispatch ? baseTimeOffline + durationMins : prev.aiOfflineDispatchExpiresSimMinutes,
           aiAutoRenew: options.autoRenew,
+          aiAutoDispatchEnabled: true,
           ledger: [
             {
               id: `led-ai-suite-${Date.now()}`,
               simDay,
               simTimeFormatted: timeFormatted,
               type: 'broker_fee' as const,
-              description: `AI Suite Subscription (${plan.label}${options.includeMaintenance ? ' + Fleet Maintenance' : ''})`,
+              description: `AI Suite Subscription (${plan.label}${addonsSummary})`,
               amountUsd: -totalUsd,
               runningBalanceUsd: nextBal,
             },
@@ -3789,8 +4685,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             {
               id: `notif-ai-suite-${Date.now()}`,
               simTimeFormatted: timeFormatted,
-              title: '🤖 AI Suite & Add-on Activated',
-              message: `Subscribed to ${plan.label}${options.includeMaintenance ? ' + Fleet Maintenance' : ''} (-$${totalUsd.toLocaleString()}). Auto-renew: ${options.autoRenew ? 'ON' : 'OFF'}.`,
+              title: isAlreadySubscribed ? '🤖 AI Suite License Extended' : '🤖 AI Suite & Add-on Activated',
+              message: `Subscribed to ${plan.label}${addonsSummary} (-$${totalUsd.toLocaleString()}). Auto-renew: ${options.autoRenew ? 'ON' : 'OFF'}.`,
               type: 'ai',
               timestamp: Date.now(),
             },
@@ -3804,15 +4700,20 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const activateAiFleetMaintenance = (tier: '7d' | '1m' | 'auto', useGold: boolean = false): boolean => {
+  const activateAiFleetMaintenance = (tier: '7d' | '1m' | 'auto', useGold: boolean = false, allowExtension: boolean = false): boolean => {
     const tierConfig = {
-      '7d': { days: 14, usd: 35000, gold: 35, label: '14-Day Maintenance Pass' },
-      '1m': { days: 60, usd: 120000, gold: 100, label: '2-Month Corporate Pass (60 Days)' },
-      'auto': { days: 180, usd: 350000, gold: 280, label: '180-Day Enterprise Pass (180 Days)' },
+      '7d': { days: 7, usd: 25000, gold: 20, label: '7-Day Maintenance Pass' },
+      '1m': { days: 30, usd: 85000, gold: 60, label: '1-Month Corporate Pass (30 Days)' },
+      'auto': { days: 30, usd: 75000, gold: 50, label: 'Monthly Auto-Renewal Pass (30 Days)' },
     };
 
     const cfg = tierConfig[tier] || tierConfig['1m'];
     const currentState = stateRef.current;
+    const isAlreadyActive = currentState.aiFleetMaintenanceActive && currentState.simTimeMinutes < currentState.aiFleetMaintenanceExpiresSimMinutes;
+    if (isAlreadyActive && !allowExtension) {
+      notifyUser('Active Maintenance in Effect', `AI Fleet Maintenance is already active until Day ${Math.floor(currentState.aiFleetMaintenanceExpiresSimMinutes / 1440) + 1}. Multiple deductions prevented.`, 'maintenance');
+      return false;
+    }
     const simDay = Math.floor(currentState.simTimeMinutes / 1440) + 1;
 
     if (useGold) {
@@ -3831,7 +4732,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             {
               id: `notif-ai-maint-sub-${Date.now()}`,
               simTimeFormatted: `Day ${simDay}`,
-              title: 'AI Fleet Maintenance Add-on Activated',
+              title: isAlreadyActive ? 'AI Fleet Maintenance Extended' : 'AI Fleet Maintenance Add-on Activated',
               message: `Subscribed to ${cfg.label} (-${cfg.gold} Gold). Autonomous fleet servicing active!`,
               type: 'ai',
               timestamp: Date.now(),
@@ -3872,7 +4773,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             {
               id: `notif-ai-maint-sub-${Date.now()}`,
               simTimeFormatted: `Day ${simDay}`,
-              title: 'AI Fleet Maintenance Add-on Activated',
+              title: isAlreadyActive ? 'AI Fleet Maintenance Extended' : 'AI Fleet Maintenance Add-on Activated',
               message: `Subscribed to ${cfg.label} (-$${cfg.usd.toLocaleString()}). Autonomous fleet servicing active!`,
               type: 'ai',
               timestamp: Date.now(),
@@ -3894,15 +4795,43 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   };
 
-  const activateAiDispatcher = (tier: '7d' | '1m' | 'auto', useGold: boolean = false): boolean => {
+  const toggleAiAutoDispatch = () => {
+    setState(prev => {
+      const nextVal = prev.aiAutoDispatchEnabled !== undefined ? !prev.aiAutoDispatchEnabled : false;
+      return {
+        ...prev,
+        aiAutoDispatchEnabled: nextVal,
+        notifications: deduplicateNotifications([
+          {
+            id: `notif-ai-toggle-${Date.now()}`,
+            simTimeFormatted: `Day ${Math.floor(prev.simTimeMinutes / 1440) + 1}`,
+            title: nextVal ? '⚡ AI Autonomous Dispatch Resumed' : '⏸️ AI Autonomous Dispatch Paused',
+            message: nextVal
+              ? 'Autonomous neural dispatcher is active and will continuously dispatch idle trucks to available freight jobs.'
+              : 'Autonomous auto-dispatch engine paused. Idle trucks will remain at base until manually dispatched.',
+            type: 'ai',
+            timestamp: Date.now(),
+          },
+          ...prev.notifications,
+        ]),
+      };
+    });
+  };
+
+  const activateAiDispatcher = (tier: '7d' | '1m' | 'auto', useGold: boolean = false, allowExtension: boolean = false): boolean => {
     const tierConfig = {
-      '7d': { days: 14, usd: 45000, gold: 40, label: '14-Day Express License' },
-      '1m': { days: 60, usd: 165000, gold: 120, label: '2-Month Corporate License (60 Days)' },
-      'auto': { days: 180, usd: 500000, gold: 350, label: 'Enterprise Long-Term Tier (180 Days)' },
+      '7d': { days: 7, usd: 45000, gold: 40, label: '7-Day Express License' },
+      '1m': { days: 30, usd: 165000, gold: 120, label: '1-Month Corporate License (30 Days)' },
+      'auto': { days: 30, usd: 145000, gold: 100, label: 'Monthly Auto-Renewal Enterprise (30 Days)' },
     };
 
     const cfg = tierConfig[tier] || tierConfig['1m'];
     const currentState = stateRef.current;
+    const isAlreadyActive = currentState.aiDispatcherActive && currentState.simTimeMinutes < currentState.aiSubscriptionExpiresSimMinutes;
+    if (isAlreadyActive && !allowExtension) {
+      notifyUser('Active License in Effect', `AI Dispatcher is already active until Day ${Math.floor(currentState.aiSubscriptionExpiresSimMinutes / 1440) + 1}. Multiple deductions prevented.`, 'maintenance');
+      return false;
+    }
     const simDay = Math.floor(currentState.simTimeMinutes / 1440) + 1;
 
     if (useGold) {
@@ -3921,8 +4850,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             {
               id: `notif-ai-sub-${Date.now()}`,
               simTimeFormatted: `Day ${simDay}`,
-              title: 'Neural AI Dispatcher License Extended',
-              message: `Subscribed to ${cfg.label} (-${cfg.gold} Gold). Autonomous dispatching extended!`,
+              title: isAlreadyActive ? 'Neural AI Dispatcher Extended' : 'Neural AI Dispatcher License Activated',
+              message: `Subscribed to ${cfg.label} (-${cfg.gold} Gold). Autonomous dispatching active!`,
               type: 'ai',
               timestamp: Date.now(),
             },
@@ -3962,8 +4891,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             {
               id: `notif-ai-sub-${Date.now()}`,
               simTimeFormatted: `Day ${simDay}`,
-              title: 'Neural AI Dispatcher License Extended',
-              message: `Subscribed to ${cfg.label} (-$${cfg.usd.toLocaleString()}). Autonomous dispatching extended!`,
+              title: isAlreadyActive ? 'Neural AI Dispatcher Extended' : 'Neural AI Dispatcher License Activated',
+              message: `Subscribed to ${cfg.label} (-$${cfg.usd.toLocaleString()}). Autonomous dispatching active!`,
               type: 'ai',
               timestamp: Date.now(),
             },
@@ -3991,7 +4920,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let contracts = [...currentState.availableContracts];
     if (contracts.length === 0) {
       const unlockedRoutes = routes.filter(r => r.isUnlocked);
-      contracts = generateContractsForRoutes(unlockedRoutes.length > 0 ? unlockedRoutes : routes, hubs, 15, idleTrucks);
+      contracts = generateContractsForRoutes(unlockedRoutes.length > 0 ? unlockedRoutes : routes, hubs, 20, idleTrucks);
     }
     contracts.sort((a, b) => b.payoutUsd - a.payoutUsd);
 
@@ -4011,48 +4940,46 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const driver = readyDrivers[0];
       if (!truck || !driver) continue;
 
-      // Strict regional & hub restriction: Truck must be stationed at the contract's origin hub and both must be in the same region
       const truckHub = hubs.find(h => h.id === truck.currentHubId);
-      let matchingContractIdx = remainingContracts.findIndex(c => {
-        const oHub = hubs.find(h => h.id === c.originHubId);
-        const dHub = hubs.find(h => h.id === c.destinationHubId);
-        if (!oHub || !dHub || !truckHub) return false;
-        return c.originHubId === truck.currentHubId && oHub.region === truckHub.region && dHub.region === truckHub.region;
-      });
 
+      // 1. First prioritize contracts originating directly at the truck's current hub
+      let matchingContractIdx = remainingContracts.findIndex(c => c.originHubId === truck.currentHubId);
+
+      // 2. If no contract exists directly at the truck's hub, adapt any available listed contract in the same region
+      if (matchingContractIdx === -1 && truckHub) {
+        const regionalContractIdx = remainingContracts.findIndex(c => {
+          const oHub = hubs.find(h => h.id === c.originHubId);
+          return oHub && oHub.region === truckHub.region;
+        });
+
+        if (regionalContractIdx !== -1) {
+          const baseContract = remainingContracts[regionalContractIdx];
+          const destHubId = baseContract.destinationHubId !== truck.currentHubId
+            ? baseContract.destinationHubId
+            : (hubs.find(h => h.region === truckHub.region && h.id !== truck.currentHubId)?.id || baseContract.destinationHubId);
+
+          const adaptedContract: CargoContract = {
+            ...baseContract,
+            id: `cnt-ai-adp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            originHubId: truck.currentHubId,
+            destinationHubId: destHubId,
+          };
+          remainingContracts[regionalContractIdx] = adaptedContract;
+          matchingContractIdx = regionalContractIdx;
+        }
+      }
+
+      // 3. If still none found, dynamically generate a lucrative regional express corridor contract
       if (matchingContractIdx === -1 && truckHub) {
         const sameRegionHubs = hubs.filter(h => h.region === truckHub.region && h.id !== truckHub.id);
-        if (sameRegionHubs.length > 0) {
-          const destHub = sameRegionHubs[Math.floor(Math.random() * sameRegionHubs.length)];
+        const destHub = sameRegionHubs.length > 0
+          ? sameRegionHubs[Math.floor(Math.random() * sameRegionHubs.length)]
+          : hubs.find(h => h.id !== truckHub.id);
+
+        if (destHub) {
           const dx = truckHub.coord.x - destHub.coord.x;
           const dy = truckHub.coord.y - destHub.coord.y;
           const dist = Math.max(250, Math.round(Math.sqrt(dx * dx + dy * dy) * 3.5));
-
-          let route = updatedRoutes.find(r => r.originHubId === truckHub.id && r.destinationHubId === destHub.id);
-          if (!route) {
-            route = {
-              id: `route-ai-dyn-${truckHub.code}-${destHub.code}-${Date.now()}`,
-              originHubId: truckHub.id,
-              destinationHubId: destHub.id,
-              name: `${truckHub.name.split(' ')[0]} - ${destHub.name.split(' ')[0]} AI Corridor`,
-              distanceKm: dist,
-              roadType: 'Interstate Highway',
-              baseSpeedLimitKmh: 105,
-              avgElevationGradePct: 1.0,
-              maxGradePct: 5.0,
-              tollCostUsd: Math.round(dist * 0.04),
-              waypoints: [
-                { name: truckHub.name, coord: truckHub.coord, elevationMeters: 50 },
-                { name: destHub.name, coord: destHub.coord, elevationMeters: 40 },
-              ],
-              hazardRisk: 0.1,
-              isUnlocked: true,
-              licenseFeeUsd: 0,
-              requiredRank: 1,
-              trafficRateScore: 90,
-            };
-            updatedRoutes.push(route);
-          }
 
           const dynamicContract: CargoContract = {
             id: `cnt-ai-dyn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -4061,7 +4988,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             destinationHubId: destHub.id,
             category: 'Dry Freight',
             weightTons: 16,
-            payoutUsd: Math.round(dist * 4.5),
+            payoutUsd: Math.round(dist * 4.8),
             bonusOnTimeUsd: Math.round(dist * 0.8),
             penaltyLateUsd: Math.round(dist * 1.5),
             deadlineMinutes: Math.round((dist / 85) * 60 * 1.5),
@@ -4083,7 +5010,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       remainingContracts.splice(matchingContractIdx, 1);
 
       if (truck.fuelCurrentLiters < 100) {
-        truck.fuelCurrentLiters = Math.max(truck.fuelCurrentLiters, 500);
+        truck.fuelCurrentLiters = Math.max(truck.fuelCurrentLiters, 450);
       }
 
       let route = updatedRoutes.find(r => r.originHubId === contract.originHubId && r.destinationHubId === contract.destinationHubId);
@@ -4127,27 +5054,40 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let chosenTrailerId: string | null = null;
       const truckModel = TRUCK_MODELS.find(m => m.id === truck.modelId);
       if (!truckModel?.isRigid) {
-        let bestTr = updatedTrailers.find(tr => tr.status === 'idle' && tr.currentHubId === contract.originHubId) || updatedTrailers.find(tr => tr.status === 'idle' && hubs.find(h => h.id === tr.currentHubId)?.region === hubs.find(h => h.id === contract.originHubId)?.region);
+        let bestTr = truck.assignedTrailerId ? updatedTrailers.find(tr => tr.id === truck.assignedTrailerId && tr.status === 'idle') : null;
         if (!bestTr) {
+          bestTr = updatedTrailers.find(tr => tr.status === 'idle' && tr.currentHubId === contract.originHubId) ||
+                   updatedTrailers.find(tr => tr.status === 'idle' && hubs.find(h => h.id === tr.currentHubId)?.region === hubs.find(h => h.id === contract.originHubId)?.region);
+        }
+        if (!bestTr) {
+          const trailerModelId: TrailerModelId = contract.temperatureControlled
+            ? 'reefer-temp'
+            : contract.isHazardous
+            ? 'adr-chemical'
+            : contract.category === 'Heavy Machinery'
+            ? 'lowboy-heavy'
+            : 'dry-van-53';
+
           const newTr: TrailerInstance = {
             id: `trl-ai-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-            modelId: contract.temperatureControlled ? 'trailer-reefer' : contract.isHazardous ? 'trailer-cistern' : 'trailer-dry-van',
-            plate: `AI-${Math.floor(1000 + Math.random() * 9000)}`,
-            status: 'idle',
+            modelId: trailerModelId,
+            serialNumber: `AH-${Math.floor(10000 + Math.random() * 90000)}`,
             currentHubId: contract.originHubId,
-            assignedTruckId: null,
-            assignedTripId: null,
-            conditionPct: 100,
+            status: 'en_route',
             odometerKm: 0,
-            purchaseDateSimDay: Math.floor(currentState.simTimeMinutes / 1440) + 1,
+            hasAeroSkirts: true,
+            hasReeferUnit: !!contract.temperatureControlled,
+            reeferFuelCurrentLiters: contract.temperatureControlled ? 100 : 0,
+            tireCompound: 'highway_eco',
+            assignedTruckId: truck.id,
+            assignedTripId: null,
           };
           updatedTrailers.push(newTr);
           bestTr = newTr;
-        }
-        if (bestTr) {
-          chosenTrailerId = bestTr.id;
+        } else {
           updatedTrailers = updatedTrailers.map(tr => tr.id === bestTr!.id ? { ...tr, status: 'en_route', assignedTruckId: truck.id, currentHubId: contract.originHubId } : tr);
         }
+        chosenTrailerId = bestTr.id;
       }
 
       const simDay = Math.floor(currentState.simTimeMinutes / 1440) + 1;
@@ -4198,8 +5138,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...t, 
         status: 'en_route', 
         activeTripId: newTrip.id,
+        assignedDriverId: driver.id,
         assignedTrailerId: chosenTrailerId || t.assignedTrailerId,
-        fuelCurrentLiters: Math.max(50, t.fuelCurrentLiters - 20)
+        fuelCurrentLiters: Math.max(150, t.fuelCurrentLiters),
       } : t);
 
       updatedDrivers = updatedDrivers.map(d => d.id === driver.id ? { ...d, hosStatus: 'driving', assignedTruckId: truck.id } : d);
@@ -4220,8 +5161,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       availableContracts: remainingContracts,
       notifications: deduplicateNotifications([
         {
-          id: `notif-ai-auto-${Date.now()}`,
-          simTimeFormatted: `Day ${Math.floor(currentState.simTimeMinutes / 1440) + 1}`,
+          id: `notif-ai-auto-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          simTimeFormatted: `Day ${Math.floor(currentState.simTimeMinutes / 1440) + 1} ${Math.floor((currentState.simTimeMinutes % 1440) / 60).toString().padStart(2, '0')}:${(currentState.simTimeMinutes % 60).toString().padStart(2, '0')}`,
           title: '🤖 AI Autonomous Dispatch Executed',
           message: `Neural AI Dispatcher successfully auto-dispatched ${dispatchedCount} truck(s) to consignment routes.`,
           type: 'ai',
@@ -4236,9 +5177,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const executeAiAutoDispatch = (): { dispatchedCount: number; message: string } => {
     const currentState = stateRef.current;
-    const isSubActive = currentState.aiDispatcherActive && currentState.simTimeMinutes < currentState.aiSubscriptionExpiresSimMinutes;
+    const isSubActive = (currentState.aiDispatcherActive && currentState.simTimeMinutes < currentState.aiSubscriptionExpiresSimMinutes) ||
+                        (currentState.aiOfflineDispatchActive && currentState.simTimeMinutes < currentState.aiOfflineDispatchExpiresSimMinutes);
     if (!isSubActive) {
-      return { dispatchedCount: 0, message: 'AI Dispatcher subscription is inactive or expired. Activate subscription in the AI Hub.' };
+      return { dispatchedCount: 0, message: 'AI Dispatcher or Auto-Dispatch subscription is inactive or expired. Activate subscription in the AI Hub.' };
     }
 
     const { nextState, dispatchedCount } = runAutoDispatchOnState(currentState);
@@ -4421,6 +5363,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         renewDriverContract,
         upgradeHub,
         refuelTruckAtHub,
+        transferFuelBetweenHubs,
         takeLoan,
         repayLoan,
         claimGrant,
@@ -4450,9 +5393,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         activateAiFleetMaintenance,
         activateAiSuite,
         toggleAiFleetMaintenance,
+        toggleAiAutoDispatch,
         executeAiAutoDispatch,
         dispatchRoadsideMechanic,
         recallTrip,
+        buyGold,
+        sellGold,
+        upgradeInsurancePolicy,
+        fileInsuranceClaim,
       }}
     >
       {children}

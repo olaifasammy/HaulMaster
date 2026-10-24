@@ -238,6 +238,7 @@ export interface TruckInstance {
   liveryColor: FleetLivery;
   assignedTrailerId: string | null;
   serviceDueKm: number;
+  health?: number;
   maintenanceMinutesRemaining?: number;
 }
 
@@ -272,6 +273,7 @@ export interface Driver {
   stats: DriverStats;
   cdlClass?: string;
   endorsements?: string[];
+  contractDaysRemaining?: number;
 }
 
 export type CargoCategory = 'Dry Freight' | 'Refrigerated Food' | 'Heavy Machinery' | 'Hazardous Chemicals' | 'High-Value Tech';
@@ -313,6 +315,7 @@ export interface LiveTelemetry {
   currentWindSpeedKmh: number;
   currentHeadwindComponentKmh: number;
   weatherState: WeatherCondition;
+  updatedSubsystems?: Partial<SubsystemHealth>;
 }
 
 export interface ActiveTrip {
@@ -361,7 +364,7 @@ export interface GameEventNotification {
   simTimeFormatted: string;
   title: string;
   message: string;
-  type: 'delivery' | 'weather' | 'maintenance' | 'breakdown' | 'finance' | 'driver' | 'ai';
+  type: 'delivery' | 'weather' | 'maintenance' | 'breakdown' | 'finance' | 'driver' | 'ai' | 'event' | 'incident' | 'accident';
   timestamp: number;
 }
 
@@ -376,10 +379,103 @@ export interface OnboardingConfig {
   starterLivery: FleetLivery;
 }
 
+export type MacroEventType =
+  | 'oil_refinery_disruption'
+  | 'dot_safety_blitz'
+  | 'polar_vortex_blizzard'
+  | 'port_dockworker_congestion'
+  | 'summer_heatwave_buckling'
+  | 'infrastructure_corridor_subsidy'
+  | 'just_in_time_shortage';
+
+export interface MacroWorldEvent {
+  id: string;
+  type: MacroEventType;
+  title: string;
+  category: 'economic' | 'weather' | 'regulatory' | 'logistics';
+  description: string;
+  region?: GeoRegion | 'Global';
+  simStartMinutes: number;
+  durationMinutes: number;
+  expiresSimMinutes: number;
+  fuelPriceMultiplier?: number;
+  tollMultiplier?: number;
+  freightPayoutMultiplier?: number;
+  accidentRiskMultiplier?: number;
+  inspectionFrequencyMultiplier?: number;
+  roadFrictionPenalty?: number;
+  severity: 'low' | 'moderate' | 'high' | 'critical';
+  icon: string;
+}
+
+export type IncidentSeverity = 'minor_incident' | 'moderate_delay' | 'major_breakdown' | 'severe_accident';
+
+export type IncidentType =
+  | 'tire_blowout'
+  | 'dot_inspection_citation'
+  | 'dot_inspection_clean'
+  | 'rockslide_detour'
+  | 'cargo_shift'
+  | 'intercooler_hose_blow'
+  | 'jackknife_accident'
+  | 'fog_pileup_accident'
+  | 'tanker_rollover'
+  | 'dock_backing_collision'
+  | 'black_ice_near_miss';
+
+export interface FleetIncidentRecord {
+  id: string;
+  simDay: number;
+  simTimeFormatted: string;
+  timestamp: number;
+  severity: IncidentSeverity;
+  title: string;
+  type: IncidentType;
+  truckId: string;
+  truckPlate: string;
+  truckModelName: string;
+  driverId: string;
+  driverName: string;
+  corridorName: string;
+  locationKm: number;
+  weatherCondition: WeatherType;
+  rootCause: string;
+  directCostUsd: number;
+  insuranceClaimUsd: number;
+  netExpenseUsd: number;
+  downtimeMinutes: number;
+  isResolved: boolean;
+  citationDetails?: string;
+}
+
+export interface GoldMarketState {
+  spotPriceUsd: number; // e.g. $2,500/oz base benchmark
+  previousDaySpotPriceUsd: number;
+  dayChangePercent: number;
+  dayHighUsd: number;
+  dayLowUsd: number;
+  brokerFeePercent: number; // 1.5%
+  totalGoldReserveUsd: number;
+  history: Array<{ simDay: number; price: number }>;
+}
+
+export interface CommercialInsurancePolicy {
+  policyTier: 'basic_liability' | 'comprehensive_fleet' | 'platinum_umbrella';
+  tierName: string;
+  deductibleUsd: number;
+  coverageRatioPercent: number; // 75%, 85%, 95%
+  dailyPremiumUsd: number;
+  claimsPaidTotalUsd: number;
+}
+
 export interface GameState {
   companyName: string;
   balanceUsd: number;
   gold: number;
+  goldMarket: GoldMarketState;
+  insurancePolicy: CommercialInsurancePolicy;
+  activeEvents: MacroWorldEvent[];
+  incidentHistory: FleetIncidentRecord[];
   simTimeMinutes: number; // 0 = Day 1, 00:00
   simSpeed: 0 | 1;
   selectedRegion: GeoRegion;
@@ -423,6 +519,8 @@ export interface GameState {
   aiOfflineDispatchActive: boolean;
   aiOfflineDispatchExpiresSimMinutes: number;
   aiAutoRenew?: boolean;
+  aiAutoDispatchEnabled?: boolean;
+  claimedGrantIds: string[];
 }
 
 export type MechanicalAssemblyCategory = 'engine' | 'transmission' | 'drivetrain' | 'brakes' | 'cooling' | 'suspension' | 'emissions' | 'exhaust' | 'tires';
