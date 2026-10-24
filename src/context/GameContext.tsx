@@ -772,6 +772,28 @@ const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameS
     }
   }
 
+  // Process AI Fleet Maintenance Add-on during offline catch-up
+  if (prevState.aiFleetMaintenanceActive && prevState.simTimeMinutes < (prevState.aiFleetMaintenanceExpiresSimMinutes || 0)) {
+    const maintResult = processAiFleetMaintenance(
+      {
+        ...prevState,
+        balanceUsd: currentBalance,
+        trucks: updatedTrucks,
+        simTimeMinutes: prevState.simTimeMinutes + simMinutesToAdd,
+      },
+      simMinutesToAdd
+    );
+    currentBalance = maintResult.updatedBalance;
+    updatedTrucks.length = 0;
+    updatedTrucks.push(...maintResult.updatedTrucks);
+    if (maintResult.newLedgerEntries.length > 0) {
+      newLedgerEntries.unshift(...maintResult.newLedgerEntries);
+    }
+    if (maintResult.newNotifications.length > 0) {
+      newNotifications.unshift(...maintResult.newNotifications);
+    }
+  }
+
   const hoursElapsed = Number((simMinutesToAdd / 60).toFixed(1));
   const progressReport = completedCount > 0 || kmCovered > 30 ? {
     hoursElapsed,

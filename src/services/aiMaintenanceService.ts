@@ -72,10 +72,11 @@ export function processAiFleetMaintenance(state: GameState, deltaSimMinutes: num
 
     const needsService =
       truck.status === 'idle' &&
-      ((truck.health ?? 100) < 75 ||
-        truck.subsystems.engineBlock < 65 ||
-        truck.subsystems.brakePads < 65 ||
-        truck.subsystems.coolingSystem < 60);
+      ((truck.health ?? 100) < 85 ||
+        truck.subsystems.engineBlock < 80 ||
+        truck.subsystems.brakePads < 80 ||
+        truck.subsystems.coolingSystem < 80 ||
+        (truck.activeDTCs && truck.activeDTCs.length > 0));
 
     if (needsService) {
       const serviceCost = 3800; // Aligned with manual Major B-Service cost ($3,800)
