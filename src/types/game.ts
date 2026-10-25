@@ -459,6 +459,16 @@ export interface GoldMarketState {
   history: Array<{ simDay: number; price: number }>;
 }
 
+export interface CryptoPricePoint {
+  simDay: number | string;
+  price: number;
+  volumeUsd?: number;
+  high?: number;
+  low?: number;
+  open?: number;
+  close?: number;
+}
+
 export interface CryptoCoinMarket {
   symbol: string;
   name: string;
@@ -467,7 +477,13 @@ export interface CryptoCoinMarket {
   dayHighUsd: number;
   dayLowUsd: number;
   stakingApyPercent: number;
-  history: Array<{ simDay: number; price: number }>;
+  history: Array<CryptoPricePoint>;
+  marketCapUsd?: number;
+  volume24hUsd?: number;
+  circulatingSupply?: string;
+  description?: string;
+  utilityPerk?: string;
+  network?: string;
 }
 
 export interface CryptoHoldingItem {
@@ -476,11 +492,42 @@ export interface CryptoHoldingItem {
   averageBuyPriceUsd: number;
   stakedAmount: number;
   stakingRewardsClaimable: number;
+  vaultTier?: 'flexible' | '30d_locked' | '90d_sovereign';
+  vaultLockedUntilSimMinutes?: number;
+}
+
+export interface CryptoLimitOrder {
+  id: string;
+  symbol: string;
+  side: 'buy' | 'sell';
+  targetPriceUsd: number;
+  amount: number;
+  totalUsd: number;
+  createdSimMinutes: number;
+  status: 'pending' | 'executed' | 'cancelled';
+}
+
+export interface CryptoTransactionRecord {
+  id: string;
+  simTimeFormatted: string;
+  timestamp: number;
+  type: 'buy' | 'sell' | 'stake' | 'unstake' | 'claim_reward' | 'utility_fuel' | 'utility_maint';
+  symbol: string;
+  amount: number;
+  priceUsd: number;
+  totalUsd: number;
+  feeUsd: number;
+  txHash: string;
+  note?: string;
 }
 
 export interface CryptoMarketState {
   coins: Record<string, CryptoCoinMarket>;
   holdings: Record<string, CryptoHoldingItem>;
+  limitOrders?: CryptoLimitOrder[];
+  transactions?: CryptoTransactionRecord[];
+  fuelDiscountActiveUntilSimMinutes?: number;
+  coldStorageLevel?: number;
 }
 
 export interface CommercialInsurancePolicy {

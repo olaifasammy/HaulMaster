@@ -296,10 +296,22 @@ export const TruckInspectorModal: React.FC<TruckInspectorModalProps> = ({
                   </div>
                 </div>
 
-                <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl">
-                  <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">Fuel Level</div>
-                  <div className="text-xs sm:text-sm font-mono font-bold text-amber-400 tabular-nums mt-0.5">
-                    {Math.round(truck.fuelCurrentLiters)} L
+                <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">Fuel Level</div>
+                      {!isEnRoute && hub && hub.bulkFuelStockLiters > 0 && (
+                        <button
+                          onClick={() => refuelTruckAtHub(truck.id, model.specs.fuelTankCapacityLiters - truck.fuelCurrentLiters)}
+                          className="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded text-[9px] font-bold font-mono transition-colors cursor-pointer"
+                        >
+                          Refill ($0)
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-xs sm:text-sm font-mono font-bold text-amber-400 tabular-nums mt-0.5">
+                      {Math.round(truck.fuelCurrentLiters)} / {model.specs.fuelTankCapacityLiters} L
+                    </div>
                   </div>
                   <div className="w-full bg-slate-800 h-1.5 rounded-full mt-1.5 overflow-hidden">
                     <div

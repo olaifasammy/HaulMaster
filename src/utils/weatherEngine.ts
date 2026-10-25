@@ -1,6 +1,6 @@
 import { Coordinate, WeatherCondition, WeatherType } from '../types/game';
 
-interface WeatherFront {
+export interface WeatherFront {
   id: string;
   center: Coordinate;
   radius: number;
@@ -12,7 +12,7 @@ interface WeatherFront {
 }
 
 // Global active weather systems simulated across North America and Europe
-const ACTIVE_FRONTS: WeatherFront[] = [
+export const ACTIVE_FRONTS: WeatherFront[] = [
   {
     id: 'front-atlantic-gale',
     center: { x: 680, y: 160 },

@@ -93,11 +93,13 @@ export function computePhysicsStep(params: StepPhysicsParams): StepPhysicsResult
   const frictionLimitSpeedKmh = 120 * Math.sqrt(effectiveRoadFriction / 0.85);
 
   const personality = getDriverPersonality(driverId || 'drv-default');
-  const fatiguePenalty = driverStats.fatigueLevel > 50 ? (driverStats.fatigueLevel - 50) * 0.002 : 0;
+  const fatigue = driverStats.fatiguePercent ?? 0;
+  const fatiguePenalty = fatigue > 50 ? (fatigue - 50) * 0.002 : 0;
   const effectiveSpeedMultiplier = Math.max(0.85, personality.speedMultiplier - fatiguePenalty);
 
+  const safety = driverStats.safetyScore ?? 80;
   const weatherCautionFactor = weather.type.includes('Snow') || weather.type.includes('Rain') || weather.type.includes('Blizzard')
-    ? (driverStats.safetyRating > 75 ? 0.92 : 0.97)
+    ? (safety > 75 ? 0.92 : 0.97)
     : 1.0;
 
   const timeSec = simTimeMinutes !== undefined ? simTimeMinutes * 60 : Date.now() / 1000;

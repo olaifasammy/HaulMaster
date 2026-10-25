@@ -192,6 +192,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="text-[9px] text-emerald-400 font-mono">({spotChange >= 0 ? '+' : ''}{spotChange}%)</span>
           </button>
 
+          <button
+            onClick={() => onSelectTab('crypto_exchange')}
+            className={`flex items-center space-x-1 hover:text-cyan-300 cursor-pointer transition-colors ${
+              currentTab === 'crypto_exchange' ? 'text-cyan-400 font-bold' : 'text-slate-400'
+            }`}
+            title="Open Logistics Crypto Exchange & Yield Vaults"
+          >
+            <span className="text-cyan-400 font-bold">🪙 Crypto:</span>
+            <strong className="text-cyan-300 font-mono font-bold">${(state.cryptoMarket?.coins?.['BTC']?.currentPriceUsd || 68500).toLocaleString()}</strong>
+          </button>
+
           {primaryEvent && (
             <button
               onClick={() => onOpenEventsModal?.('events')}

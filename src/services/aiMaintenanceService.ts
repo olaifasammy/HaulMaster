@@ -1,4 +1,5 @@
-import { GameState, LedgerEntry, GameEventNotification, SubsystemHealth } from '../types/game';
+import { GameState, LedgerEntry, GameEventNotification } from '../types/game';
+import { createPristineSubsystems } from '../constants/gameData';
 
 interface MaintenanceResult {
   updatedTrucks: GameState['trucks'];
@@ -6,39 +7,6 @@ interface MaintenanceResult {
   newLedgerEntries: LedgerEntry[];
   newNotifications: GameEventNotification[];
 }
-
-const createPristineSubsystems = (): SubsystemHealth => ({
-  engineBlock: 100,
-  cylinderHead: 100,
-  turbocharger: 100,
-  fuelInjectors: 100,
-  transmission: 100,
-  clutchPlate: 100,
-  driveshaft: 100,
-  differential: 100,
-  steerTires: { pressurePsi: 110, recommendedPsi: 110, temperatureCelsius: 22, treadDepthMm: 16.0, wearPercentage: 100 },
-  driveTiresAxle1: { pressurePsi: 105, recommendedPsi: 105, temperatureCelsius: 22, treadDepthMm: 16.0, wearPercentage: 100 },
-  driveTiresAxle2: { pressurePsi: 105, recommendedPsi: 105, temperatureCelsius: 22, treadDepthMm: 16.0, wearPercentage: 100 },
-  brakePads: 100,
-  brakeRotors: 100,
-  airCompressor: 100,
-  absModule: 100,
-  steeringGearbox: 100,
-  suspensionDampers: 100,
-  leafSprings: 100,
-  radiator: 100,
-  waterPump: 100,
-  thermostat: 100,
-  coolingSystem: 100,
-  alternator: 100,
-  starterMotor: 100,
-  batteryBank: 100,
-  wiringHarness: 100,
-  ecuModule: 100,
-  exhaustAftertreatment: 100,
-  dieselParticulateFilter: 100,
-  noxSensor: 100,
-});
 
 export function processAiFleetMaintenance(state: GameState, deltaSimMinutes: number): MaintenanceResult {
   const isMaintenanceActive = !!(

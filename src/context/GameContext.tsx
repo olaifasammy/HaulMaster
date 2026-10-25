@@ -21,6 +21,11 @@ import {
   CommercialInsurancePolicy,
   MacroWorldEvent,
   FleetIncidentRecord,
+  CryptoMarketState,
+  CryptoLimitOrder,
+  CryptoTransactionRecord,
+  CryptoHoldingItem,
+  CryptoCoinMarket,
 } from '../types/game';
 import {
   INITIAL_HUBS,
@@ -196,12 +201,21 @@ interface GameContextType {
   sellGold: (amount: number) => boolean;
   upgradeInsurancePolicy: (tier: 'basic_liability' | 'comprehensive_fleet' | 'platinum_umbrella') => boolean;
   fileInsuranceClaim: (incidentId: string) => boolean;
-  buyCrypto: (symbol: string, amount: number) => boolean;
-  sellCrypto: (symbol: string, amount: number) => boolean;
-  stakeCrypto: (symbol: string, amount: number) => boolean;
+  buyCrypto: (symbol: string, amount: number, isLimit?: boolean, targetPrice?: number) => boolean;
+  sellCrypto: (symbol: string, amount: number, isLimit?: boolean, targetPrice?: number) => boolean;
+  cancelLimitOrder: (orderId: string) => boolean;
+  stakeCrypto: (symbol: string, amount: number, vaultTier?: 'flexible' | '30d_locked' | '90d_sovereign') => boolean;
   unstakeCrypto: (symbol: string, amount: number) => boolean;
   claimCryptoRewards: (symbol: string) => boolean;
+  claimAllCryptoRewards: () => boolean;
+  applyCryptoFuelDiscount: (amountHaul: number) => boolean;
+  upgradeColdStorageVault: () => boolean;
+  procureBulkFuelForHub: (hubId: string, liters: number) => boolean;
+  refuelTruckFromBulkReserve: (truckId: string, liters?: number) => boolean;
+  refuelAllStationedTrucksFromReserves: (hubId?: string) => { refueledCount: number; totalLiters: number };
+  acquireTerminalConcession: (concessionId: string) => boolean;
   clearLedgerRecords: () => void;
+  setState: React.Dispatch<React.SetStateAction<GameState>>;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -210,13 +224,15 @@ const createInitialState = (): GameState => {
   const primaryHubId = 'hub-denver';
   const activeHubIds = [primaryHubId];
 
-  // Configure initial hubs: strictly 1 primary headquarters hub is unlocked initially (no default connected second hub/location)
   const initialHubs = INITIAL_HUBS.map((hub) => {
     const isOwned = hub.id === primaryHubId;
     return {
       ...hub,
       isUnlocked: isOwned,
       isPrimaryBase: hub.id === primaryHubId,
+      hasBulkFuelDepot: isOwned ? true : hub.hasBulkFuelDepot,
+      bulkFuelStockLiters: isOwned ? 35000 : (hub.bulkFuelStockLiters || 15000),
+      bulkFuelCapacityLiters: hub.bulkFuelCapacityLiters || 80000,
     };
   });
 
@@ -229,7 +245,6 @@ const createInitialState = (): GameState => {
   const ownedHubIds = [primaryHubId];
   const ownedRouteIds: string[] = [];
 
-  // Free starter commercial vehicle: MetroFreight Rigid 320 Urban stationed at Denver primary base (Rigid truck - no trailer required)
   const initialTrucks: TruckInstance[] = [
     {
       id: 'trk-01',
@@ -254,6 +269,121 @@ const createInitialState = (): GameState => {
       assignedTrailerId: null,
       serviceDueKm: 45000,
     },
+    {
+      id: 'trk-02',
+      modelId: 'scania-r500-super',
+      vin: 'SCN500R8X99214',
+      plate: 'EU-500-SC',
+      currentHubId: primaryHubId,
+      status: 'idle',
+      odometerKm: 1200,
+      fuelCurrentLiters: 500,
+      adBlueCurrentLiters: 60,
+      subsystems: createPristineSubsystems(),
+      activeDTCs: [],
+      assignedDriverId: 'drv-02',
+      activeTripId: null,
+      lastServiceKm: 0,
+      hasAeroPackage: true,
+      hasRetarder: true,
+      tireCompound: 'highway_eco',
+      sleeperTier: 'deluxe_suite',
+      liveryColor: 'continental_emerald',
+      assignedTrailerId: null,
+      serviceDueKm: 50000,
+    },
+    {
+      id: 'trk-03',
+      modelId: 'freightliner-cascadia',
+      vin: '1FTCSDD1590482',
+      plate: 'US-650-CS',
+      currentHubId: primaryHubId,
+      status: 'idle',
+      odometerKm: 3400,
+      fuelCurrentLiters: 650,
+      adBlueCurrentLiters: 70,
+      subsystems: createPristineSubsystems(),
+      activeDTCs: [],
+      assignedDriverId: 'drv-03',
+      activeTripId: null,
+      lastServiceKm: 0,
+      hasAeroPackage: true,
+      hasRetarder: true,
+      tireCompound: 'highway_eco',
+      sleeperTier: 'standard_sleeper',
+      liveryColor: 'apex_amber',
+      assignedTrailerId: null,
+      serviceDueKm: 50000,
+    },
+    {
+      id: 'trk-04',
+      modelId: 'mercedes-sprinter-519',
+      vin: 'WDB9066351N892',
+      plate: 'US-190-SP',
+      currentHubId: primaryHubId,
+      status: 'idle',
+      odometerKm: 500,
+      fuelCurrentLiters: 80,
+      adBlueCurrentLiters: 20,
+      subsystems: createPristineSubsystems(),
+      activeDTCs: [],
+      assignedDriverId: 'drv-04',
+      activeTripId: null,
+      lastServiceKm: 0,
+      hasAeroPackage: false,
+      hasRetarder: false,
+      tireCompound: 'all_weather',
+      sleeperTier: 'day_cab',
+      liveryColor: 'titanium_silver',
+      assignedTrailerId: null,
+      serviceDueKm: 35000,
+    },
+    {
+      id: 'trk-05',
+      modelId: 'man-tgm-18320',
+      vin: 'WMA18320M29412',
+      plate: 'EU-320-TG',
+      currentHubId: primaryHubId,
+      status: 'idle',
+      odometerKm: 2100,
+      fuelCurrentLiters: 280,
+      adBlueCurrentLiters: 35,
+      subsystems: createPristineSubsystems(),
+      activeDTCs: [],
+      assignedDriverId: 'drv-05',
+      activeTripId: null,
+      lastServiceKm: 0,
+      hasAeroPackage: true,
+      hasRetarder: false,
+      tireCompound: 'highway_eco',
+      sleeperTier: 'day_cab',
+      liveryColor: 'obsidian_slate',
+      assignedTrailerId: null,
+      serviceDueKm: 40000,
+    },
+    {
+      id: 'trk-06',
+      modelId: 'hino-700-profia',
+      vin: 'HIN700E13C9102',
+      plate: 'AS-700-HN',
+      currentHubId: primaryHubId,
+      status: 'idle',
+      odometerKm: 1800,
+      fuelCurrentLiters: 550,
+      adBlueCurrentLiters: 60,
+      subsystems: createPristineSubsystems(),
+      activeDTCs: [],
+      assignedDriverId: 'drv-06',
+      activeTripId: null,
+      lastServiceKm: 0,
+      hasAeroPackage: true,
+      hasRetarder: true,
+      tireCompound: 'highway_eco',
+      sleeperTier: 'standard_sleeper',
+      liveryColor: 'continental_emerald',
+      assignedTrailerId: null,
+      serviceDueKm: 48000,
+    },
   ];
 
   const initialTrailers: TrailerInstance[] = [];
@@ -264,6 +394,91 @@ const createInitialState = (): GameState => {
       homeHubId: primaryHubId,
       currentHubId: primaryHubId,
       assignedTruckId: 'trk-01',
+    },
+    {
+      id: 'drv-02',
+      name: 'Elena Rostova',
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
+      experienceYears: 8,
+      wagePerKmUsd: 0.42,
+      dailyRetainerUsd: 105,
+      homeHubId: primaryHubId,
+      currentHubId: primaryHubId,
+      assignedTruckId: 'trk-02',
+      hosStatus: 'off_duty',
+      continuousDriveMinutes: 0,
+      dailyDriveMinutes: 0,
+      currentRestMinutesRemaining: 0,
+      contractDaysRemaining: 45,
+      stats: { ecoDrivingRating: 88, mechanicalSympathy: 90, mountainCert: false, winterCert: true, hazmatCert: false, fatiguePercent: 8, totalKmDriven: 89000, deliveriesCompleted: 62, safetyScore: 94 },
+    },
+    {
+      id: 'drv-03',
+      name: 'Klaus Lindemann',
+      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80',
+      experienceYears: 16,
+      wagePerKmUsd: 0.52,
+      dailyRetainerUsd: 135,
+      homeHubId: primaryHubId,
+      currentHubId: primaryHubId,
+      assignedTruckId: 'trk-03',
+      hosStatus: 'off_duty',
+      continuousDriveMinutes: 0,
+      dailyDriveMinutes: 0,
+      currentRestMinutesRemaining: 0,
+      contractDaysRemaining: 45,
+      stats: { ecoDrivingRating: 96, mechanicalSympathy: 94, mountainCert: true, winterCert: true, hazmatCert: true, fatiguePercent: 2, totalKmDriven: 185000, deliveriesCompleted: 120, safetyScore: 99 },
+    },
+    {
+      id: 'drv-04',
+      name: 'Sarah Jenkins',
+      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80',
+      experienceYears: 6,
+      wagePerKmUsd: 0.38,
+      dailyRetainerUsd: 95,
+      homeHubId: primaryHubId,
+      currentHubId: primaryHubId,
+      assignedTruckId: 'trk-04',
+      hosStatus: 'off_duty',
+      continuousDriveMinutes: 0,
+      dailyDriveMinutes: 0,
+      currentRestMinutesRemaining: 0,
+      contractDaysRemaining: 30,
+      stats: { ecoDrivingRating: 91, mechanicalSympathy: 89, mountainCert: false, winterCert: false, hazmatCert: false, fatiguePercent: 4, totalKmDriven: 52000, deliveriesCompleted: 45, safetyScore: 96 },
+    },
+    {
+      id: 'drv-05',
+      name: 'Hans Gruber',
+      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&q=80',
+      experienceYears: 11,
+      wagePerKmUsd: 0.45,
+      dailyRetainerUsd: 115,
+      homeHubId: primaryHubId,
+      currentHubId: primaryHubId,
+      assignedTruckId: 'trk-05',
+      hosStatus: 'off_duty',
+      continuousDriveMinutes: 0,
+      dailyDriveMinutes: 0,
+      currentRestMinutesRemaining: 0,
+      contractDaysRemaining: 60,
+      stats: { ecoDrivingRating: 85, mechanicalSympathy: 92, mountainCert: true, winterCert: false, hazmatCert: true, fatiguePercent: 10, totalKmDriven: 112000, deliveriesCompleted: 78, safetyScore: 92 },
+    },
+    {
+      id: 'drv-06',
+      name: 'Kenji Sato',
+      avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=150&q=80',
+      experienceYears: 12,
+      wagePerKmUsd: 0.47,
+      dailyRetainerUsd: 120,
+      homeHubId: primaryHubId,
+      currentHubId: primaryHubId,
+      assignedTruckId: 'trk-06',
+      hosStatus: 'off_duty',
+      continuousDriveMinutes: 0,
+      dailyDriveMinutes: 0,
+      currentRestMinutesRemaining: 0,
+      contractDaysRemaining: 90,
+      stats: { ecoDrivingRating: 94, mechanicalSympathy: 96, mountainCert: true, winterCert: true, hazmatCert: true, fatiguePercent: 3, totalKmDriven: 145000, deliveriesCompleted: 104, safetyScore: 98 },
     },
   ];
 
@@ -321,19 +536,163 @@ const createInitialState = (): GameState => {
     },
     cryptoMarket: {
       coins: {
-        BTC: { symbol: 'BTC', name: 'Bitcoin', currentPriceUsd: 68500, prevDayPriceUsd: 67200, dayHighUsd: 69400, dayLowUsd: 66800, stakingApyPercent: 4.5, history: [{ simDay: 1, price: 67200 }] },
-        ETH: { symbol: 'ETH', name: 'Ethereum', currentPriceUsd: 3520, prevDayPriceUsd: 3450, dayHighUsd: 3590, dayLowUsd: 3410, stakingApyPercent: 6.2, history: [{ simDay: 1, price: 3450 }] },
-        SOL: { symbol: 'SOL', name: 'Solana', currentPriceUsd: 184, prevDayPriceUsd: 178, dayHighUsd: 191, dayLowUsd: 175, stakingApyPercent: 7.8, history: [{ simDay: 1, price: 178 }] },
-        HAUL: { symbol: 'HAUL', name: 'HaulMaster Token', currentPriceUsd: 14.50, prevDayPriceUsd: 12.80, dayHighUsd: 15.20, dayLowUsd: 12.50, stakingApyPercent: 14.5, history: [{ simDay: 1, price: 12.80 }] },
-        LGT: { symbol: 'LGT', name: 'LogiChain IoT', currentPriceUsd: 4.25, prevDayPriceUsd: 4.10, dayHighUsd: 4.45, dayLowUsd: 3.95, stakingApyPercent: 11.2, history: [{ simDay: 1, price: 4.10 }] },
+        BTC: {
+          symbol: 'BTC',
+          name: 'Bitcoin',
+          currentPriceUsd: 68500,
+          prevDayPriceUsd: 67200,
+          dayHighUsd: 69400,
+          dayLowUsd: 66800,
+          stakingApyPercent: 4.5,
+          marketCapUsd: 1350000000000,
+          volume24hUsd: 28400000000,
+          circulatingSupply: '19.7M BTC',
+          description: 'Sovereign digital gold reserve and primary global macroeconomic hedge.',
+          utilityPerk: 'Hedge against diesel hyper-inflation & fiat devaluation',
+          network: 'Bitcoin Core',
+          history: [
+            { simDay: -6, price: 65400, volumeUsd: 26000000000 },
+            { simDay: -5, price: 66100, volumeUsd: 27200000000 },
+            { simDay: -4, price: 65800, volumeUsd: 24500000000 },
+            { simDay: -3, price: 66900, volumeUsd: 28100000000 },
+            { simDay: -2, price: 67200, volumeUsd: 29000000000 },
+            { simDay: 0, price: 67800, volumeUsd: 27900000000 },
+            { simDay: 1, price: 68500, volumeUsd: 28400000000 },
+          ],
+        },
+        ETH: {
+          symbol: 'ETH',
+          name: 'Ethereum',
+          currentPriceUsd: 3520,
+          prevDayPriceUsd: 3450,
+          dayHighUsd: 3590,
+          dayLowUsd: 3410,
+          stakingApyPercent: 6.2,
+          marketCapUsd: 422000000000,
+          volume24hUsd: 16800000000,
+          circulatingSupply: '120.2M ETH',
+          description: 'Programmable smart-contract layer for decentralized supply chain escrow.',
+          utilityPerk: 'Smart-Contract freight escrow settlement with instant payout',
+          network: 'Ethereum Mainnet',
+          history: [
+            { simDay: -6, price: 3380, volumeUsd: 14200000000 },
+            { simDay: -5, price: 3420, volumeUsd: 15100000000 },
+            { simDay: -4, price: 3390, volumeUsd: 13900000000 },
+            { simDay: -3, price: 3440, volumeUsd: 15800000000 },
+            { simDay: -2, price: 3450, volumeUsd: 16200000000 },
+            { simDay: 0, price: 3490, volumeUsd: 16000000000 },
+            { simDay: 1, price: 3520, volumeUsd: 16800000000 },
+          ],
+        },
+        SOL: {
+          symbol: 'SOL',
+          name: 'Solana',
+          currentPriceUsd: 184,
+          prevDayPriceUsd: 178,
+          dayHighUsd: 191,
+          dayLowUsd: 175,
+          stakingApyPercent: 7.8,
+          marketCapUsd: 84000000000,
+          volume24hUsd: 6200000000,
+          circulatingSupply: '468M SOL',
+          description: 'High-throughput sub-second settlement engine for automated highway micro-tolls.',
+          utilityPerk: 'Automated corridor micro-toll pass settlement with 0% gateway fee',
+          network: 'Solana High-Speed',
+          history: [
+            { simDay: -6, price: 168, volumeUsd: 5400000000 },
+            { simDay: -5, price: 172, volumeUsd: 5800000000 },
+            { simDay: -4, price: 170, volumeUsd: 5200000000 },
+            { simDay: -3, price: 175, volumeUsd: 6100000000 },
+            { simDay: -2, price: 178, volumeUsd: 6000000000 },
+            { simDay: 0, price: 181, volumeUsd: 5900000000 },
+            { simDay: 1, price: 184, volumeUsd: 6200000000 },
+          ],
+        },
+        HAUL: {
+          symbol: 'HAUL',
+          name: 'HaulMaster Token',
+          currentPriceUsd: 14.50,
+          prevDayPriceUsd: 12.80,
+          dayHighUsd: 15.20,
+          dayLowUsd: 12.50,
+          stakingApyPercent: 14.5,
+          marketCapUsd: 72500000,
+          volume24hUsd: 3850000,
+          circulatingSupply: '5.0M HAUL',
+          description: 'Apex Continental Freight native utility & fleet governance asset.',
+          utilityPerk: 'Burn 25 HAUL for 7-day 15% fleet fuel discount; stake for high APY',
+          network: 'HaulChain Enterprise L2',
+          history: [
+            { simDay: -6, price: 10.80, volumeUsd: 2100000 },
+            { simDay: -5, price: 11.40, volumeUsd: 2400000 },
+            { simDay: -4, price: 11.20, volumeUsd: 2200000 },
+            { simDay: -3, price: 12.10, volumeUsd: 3100000 },
+            { simDay: -2, price: 12.80, volumeUsd: 3400000 },
+            { simDay: 0, price: 13.60, volumeUsd: 3600000 },
+            { simDay: 1, price: 14.50, volumeUsd: 3850000 },
+          ],
+        },
+        LGT: {
+          symbol: 'LGT',
+          name: 'LogiChain IoT',
+          currentPriceUsd: 4.25,
+          prevDayPriceUsd: 4.10,
+          dayHighUsd: 4.45,
+          dayLowUsd: 3.95,
+          stakingApyPercent: 11.2,
+          marketCapUsd: 38000000,
+          volume24hUsd: 1950000,
+          circulatingSupply: '9.0M LGT',
+          description: 'Decentralized sensor oracle telemetry token verifying cold-chain reefer integrity.',
+          utilityPerk: 'Unlocks satellite telemetry grounding and AI fleet monitoring boosts',
+          network: 'LogiChain Oracle',
+          history: [
+            { simDay: -6, price: 3.80, volumeUsd: 1600000 },
+            { simDay: -5, price: 3.95, volumeUsd: 1750000 },
+            { simDay: -4, price: 3.90, volumeUsd: 1550000 },
+            { simDay: -3, price: 4.05, volumeUsd: 1800000 },
+            { simDay: -2, price: 4.10, volumeUsd: 1850000 },
+            { simDay: 0, price: 4.18, volumeUsd: 1900000 },
+            { simDay: 1, price: 4.25, volumeUsd: 1950000 },
+          ],
+        },
+        USDT: {
+          symbol: 'USDT',
+          name: 'Tether USD',
+          currentPriceUsd: 1.00,
+          prevDayPriceUsd: 1.00,
+          dayHighUsd: 1.002,
+          dayLowUsd: 0.998,
+          stakingApyPercent: 8.5,
+          marketCapUsd: 118000000000,
+          volume24hUsd: 45000000000,
+          circulatingSupply: '118B USDT',
+          description: 'Dollar-pegged stablecoin for cash volatility shielding and liquid treasury vault yield.',
+          utilityPerk: 'Zero-volatility cash haven yielding 8.5% low-risk APY',
+          network: 'Multi-Chain',
+          history: [
+            { simDay: -6, price: 1.00, volumeUsd: 42000000000 },
+            { simDay: -5, price: 1.00, volumeUsd: 44000000000 },
+            { simDay: -4, price: 1.00, volumeUsd: 41000000000 },
+            { simDay: -3, price: 1.00, volumeUsd: 43000000000 },
+            { simDay: -2, price: 1.00, volumeUsd: 45000000000 },
+            { simDay: 0, price: 1.00, volumeUsd: 44500000000 },
+            { simDay: 1, price: 1.00, volumeUsd: 45000000000 },
+          ],
+        },
       },
       holdings: {
-        BTC: { symbol: 'BTC', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
-        ETH: { symbol: 'ETH', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
-        SOL: { symbol: 'SOL', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
-        HAUL: { symbol: 'HAUL', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
-        LGT: { symbol: 'LGT', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
+        BTC: { symbol: 'BTC', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0, vaultTier: 'flexible', vaultLockedUntilSimMinutes: 0 },
+        ETH: { symbol: 'ETH', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0, vaultTier: 'flexible', vaultLockedUntilSimMinutes: 0 },
+        SOL: { symbol: 'SOL', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0, vaultTier: 'flexible', vaultLockedUntilSimMinutes: 0 },
+        HAUL: { symbol: 'HAUL', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0, vaultTier: 'flexible', vaultLockedUntilSimMinutes: 0 },
+        LGT: { symbol: 'LGT', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0, vaultTier: 'flexible', vaultLockedUntilSimMinutes: 0 },
+        USDT: { symbol: 'USDT', amount: 0, averageBuyPriceUsd: 1.00, stakedAmount: 0, stakingRewardsClaimable: 0, vaultTier: 'flexible', vaultLockedUntilSimMinutes: 0 },
       },
+      limitOrders: [],
+      transactions: [],
+      fuelDiscountActiveUntilSimMinutes: 0,
+      coldStorageLevel: 1,
     },
     insurancePolicy: {
       policyTier: 'comprehensive_fleet',
@@ -457,9 +816,11 @@ const createInitialState = (): GameState => {
       },
     ],
     terminalConcessions: [
-      { id: 'term-lax', name: 'Port of Los Angeles Container Terminal', type: 'port_container', location: 'Los Angeles, CA', acquisitionCostUsd: 2500000, weeklyRevenueUsd: 85000, isOwned: false },
+      { id: 'term-lax', name: 'Port of Los Angeles Deep-Water Container Terminal', type: 'port_container', location: 'Los Angeles, CA', acquisitionCostUsd: 2500000, weeklyRevenueUsd: 85000, isOwned: false },
       { id: 'term-chi', name: 'Chicago Intermodal Rail-Bridge Yard', type: 'rail_bridge', location: 'Chicago, IL', acquisitionCostUsd: 1800000, weeklyRevenueUsd: 62000, isOwned: false },
       { id: 'term-rot', name: 'Port of Rotterdam Deep-Water Container Pier', type: 'port_container', location: 'Rotterdam, Netherlands', acquisitionCostUsd: 4500000, weeklyRevenueUsd: 165000, isOwned: false },
+      { id: 'term-fra', name: 'Frankfurt Rhein-Main Air Cargo Freight Ramp', type: 'air_freight', location: 'Frankfurt, Germany', acquisitionCostUsd: 3200000, weeklyRevenueUsd: 115000, isOwned: false },
+      { id: 'term-dfw', name: 'Dallas Fort Worth Intermodal Freight Hub', type: 'rail_bridge', location: 'Dallas, TX', acquisitionCostUsd: 2100000, weeklyRevenueUsd: 74000, isOwned: false },
     ],
     totalCo2EmissionsKg: 0,
     carbonTaxPaidUsd: 0,
@@ -537,7 +898,7 @@ const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameS
     completedCount++;
     const destHub = prevState.hubs.find((h) => h.id === finished.contract.destinationHubId);
     const isOnTime = finished.elapsedMinutes <= finished.contract.deadlineMinutes;
-    const commMultiplier = getCommercialPayoutMultiplier(finished.truckId, finished.trailerId, prevState.trucks);
+    const commMultiplier = getCommercialPayoutMultiplier(finished.truckId, finished.trailerId || null, prevState.trucks);
     const adjPayout = Math.round(finished.contract.payoutUsd * commMultiplier);
     const adjBonus = Math.round(finished.contract.bonusOnTimeUsd * commMultiplier);
     const adjPenalty = Math.round(finished.contract.penaltyLateUsd * commMultiplier);
@@ -920,22 +1281,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             };
           }
           if (!parsed.cryptoMarket) {
-            parsed.cryptoMarket = {
-              coins: {
-                BTC: { symbol: 'BTC', name: 'Bitcoin', currentPriceUsd: 68500, prevDayPriceUsd: 67200, dayHighUsd: 69400, dayLowUsd: 66800, stakingApyPercent: 4.5, history: [{ simDay: 1, price: 67200 }] },
-                ETH: { symbol: 'ETH', name: 'Ethereum', currentPriceUsd: 3520, prevDayPriceUsd: 3450, dayHighUsd: 3590, dayLowUsd: 3410, stakingApyPercent: 6.2, history: [{ simDay: 1, price: 3450 }] },
-                SOL: { symbol: 'SOL', name: 'Solana', currentPriceUsd: 184, prevDayPriceUsd: 178, dayHighUsd: 191, dayLowUsd: 175, stakingApyPercent: 7.8, history: [{ simDay: 1, price: 178 }] },
-                HAUL: { symbol: 'HAUL', name: 'HaulMaster Token', currentPriceUsd: 14.50, prevDayPriceUsd: 12.80, dayHighUsd: 15.20, dayLowUsd: 12.50, stakingApyPercent: 14.5, history: [{ simDay: 1, price: 12.80 }] },
-                LGT: { symbol: 'LGT', name: 'LogiChain IoT', currentPriceUsd: 4.25, prevDayPriceUsd: 4.10, dayHighUsd: 4.45, dayLowUsd: 3.95, stakingApyPercent: 11.2, history: [{ simDay: 1, price: 4.10 }] },
-              },
-              holdings: {
-                BTC: { symbol: 'BTC', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
-                ETH: { symbol: 'ETH', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
-                SOL: { symbol: 'SOL', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
-                HAUL: { symbol: 'HAUL', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
-                LGT: { symbol: 'LGT', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
-              },
-            };
+            parsed.cryptoMarket = createInitialState().cryptoMarket;
+          } else {
+            if (!parsed.cryptoMarket.limitOrders) parsed.cryptoMarket.limitOrders = [];
+            if (!parsed.cryptoMarket.transactions) parsed.cryptoMarket.transactions = [];
+            if (!parsed.cryptoMarket.coldStorageLevel) parsed.cryptoMarket.coldStorageLevel = 1;
+            if (!parsed.cryptoMarket.fuelDiscountActiveUntilSimMinutes) parsed.cryptoMarket.fuelDiscountActiveUntilSimMinutes = 0;
+            if (!parsed.cryptoMarket.coins.USDT) {
+              const initCrypto = createInitialState().cryptoMarket;
+              parsed.cryptoMarket.coins.USDT = initCrypto.coins.USDT;
+              parsed.cryptoMarket.holdings.USDT = initCrypto.holdings.USDT;
+            }
           }
           if (!parsed.insurancePolicy) {
             parsed.insurancePolicy = {
@@ -1053,6 +1409,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ];
           }
 
+          const defaultFallback = createInitialState();
+          if (!parsed.cryptoMarket || !parsed.cryptoMarket.coins || Object.keys(parsed.cryptoMarket.coins).length === 0) {
+            parsed.cryptoMarket = defaultFallback.cryptoMarket;
+          } else {
+            parsed.cryptoMarket.coins = { ...defaultFallback.cryptoMarket.coins, ...parsed.cryptoMarket.coins };
+            parsed.cryptoMarket.holdings = { ...defaultFallback.cryptoMarket.holdings, ...(parsed.cryptoMarket.holdings || {}) };
+            parsed.cryptoMarket.limitOrders = parsed.cryptoMarket.limitOrders || [];
+            parsed.cryptoMarket.transactions = parsed.cryptoMarket.transactions || [];
+            parsed.cryptoMarket.coldStorageLevel = parsed.cryptoMarket.coldStorageLevel || 1;
+          }
+
           const now = Date.now();
           const lastTime = parsed.lastRealTimeTimestamp || now;
           const realElapsedMs = now - lastTime;
@@ -1111,19 +1478,40 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!isMounted || !dbState) return;
       if (dbState.trucks && dbState.trucks.length > 0) {
         setState((currentState) => {
+          const defaultFallback = createInitialState();
+          const mergedDbState: GameState = {
+            ...defaultFallback,
+            ...dbState,
+            cryptoMarket: {
+              ...defaultFallback.cryptoMarket,
+              ...(dbState.cryptoMarket || {}),
+              coins: {
+                ...defaultFallback.cryptoMarket.coins,
+                ...(dbState.cryptoMarket?.coins || {}),
+              },
+              holdings: {
+                ...defaultFallback.cryptoMarket.holdings,
+                ...(dbState.cryptoMarket?.holdings || {}),
+              },
+              limitOrders: dbState.cryptoMarket?.limitOrders || [],
+              transactions: dbState.cryptoMarket?.transactions || [],
+              coldStorageLevel: dbState.cryptoMarket?.coldStorageLevel || 1,
+            },
+          };
+
           const now = Date.now();
-          const lastTime = dbState.lastRealTimeTimestamp || now;
+          const lastTime = mergedDbState.lastRealTimeTimestamp || now;
           const realElapsedMs = now - lastTime;
-          const isAiOfflineSubActive = dbState.aiOfflineDispatchActive && dbState.simTimeMinutes < dbState.aiOfflineDispatchExpiresSimMinutes;
-          if (realElapsedMs > 300000 && ((dbState.activeTrips && dbState.activeTrips.length > 0) || isAiOfflineSubActive)) {
+          const isAiOfflineSubActive = mergedDbState.aiOfflineDispatchActive && mergedDbState.simTimeMinutes < mergedDbState.aiOfflineDispatchExpiresSimMinutes;
+          if (realElapsedMs > 300000 && ((mergedDbState.activeTrips && mergedDbState.activeTrips.length > 0) || isAiOfflineSubActive)) {
             const realSeconds = Math.floor(realElapsedMs / 1000);
             const simMinutesToAdd = Math.min(realSeconds * 1, 43200);
-            const updated = runOfflineCatchUp(dbState, simMinutesToAdd);
+            const updated = runOfflineCatchUp(mergedDbState, simMinutesToAdd);
             updated.lastRealTimeTimestamp = now;
             return updated;
           }
-          dbState.lastRealTimeTimestamp = now;
-          return dbState;
+          mergedDbState.lastRealTimeTimestamp = now;
+          return mergedDbState;
         });
       }
     }).catch((err) => {
@@ -1259,6 +1647,27 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 amountUsd: -updatedInsurance.dailyPremiumUsd,
                 runningBalanceUsd: currentBalance,
               });
+            }
+
+            // Intermodal & Port Terminal Concession Daily Dividends
+            if (prevState.terminalConcessions) {
+              const ownedConcessions = prevState.terminalConcessions.filter(c => c.isOwned);
+              let totalConcessionDiv = 0;
+              for (const conc of ownedConcessions) {
+                totalConcessionDiv += Math.round(conc.weeklyRevenueUsd / 7);
+              }
+              if (totalConcessionDiv > 0) {
+                currentBalance += totalConcessionDiv;
+                newLedgerEntries.push({
+                  id: `led-term-div-${newSimMinutes}`,
+                  simDay: currentDay,
+                  simTimeFormatted: timeFormatted,
+                  type: 'freight_revenue',
+                  description: `Intermodal & Port Terminal concession daily dividend yields (${ownedConcessions.length} concessions)`,
+                  amountUsd: totalConcessionDiv,
+                  runningBalanceUsd: currentBalance,
+                });
+              }
             }
 
             // Real Valuation: Fluctuate Gold Spot Price (COMEX benchmark)
@@ -1513,6 +1922,110 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 availableContracts: [...prunedExisting, ...freshBids],
                 lastMarketRefreshSimTime: newSimMinutes,
               };
+            }
+          }
+
+          // Continuous Crypto Mechanics (Spot Micro-Fluctuations, Staking Yield Accrual, and Limit Orders)
+          if (updatedCryptoMarket.coins) {
+            // 1. Continuous Staking Yield Accrual
+            if (updatedCryptoMarket.holdings) {
+              Object.keys(updatedCryptoMarket.holdings).forEach((sym) => {
+                const holding = updatedCryptoMarket.holdings[sym];
+                const coin = updatedCryptoMarket.coins[sym];
+                if (holding && coin && holding.stakedAmount > 0) {
+                  let multiplier = 1.0;
+                  if (holding.vaultTier === '30d_locked') multiplier = 1.25;
+                  else if (holding.vaultTier === '90d_sovereign') multiplier = 1.55;
+                  if ((updatedCryptoMarket.coldStorageLevel || 1) >= 2) multiplier += 0.1;
+                  const perMinYield = holding.stakedAmount * ((coin.stakingApyPercent * multiplier) / 100 / 525600) * deltaSimMinutes;
+                  holding.stakingRewardsClaimable = (holding.stakingRewardsClaimable || 0) + perMinYield;
+                }
+              });
+            }
+
+            // 2. Continuous Spot Price Micro-Walk (every sim minute)
+            Object.keys(updatedCryptoMarket.coins).forEach((sym) => {
+              if (sym === 'USDT') return; // Stablecoin pegs to $1.00
+              const coin = updatedCryptoMarket.coins[sym];
+              const microVol = sym === 'BTC' ? 0.001 : sym === 'ETH' ? 0.0015 : sym === 'SOL' ? 0.0025 : sym === 'HAUL' ? 0.0035 : 0.002;
+              const delta = (Math.random() - 0.495) * microVol;
+              const newPrice = Math.max(0.01, Math.round((coin.currentPriceUsd * (1 + delta)) * 100) / 100);
+              coin.currentPriceUsd = newPrice;
+              coin.dayHighUsd = Math.max(coin.dayHighUsd, newPrice);
+              coin.dayLowUsd = Math.min(coin.dayLowUsd, newPrice);
+            });
+
+            // 3. Evaluate Pending Limit Orders
+            if (updatedCryptoMarket.limitOrders && updatedCryptoMarket.limitOrders.length > 0) {
+              const pendingOrders = updatedCryptoMarket.limitOrders.filter((o: CryptoLimitOrder) => o.status === 'pending');
+              for (const order of pendingOrders) {
+                const coin = updatedCryptoMarket.coins[order.symbol];
+                if (!coin) continue;
+
+                let triggered = false;
+                if (order.side === 'buy' && coin.currentPriceUsd <= order.targetPriceUsd) {
+                  triggered = true;
+                } else if (order.side === 'sell' && coin.currentPriceUsd >= order.targetPriceUsd) {
+                  triggered = true;
+                }
+
+                if (triggered) {
+                  order.status = 'executed';
+                  const holding = updatedCryptoMarket.holdings[order.symbol] || {
+                    symbol: order.symbol,
+                    amount: 0,
+                    averageBuyPriceUsd: 0,
+                    stakedAmount: 0,
+                    stakingRewardsClaimable: 0,
+                    vaultTier: 'flexible',
+                  };
+                  const txHash = '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
+                  if (order.side === 'buy') {
+                    const newAmount = holding.amount + order.amount;
+                    const newAvg = ((holding.amount * holding.averageBuyPriceUsd) + order.totalUsd) / newAmount;
+                    holding.amount = newAmount;
+                    holding.averageBuyPriceUsd = newAvg;
+                    updatedCryptoMarket.holdings[order.symbol] = holding;
+
+                    newNotifications.push({
+                      id: `notif-limit-buy-${order.id}-${newSimMinutes}`,
+                      simTimeFormatted: timeFormatted,
+                      title: `🎯 Limit Buy Executed: ${order.symbol}`,
+                      message: `Limit order filled: Acquired ${order.amount} ${order.symbol} at $${coin.currentPriceUsd.toLocaleString()} USD (Target: $${order.targetPriceUsd.toLocaleString()}).`,
+                      type: 'finance',
+                      timestamp: Date.now(),
+                    });
+                  } else {
+                    currentBalance += order.totalUsd;
+                    newNotifications.push({
+                      id: `notif-limit-sell-${order.id}-${newSimMinutes}`,
+                      simTimeFormatted: timeFormatted,
+                      title: `🎯 Limit Sell Executed: ${order.symbol}`,
+                      message: `Limit order filled: Liquidated ${order.amount} ${order.symbol} at $${coin.currentPriceUsd.toLocaleString()} USD (+$${order.totalUsd.toLocaleString()} USD).`,
+                      type: 'finance',
+                      timestamp: Date.now(),
+                    });
+                  }
+
+                  updatedCryptoMarket.transactions = [
+                    {
+                      id: `tx-limit-${Date.now()}-${order.id.slice(-4)}`,
+                      simTimeFormatted: timeFormatted,
+                      timestamp: Date.now(),
+                      type: order.side === 'buy' ? ('buy' as const) : ('sell' as const),
+                      symbol: order.symbol,
+                      amount: order.amount,
+                      priceUsd: coin.currentPriceUsd,
+                      totalUsd: order.totalUsd,
+                      feeUsd: Math.round(order.totalUsd * 0.001 * 100) / 100,
+                      txHash,
+                      note: `Automated Limit Order #${order.id.slice(-5)} Fulfilled`,
+                    },
+                    ...(updatedCryptoMarket.transactions || []),
+                  ].slice(0, 50);
+                }
+              }
             }
           }
 
@@ -2035,7 +2548,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           for (const finished of completedTrips) {
             const destHub = prevState.hubs.find((h) => h.id === finished.contract.destinationHubId);
             const isOnTime = finished.elapsedMinutes <= finished.contract.deadlineMinutes;
-            const commMultiplier = getCommercialPayoutMultiplier(finished.truckId, finished.trailerId, updatedTrucks);
+            const commMultiplier = getCommercialPayoutMultiplier(finished.truckId, finished.trailerId || null, updatedTrucks);
             const adjPayout = Math.round(finished.contract.payoutUsd * commMultiplier);
             const adjBonus = Math.round(finished.contract.bonusOnTimeUsd * commMultiplier);
             const adjPenalty = Math.round(finished.contract.penaltyLateUsd * commMultiplier);
@@ -3395,7 +3908,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const toPump = Math.min(needed, liters);
     if (toPump <= 0) return false;
 
-    const fuelCost = Math.round(toPump * hub.fuelPricePerLiter);
+    const hasCryptoDiscount = Boolean(state.cryptoMarket?.fuelDiscountActiveUntilSimMinutes && state.simTimeMinutes < state.cryptoMarket.fuelDiscountActiveUntilSimMinutes);
+    const effectivePrice = hasCryptoDiscount ? Math.round(hub.fuelPricePerLiter * 0.85 * 100) / 100 : hub.fuelPricePerLiter;
+    const fuelCost = Math.round(toPump * effectivePrice);
     if (state.balanceUsd < fuelCost) {
       notifyUser('Insufficient Capital', 'Insufficient company funds to bunker fuel tanks.', 'finance');
       return false;
@@ -3414,7 +3929,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           simDay,
           simTimeFormatted: `Day ${simDay}`,
           type: 'fuel_expense',
-          description: `Bunkered ${Math.round(toPump)}L diesel at ${hub.name} ($${hub.fuelPricePerLiter}/L)`,
+          description: `Bunkered ${Math.round(toPump)}L diesel at ${hub.name} ($${effectivePrice}/L)${hasCryptoDiscount ? ' [HAUL 15% Token Discount]' : ''}`,
           amountUsd: -fuelCost,
           runningBalanceUsd: nextBal,
         },
@@ -3763,68 +4278,233 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
-  const buyCrypto = (symbol: string, amount: number): boolean => {
-    if (amount <= 0) return false;
-    const coin = state.cryptoMarket?.coins?.[symbol];
-    if (!coin) return false;
-    const totalCost = amount * coin.currentPriceUsd;
-
-    if (state.balanceUsd < totalCost) {
-      notifyUser('Insufficient Treasury', `Purchasing ${amount} ${symbol} requires $${totalCost.toLocaleString()} USD. Treasury: $${state.balanceUsd.toLocaleString()} USD.`, 'finance');
+  const buyCrypto = (symbol: string, amount: number, isLimit: boolean = false, targetPrice?: number): boolean => {
+    if (amount <= 0 || isNaN(amount)) {
+      notifyUser('Invalid Quantity', 'Please specify a positive asset volume to execute.', 'finance');
+      return false;
+    }
+    const defaultState = createInitialState();
+    const market = state.cryptoMarket || defaultState.cryptoMarket;
+    const coin = market.coins?.[symbol] || defaultState.cryptoMarket.coins[symbol];
+    if (!coin) {
+      notifyUser('Market Offline', `Asset ${symbol} is temporarily unavailable for spot execution.`, 'finance');
       return false;
     }
 
     const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
-    const nextBal = state.balanceUsd - totalCost;
+    const hours = Math.floor((state.simTimeMinutes % 1440) / 60);
+    const mins = state.simTimeMinutes % 60;
+    const timeFormatted = `Day ${simDay} ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    const feeRate = (market.coldStorageLevel || 1) >= 3 ? 0 : (market.coldStorageLevel || 1) >= 2 ? 0.0005 : 0.001;
+
+    if (isLimit) {
+      const target = targetPrice && targetPrice > 0 ? targetPrice : coin.currentPriceUsd;
+      const totalCost = amount * target;
+      const fee = Math.round(totalCost * feeRate * 100) / 100;
+      const requiredTreasury = totalCost + fee;
+
+      if (state.balanceUsd < requiredTreasury) {
+        notifyUser('Insufficient Treasury', `Placing limit buy order for ${amount} ${symbol} @ $${target.toLocaleString()} requires $${Math.round(requiredTreasury).toLocaleString()} USD in escrow. Available: $${Math.round(state.balanceUsd).toLocaleString()} USD.`, 'finance');
+        return false;
+      }
+
+      const orderId = `ord-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const newOrder: CryptoLimitOrder = {
+        id: orderId,
+        symbol,
+        side: 'buy',
+        targetPriceUsd: target,
+        amount,
+        totalUsd: totalCost,
+        createdSimMinutes: state.simTimeMinutes,
+        status: 'pending',
+      };
+
+      const nextBal = state.balanceUsd - requiredTreasury;
+
+      setState((prev) => {
+        const prevMarket = prev.cryptoMarket || defaultState.cryptoMarket;
+        return {
+          ...prev,
+          balanceUsd: nextBal,
+          cryptoMarket: {
+            ...prevMarket,
+            limitOrders: [newOrder, ...(prevMarket.limitOrders || [])],
+          },
+          ledger: [
+            {
+              id: `led-limit-escrow-${orderId}`,
+              simDay,
+              simTimeFormatted: timeFormatted,
+              type: 'equipment_purchase',
+              description: `Escrow allocation for Limit Buy Order #${orderId.slice(-5)}: ${amount} ${symbol} @ $${target.toLocaleString()}/unit`,
+              amountUsd: -requiredTreasury,
+              runningBalanceUsd: nextBal,
+            },
+            ...prev.ledger,
+          ],
+        };
+      });
+
+      notifyUser('Limit Order Registered', `Limit buy order for ${amount} ${symbol} @ $${target.toLocaleString()} placed in order book. Escrow locked.`, 'finance');
+      return true;
+    }
+
+    // Spot Market Order
+    const totalCost = amount * coin.currentPriceUsd;
+    const fee = Math.round(totalCost * feeRate * 100) / 100;
+    const requiredTotal = totalCost + fee;
+
+    if (state.balanceUsd < requiredTotal) {
+      notifyUser('Insufficient Treasury', `Purchasing ${amount} ${symbol} requires $${Math.round(requiredTotal).toLocaleString()} USD (including $${fee.toFixed(2)} exchange fee). Available: $${Math.round(state.balanceUsd).toLocaleString()} USD.`, 'finance');
+      return false;
+    }
+
+    const nextBal = state.balanceUsd - requiredTotal;
+    const txHash = '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
 
     setState((prev) => {
-      const curHolding = prev.cryptoMarket.holdings[symbol] || { symbol, amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 };
+      const prevMarket = prev.cryptoMarket || defaultState.cryptoMarket;
+      const prevHoldings = prevMarket.holdings || defaultState.cryptoMarket.holdings;
+      const curHolding = prevHoldings[symbol] || {
+        symbol,
+        amount: 0,
+        averageBuyPriceUsd: 0,
+        stakedAmount: 0,
+        stakingRewardsClaimable: 0,
+        vaultTier: 'flexible',
+        vaultLockedUntilSimMinutes: 0,
+      };
       const newAmount = curHolding.amount + amount;
       const newAvgCost = ((curHolding.amount * curHolding.averageBuyPriceUsd) + (amount * coin.currentPriceUsd)) / newAmount;
+
+      const newTx: CryptoTransactionRecord = {
+        id: `tx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        simTimeFormatted: timeFormatted,
+        timestamp: Date.now(),
+        type: 'buy',
+        symbol,
+        amount,
+        priceUsd: coin.currentPriceUsd,
+        totalUsd: totalCost,
+        feeUsd: fee,
+        txHash,
+        note: `Instant Spot Market Execution`,
+      };
 
       return {
         ...prev,
         balanceUsd: nextBal,
         cryptoMarket: {
-          ...prev.cryptoMarket,
+          ...prevMarket,
           holdings: {
-            ...prev.cryptoMarket.holdings,
+            ...prevHoldings,
             [symbol]: {
               ...curHolding,
               amount: newAmount,
               averageBuyPriceUsd: newAvgCost,
             },
           },
+          transactions: [newTx, ...(prevMarket.transactions || [])].slice(0, 50),
         },
         ledger: [
           {
             id: `led-crypto-buy-${Date.now()}`,
             simDay,
-            simTimeFormatted: `Day ${simDay}`,
+            simTimeFormatted: timeFormatted,
             type: 'equipment_purchase',
-            description: `Acquired ${amount} ${symbol} at $${coin.currentPriceUsd.toLocaleString()}/unit`,
-            amountUsd: -totalCost,
+            description: `Spot acquired ${amount} ${symbol} at $${coin.currentPriceUsd.toLocaleString()}/unit (Fee: $${fee.toFixed(2)})`,
+            amountUsd: -requiredTotal,
             runningBalanceUsd: nextBal,
           },
           ...prev.ledger,
         ],
       };
     });
+
+    notifyUser('Spot Asset Acquired', `Acquired ${amount} ${symbol} for $${Math.round(totalCost).toLocaleString()} USD into cold storage.`, 'finance');
     return true;
   };
 
-  const sellCrypto = (symbol: string, amount: number): boolean => {
-    if (amount <= 0) return false;
-    const curHolding = state.cryptoMarket?.holdings?.[symbol];
-    const coin = state.cryptoMarket?.coins?.[symbol];
+  const sellCrypto = (symbol: string, amount: number, isLimit: boolean = false, targetPrice?: number): boolean => {
+    if (amount <= 0 || isNaN(amount)) {
+      notifyUser('Invalid Quantity', 'Please specify a positive volume to sell.', 'finance');
+      return false;
+    }
+    const defaultState = createInitialState();
+    const market = state.cryptoMarket || defaultState.cryptoMarket;
+    const curHolding = market.holdings?.[symbol] || defaultState.cryptoMarket.holdings[symbol];
+    const coin = market.coins?.[symbol] || defaultState.cryptoMarket.coins[symbol];
     if (!curHolding || !coin || curHolding.amount < amount) {
-      notifyUser('Insufficient Holdings', `You hold ${curHolding?.amount || 0} ${symbol}. Cannot sell ${amount}.`, 'finance');
+      notifyUser('Insufficient Holdings', `You hold ${curHolding?.amount ? curHolding.amount.toFixed(4) : '0'} ${symbol}. Cannot liquidate ${amount} units.`, 'finance');
       return false;
     }
 
-    const proceeds = amount * coin.currentPriceUsd;
     const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
-    const nextBal = state.balanceUsd + proceeds;
+    const hours = Math.floor((state.simTimeMinutes % 1440) / 60);
+    const mins = state.simTimeMinutes % 60;
+    const timeFormatted = `Day ${simDay} ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    const feeRate = (market.coldStorageLevel || 1) >= 3 ? 0 : (market.coldStorageLevel || 1) >= 2 ? 0.0005 : 0.001;
+
+    if (isLimit) {
+      const target = targetPrice && targetPrice > 0 ? targetPrice : coin.currentPriceUsd;
+      const totalProceeds = amount * target;
+      const orderId = `ord-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+      const newOrder: CryptoLimitOrder = {
+        id: orderId,
+        symbol,
+        side: 'sell',
+        targetPriceUsd: target,
+        amount,
+        totalUsd: totalProceeds,
+        createdSimMinutes: state.simTimeMinutes,
+        status: 'pending',
+      };
+
+      setState((prev) => {
+        const prevMarket = prev.cryptoMarket || defaultState.cryptoMarket;
+        const prevHoldings = prevMarket.holdings || defaultState.cryptoMarket.holdings;
+        return {
+          ...prev,
+          cryptoMarket: {
+            ...prevMarket,
+            holdings: {
+              ...prevHoldings,
+              [symbol]: {
+                ...curHolding,
+                amount: curHolding.amount - amount,
+              },
+            },
+            limitOrders: [newOrder, ...(prevMarket.limitOrders || [])],
+          },
+        };
+      });
+
+      notifyUser('Limit Sell Registered', `Limit sell order for ${amount} ${symbol} @ $${target.toLocaleString()} placed in order book. Tokens escrowed.`, 'finance');
+      return true;
+    }
+
+    // Spot Market Liquidation
+    const grossProceeds = amount * coin.currentPriceUsd;
+    const fee = Math.round(grossProceeds * feeRate * 100) / 100;
+    const netProceeds = grossProceeds - fee;
+    const nextBal = state.balanceUsd + netProceeds;
+    const txHash = '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
+    const newTx: CryptoTransactionRecord = {
+      id: `tx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      simTimeFormatted: timeFormatted,
+      timestamp: Date.now(),
+      type: 'sell',
+      symbol,
+      amount,
+      priceUsd: coin.currentPriceUsd,
+      totalUsd: grossProceeds,
+      feeUsd: fee,
+      txHash,
+      note: `Instant Spot Market Liquidation`,
+    };
 
     setState((prev) => ({
       ...prev,
@@ -3838,27 +4518,109 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             amount: curHolding.amount - amount,
           },
         },
+        transactions: [newTx, ...(prev.cryptoMarket.transactions || [])].slice(0, 50),
       },
       ledger: [
         {
           id: `led-crypto-sell-${Date.now()}`,
           simDay,
-          simTimeFormatted: `Day ${simDay}`,
+          simTimeFormatted: timeFormatted,
           type: 'freight_revenue',
-          description: `Liquidated ${amount} ${symbol} for working capital at $${coin.currentPriceUsd.toLocaleString()}/unit`,
-          amountUsd: proceeds,
+          description: `Liquidated ${amount} ${symbol} at $${coin.currentPriceUsd.toLocaleString()}/unit (Proceeds: +$${Math.round(netProceeds).toLocaleString()})`,
+          amountUsd: netProceeds,
           runningBalanceUsd: nextBal,
         },
         ...prev.ledger,
       ],
     }));
+
+    notifyUser('Digital Asset Liquidated', `Liquidated ${amount} ${symbol} for +$${Math.round(netProceeds).toLocaleString()} USD into company treasury.`, 'finance');
     return true;
   };
 
-  const stakeCrypto = (symbol: string, amount: number): boolean => {
+  const cancelLimitOrder = (orderId: string): boolean => {
+    const order = state.cryptoMarket?.limitOrders?.find((o) => o.id === orderId);
+    if (!order || order.status !== 'pending') return false;
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const hours = Math.floor((state.simTimeMinutes % 1440) / 60);
+    const mins = state.simTimeMinutes % 60;
+    const timeFormatted = `Day ${simDay} ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+
+    if (order.side === 'buy') {
+      const refund = order.totalUsd;
+      const nextBal = state.balanceUsd + refund;
+
+      setState((prev) => ({
+        ...prev,
+        balanceUsd: nextBal,
+        cryptoMarket: {
+          ...prev.cryptoMarket,
+          limitOrders: (prev.cryptoMarket.limitOrders || []).map((o) => (o.id === orderId ? { ...o, status: 'cancelled' } : o)),
+        },
+        ledger: [
+          {
+            id: `led-order-cancel-${orderId}`,
+            simDay,
+            simTimeFormatted: timeFormatted,
+            type: 'freight_revenue',
+            description: `Refunded limit buy escrow for Order #${orderId.slice(-5)} (${order.amount} ${order.symbol})`,
+            amountUsd: refund,
+            runningBalanceUsd: nextBal,
+          },
+          ...prev.ledger,
+        ],
+      }));
+    } else {
+      const holding = state.cryptoMarket?.holdings?.[order.symbol];
+      setState((prev) => ({
+        ...prev,
+        cryptoMarket: {
+          ...prev.cryptoMarket,
+          holdings: {
+            ...prev.cryptoMarket.holdings,
+            [order.symbol]: {
+              ...(holding || { symbol: order.symbol, amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 }),
+              amount: (holding?.amount || 0) + order.amount,
+            },
+          },
+          limitOrders: (prev.cryptoMarket.limitOrders || []).map((o) => (o.id === orderId ? { ...o, status: 'cancelled' } : o)),
+        },
+      }));
+    }
+
+    notifyUser('Limit Order Cancelled', `Limit order #${orderId.slice(-5)} cancelled. Escrowed assets returned to balance.`, 'finance');
+    return true;
+  };
+
+  const stakeCrypto = (symbol: string, amount: number, vaultTier: 'flexible' | '30d_locked' | '90d_sovereign' = 'flexible'): boolean => {
     if (amount <= 0) return false;
     const curHolding = state.cryptoMarket?.holdings?.[symbol];
-    if (!curHolding || curHolding.amount < amount) return false;
+    if (!curHolding || curHolding.amount < amount) {
+      notifyUser('Insufficient Unstaked Balance', `You have ${curHolding?.amount || 0} ${symbol} available to stake.`, 'finance');
+      return false;
+    }
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const hours = Math.floor((state.simTimeMinutes % 1440) / 60);
+    const mins = state.simTimeMinutes % 60;
+    const timeFormatted = `Day ${simDay} ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    const lockMins = vaultTier === '90d_sovereign' ? 90 * 1440 : vaultTier === '30d_locked' ? 30 * 1440 : 0;
+    const txHash = '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
+    const newTx: CryptoTransactionRecord = {
+      id: `tx-stake-${Date.now()}`,
+      simTimeFormatted: timeFormatted,
+      timestamp: Date.now(),
+      type: 'stake',
+      symbol,
+      amount,
+      priceUsd: state.cryptoMarket?.coins?.[symbol]?.currentPriceUsd || 0,
+      totalUsd: amount * (state.cryptoMarket?.coins?.[symbol]?.currentPriceUsd || 0),
+      feeUsd: 0,
+      txHash,
+      note: `Vault Deposit (${vaultTier.replace('_', ' ').toUpperCase()})`,
+    };
 
     setState((prev) => ({
       ...prev,
@@ -3870,17 +4632,57 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ...curHolding,
             amount: curHolding.amount - amount,
             stakedAmount: curHolding.stakedAmount + amount,
+            vaultTier,
+            vaultLockedUntilSimMinutes: lockMins > 0 ? prev.simTimeMinutes + lockMins : 0,
           },
         },
+        transactions: [newTx, ...(prev.cryptoMarket.transactions || [])].slice(0, 50),
       },
     }));
+
+    const tierLabel = vaultTier === '90d_sovereign' ? '90-Day Sovereign Vault (+55% Yield)' : vaultTier === '30d_locked' ? '30-Day Locked Vault (+25% Yield)' : 'Flexible Staking Vault';
+    notifyUser('Vault Staking Confirmed', `Locked ${amount} ${symbol} in ${tierLabel}. Yield starts accruing immediately!`, 'finance');
     return true;
   };
 
   const unstakeCrypto = (symbol: string, amount: number): boolean => {
     if (amount <= 0) return false;
     const curHolding = state.cryptoMarket?.holdings?.[symbol];
-    if (!curHolding || curHolding.stakedAmount < amount) return false;
+    if (!curHolding || curHolding.stakedAmount < amount) {
+      notifyUser('Insufficient Staked Balance', `You have ${curHolding?.stakedAmount || 0} ${symbol} in the vault.`, 'finance');
+      return false;
+    }
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const hours = Math.floor((state.simTimeMinutes % 1440) / 60);
+    const mins = state.simTimeMinutes % 60;
+    const timeFormatted = `Day ${simDay} ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    const isLocked = Boolean(curHolding.vaultLockedUntilSimMinutes && curHolding.vaultLockedUntilSimMinutes > state.simTimeMinutes);
+
+    if (isLocked) {
+      const remainingDays = Math.ceil((curHolding.vaultLockedUntilSimMinutes! - state.simTimeMinutes) / 1440);
+      if (!window.confirm(`⚠️ Early Vault Withdrawal Warning:\n\nThis vault is locked for ${remainingDays} more simulation days.\nWithdrawing early incurs a 5% protocol penalty.\n\nProceed with early withdrawal?`)) {
+        return false;
+      }
+    }
+
+    const penaltyRate = isLocked ? 0.05 : 0;
+    const returnAmount = amount * (1 - penaltyRate);
+    const txHash = '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
+    const newTx: CryptoTransactionRecord = {
+      id: `tx-unstake-${Date.now()}`,
+      simTimeFormatted: timeFormatted,
+      timestamp: Date.now(),
+      type: 'unstake',
+      symbol,
+      amount: returnAmount,
+      priceUsd: state.cryptoMarket?.coins?.[symbol]?.currentPriceUsd || 0,
+      totalUsd: returnAmount * (state.cryptoMarket?.coins?.[symbol]?.currentPriceUsd || 0),
+      feeUsd: amount * penaltyRate * (state.cryptoMarket?.coins?.[symbol]?.currentPriceUsd || 0),
+      txHash,
+      note: isLocked ? `Early Vault Unstake (5% penalty applied)` : `Standard Vault Unstake`,
+    };
 
     setState((prev) => ({
       ...prev,
@@ -3891,11 +4693,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           [symbol]: {
             ...curHolding,
             stakedAmount: curHolding.stakedAmount - amount,
-            amount: curHolding.amount + amount,
+            amount: curHolding.amount + returnAmount,
           },
         },
+        transactions: [newTx, ...(prev.cryptoMarket.transactions || [])].slice(0, 50),
       },
     }));
+
+    notifyUser('Tokens Withdrawn', `Successfully withdrawn ${returnAmount.toFixed(4)} ${symbol} from the vault to your liquid balance.`, 'finance');
     return true;
   };
 
@@ -3904,6 +4709,27 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!curHolding || curHolding.stakingRewardsClaimable <= 0) return false;
 
     const reward = curHolding.stakingRewardsClaimable;
+    const coin = state.cryptoMarket?.coins?.[symbol];
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const hours = Math.floor((state.simTimeMinutes % 1440) / 60);
+    const mins = state.simTimeMinutes % 60;
+    const timeFormatted = `Day ${simDay} ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    const txHash = '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
+    const newTx: CryptoTransactionRecord = {
+      id: `tx-claim-${Date.now()}`,
+      simTimeFormatted: timeFormatted,
+      timestamp: Date.now(),
+      type: 'claim_reward',
+      symbol,
+      amount: reward,
+      priceUsd: coin?.currentPriceUsd || 0,
+      totalUsd: reward * (coin?.currentPriceUsd || 0),
+      feeUsd: 0,
+      txHash,
+      note: `Staking Yield Harvest`,
+    };
+
     setState((prev) => ({
       ...prev,
       cryptoMarket: {
@@ -3916,9 +4742,170 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             stakingRewardsClaimable: 0,
           },
         },
+        transactions: [newTx, ...(prev.cryptoMarket.transactions || [])].slice(0, 50),
       },
     }));
-    notifyUser('Staking Rewards Claimed', `Successfully claimed and added ${reward.toFixed(4)} ${symbol} to your exchange wallet.`, 'finance');
+
+    notifyUser('Yield Harvested', `Harvested +${reward.toFixed(4)} ${symbol} (${coin ? '$' + Math.round(reward * coin.currentPriceUsd).toLocaleString() : ''} USD) into liquid balance.`, 'finance');
+    return true;
+  };
+
+  const claimAllCryptoRewards = (): boolean => {
+    const holdings = state.cryptoMarket?.holdings || {};
+    let totalHarvestUsd = 0;
+    let claimedCount = 0;
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const hours = Math.floor((state.simTimeMinutes % 1440) / 60);
+    const mins = state.simTimeMinutes % 60;
+    const timeFormatted = `Day ${simDay} ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    const newTxs: CryptoTransactionRecord[] = [];
+
+    const updatedHoldings = { ...holdings };
+    Object.keys(updatedHoldings).forEach((sym) => {
+      const h = updatedHoldings[sym];
+      const coin = state.cryptoMarket?.coins?.[sym];
+      if (h.stakingRewardsClaimable > 0) {
+        const amt = h.stakingRewardsClaimable;
+        const usdVal = amt * (coin?.currentPriceUsd || 0);
+        totalHarvestUsd += usdVal;
+        claimedCount++;
+
+        const txHash = '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+        newTxs.push({
+          id: `tx-claim-${Date.now()}-${sym}`,
+          simTimeFormatted: timeFormatted,
+          timestamp: Date.now(),
+          type: 'claim_reward',
+          symbol: sym,
+          amount: amt,
+          priceUsd: coin?.currentPriceUsd || 0,
+          totalUsd: usdVal,
+          feeUsd: 0,
+          txHash,
+          note: `Batch Staking Harvest: ${sym}`,
+        });
+
+        updatedHoldings[sym] = {
+          ...h,
+          amount: h.amount + amt,
+          stakingRewardsClaimable: 0,
+        };
+      }
+    });
+
+    if (claimedCount === 0) {
+      notifyUser('No Dividends Available', 'No claimable staking yield available at this time.', 'finance');
+      return false;
+    }
+
+    setState((prev) => ({
+      ...prev,
+      cryptoMarket: {
+        ...prev.cryptoMarket,
+        holdings: updatedHoldings,
+        transactions: [...newTxs, ...(prev.cryptoMarket.transactions || [])].slice(0, 50),
+      },
+    }));
+
+    notifyUser('Universal Harvest Complete', `Successfully claimed dividends across ${claimedCount} asset pools (+$${Math.round(totalHarvestUsd).toLocaleString()} USD total).`, 'finance');
+    return true;
+  };
+
+  const applyCryptoFuelDiscount = (amountHaul: number = 25): boolean => {
+    const curHolding = state.cryptoMarket?.holdings?.['HAUL'];
+    if (!curHolding || curHolding.amount < amountHaul) {
+      notifyUser('Insufficient HAUL Tokens', `Activating 7 days of 15% wholesale fuel discount requires burning ${amountHaul} HAUL tokens. You have ${curHolding?.amount.toFixed(2) || 0} HAUL.`, 'finance');
+      return false;
+    }
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const hours = Math.floor((state.simTimeMinutes % 1440) / 60);
+    const mins = state.simTimeMinutes % 60;
+    const timeFormatted = `Day ${simDay} ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    const txHash = '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
+    const newTx: CryptoTransactionRecord = {
+      id: `tx-fuel-burn-${Date.now()}`,
+      simTimeFormatted: timeFormatted,
+      timestamp: Date.now(),
+      type: 'utility_fuel',
+      symbol: 'HAUL',
+      amount: amountHaul,
+      priceUsd: state.cryptoMarket?.coins?.['HAUL']?.currentPriceUsd || 0,
+      totalUsd: amountHaul * (state.cryptoMarket?.coins?.['HAUL']?.currentPriceUsd || 0),
+      feeUsd: 0,
+      txHash,
+      note: `Fleet Fuel Wholesale Concession (15% Off 7 Days)`,
+    };
+
+    const durationMins = 7 * 1440;
+    const newExpires = Math.max(state.simTimeMinutes, state.cryptoMarket?.fuelDiscountActiveUntilSimMinutes || 0) + durationMins;
+
+    setState((prev) => ({
+      ...prev,
+      cryptoMarket: {
+        ...prev.cryptoMarket,
+        holdings: {
+          ...prev.cryptoMarket.holdings,
+          HAUL: {
+            ...curHolding,
+            amount: curHolding.amount - amountHaul,
+          },
+        },
+        fuelDiscountActiveUntilSimMinutes: newExpires,
+        transactions: [newTx, ...(prev.cryptoMarket.transactions || [])].slice(0, 50),
+      },
+    }));
+
+    notifyUser('⛽ Fuel Discount Activated!', `Burned ${amountHaul} HAUL. All fleet diesel bunkering is now 15% cheaper for the next 7 simulation days!`, 'finance');
+    return true;
+  };
+
+  const upgradeColdStorageVault = (): boolean => {
+    const curLevel = state.cryptoMarket?.coldStorageLevel || 1;
+    if (curLevel >= 3) {
+      notifyUser('Maximum Security Reached', 'Your enterprise treasury is already secured by Tier-3 Institutional MultiSig Sovereign Vault.', 'finance');
+      return false;
+    }
+
+    const targetLevel = curLevel + 1;
+    const cost = targetLevel === 2 ? 15000 : 50000;
+    const tierName = targetLevel === 2 ? 'Hardware HSM Ledger Vault (Level 2)' : 'Institutional MultiSig Sovereign Vault (Level 3)';
+
+    if (state.balanceUsd < cost) {
+      notifyUser('Insufficient Treasury', `Upgrading cold storage to ${tierName} requires $${cost.toLocaleString()} USD. Treasury: $${Math.round(state.balanceUsd).toLocaleString()} USD.`, 'finance');
+      return false;
+    }
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const hours = Math.floor((state.simTimeMinutes % 1440) / 60);
+    const mins = state.simTimeMinutes % 60;
+    const timeFormatted = `Day ${simDay} ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    const nextBal = state.balanceUsd - cost;
+
+    setState((prev) => ({
+      ...prev,
+      balanceUsd: nextBal,
+      cryptoMarket: {
+        ...prev.cryptoMarket,
+        coldStorageLevel: targetLevel,
+      },
+      ledger: [
+        {
+          id: `led-vault-upgrade-${Date.now()}`,
+          simDay,
+          simTimeFormatted: timeFormatted,
+          type: 'depot_upgrade',
+          description: `Enterprise crypto cold storage vault upgrade: ${tierName}`,
+          amountUsd: -cost,
+          runningBalanceUsd: nextBal,
+        },
+        ...prev.ledger,
+      ],
+    }));
+
+    notifyUser('🛡️ Vault Security Upgraded!', `Cold storage upgraded to ${tierName}. Lower exchange trading fees and enhanced staking yield active.`, 'finance');
     return true;
   };
 
@@ -5742,6 +6729,166 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true, message: `Roadside rescue dispatched successfully for $${cost.toLocaleString()}!` };
   };
 
+  const procureBulkFuelForHub = (hubId: string, liters: number): boolean => {
+    const hub = state.hubs.find(h => h.id === hubId);
+    if (!hub || !hub.isUnlocked || liters <= 0) return false;
+
+    const availableCapacity = hub.bulkFuelCapacityLiters - hub.bulkFuelStockLiters;
+    const toProcure = Math.min(liters, availableCapacity);
+    if (toProcure <= 0) {
+      notifyUser('Depot Storage Full', `Bulk fuel reserves at ${hub.name} are already at maximum capacity (${hub.bulkFuelCapacityLiters.toLocaleString()}L).`, 'maintenance');
+      return false;
+    }
+
+    const wholesalePricePerLiter = 0.85;
+    const totalCost = Math.round(toProcure * wholesalePricePerLiter);
+    if (state.balanceUsd < totalCost) {
+      notifyUser('Insufficient Treasury', `Procuring ${toProcure.toLocaleString()}L wholesale bulk fuel at ${hub.name} requires $${totalCost.toLocaleString()} USD.`, 'finance');
+      return false;
+    }
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd - totalCost;
+
+    setState(prev => ({
+      ...prev,
+      balanceUsd: nextBal,
+      hubs: prev.hubs.map(h => h.id === hubId ? { ...h, bulkFuelStockLiters: h.bulkFuelStockLiters + toProcure, hasBulkFuelDepot: true } : h),
+      ledger: [
+        {
+          id: `led-bulk-fuel-${Date.now()}`,
+          simDay,
+          simTimeFormatted: `Day ${simDay}`,
+          type: 'fuel_expense',
+          description: `Procured ${toProcure.toLocaleString()}L wholesale bulk diesel for ${hub.name} ($${wholesalePricePerLiter}/L)`,
+          amountUsd: -totalCost,
+          runningBalanceUsd: nextBal,
+        },
+        ...prev.ledger,
+      ],
+    }));
+
+    notifyUser('Wholesale Fuel Procured', `Successfully loaded ${toProcure.toLocaleString()}L of bulk diesel into ${hub.name} reserves for $${totalCost.toLocaleString()} USD.`, 'maintenance');
+    return true;
+  };
+
+  const refuelTruckFromBulkReserve = (truckId: string, requestedLiters?: number): boolean => {
+    const truck = state.trucks.find(t => t.id === truckId);
+    if (!truck || truck.status === 'en_route') {
+      notifyUser('Truck Unavailable', 'Truck must be stationed at a hub to refuel from company reserves.', 'maintenance');
+      return false;
+    }
+    const hub = state.hubs.find(h => h.id === truck.currentHubId);
+    if (!hub) {
+      notifyUser('Hub Not Found', 'Truck is not located at any recognized hub.', 'maintenance');
+      return false;
+    }
+    const model = TRUCK_MODELS.find(m => m.id === truck.modelId);
+    if (!model) return false;
+
+    const maxCap = model.specs.fuelTankCapacityLiters;
+    const needed = maxCap - truck.fuelCurrentLiters;
+    if (needed <= 0) {
+      notifyUser('Tank Full', `Truck ${truck.plate} fuel tanks are already 100% full (${Math.round(truck.fuelCurrentLiters)}L).`, 'maintenance');
+      return false;
+    }
+
+    const toPump = Math.min(needed, requestedLiters !== undefined ? requestedLiters : needed);
+    if (hub.bulkFuelStockLiters < toPump) {
+      notifyUser('Reserves Depleted', `Hub bulk reserves have only ${Math.round(hub.bulkFuelStockLiters)}L remaining. Procure more wholesale fuel.`, 'maintenance');
+      return false;
+    }
+
+    setState(prev => ({
+      ...prev,
+      hubs: prev.hubs.map(h => h.id === hub.id ? { ...h, bulkFuelStockLiters: h.bulkFuelStockLiters - toPump } : h),
+      trucks: prev.trucks.map(t => t.id === truckId ? { ...t, fuelCurrentLiters: t.fuelCurrentLiters + toPump } : t),
+    }));
+
+    notifyUser('Bunkered from Reserves', `Successfully bunkered ${Math.round(toPump)}L of diesel into Truck ${truck.plate} from ${hub.name} reserves at $0 cost.`, 'maintenance');
+    return true;
+  };
+
+  const refuelAllStationedTrucksFromReserves = (targetHubId?: string): { refueledCount: number; totalLiters: number } => {
+    let refueledCount = 0;
+    let totalLiters = 0;
+
+    setState(prev => {
+      const hubsMap = new Map(prev.hubs.map(h => [h.id, { ...h }]));
+      const updatedTrucks = prev.trucks.map(truck => {
+        if (truck.status !== 'idle') return truck;
+        if (targetHubId && truck.currentHubId !== targetHubId) return truck;
+
+        const hub = hubsMap.get(truck.currentHubId);
+        if (!hub || hub.bulkFuelStockLiters <= 0) return truck;
+
+        const model = TRUCK_MODELS.find(m => m.id === truck.modelId);
+        if (!model) return truck;
+
+        const maxCap = model.specs.fuelTankCapacityLiters;
+        const needed = maxCap - truck.fuelCurrentLiters;
+        if (needed <= 0) return truck;
+
+        const toPump = Math.min(needed, hub.bulkFuelStockLiters);
+        if (toPump <= 0) return truck;
+
+        hub.bulkFuelStockLiters -= toPump;
+        refueledCount++;
+        totalLiters += toPump;
+
+        return { ...truck, fuelCurrentLiters: truck.fuelCurrentLiters + toPump };
+      });
+
+      return {
+        ...prev,
+        hubs: Array.from(hubsMap.values()),
+        trucks: updatedTrucks,
+      };
+    });
+
+    if (refueledCount > 0) {
+      notifyUser('Fleet Refueled', `Successfully refueled ${refueledCount} stationed trucks with ${Math.round(totalLiters).toLocaleString()}L from company reserves at $0 cost.`, 'maintenance');
+    } else {
+      notifyUser('No Trucks Refueled', 'No stationed idle trucks required refueling or hub reserves were empty.', 'maintenance');
+    }
+
+    return { refueledCount, totalLiters };
+  };
+
+  const acquireTerminalConcession = (concessionId: string): boolean => {
+    const concession = state.terminalConcessions?.find(c => c.id === concessionId);
+    if (!concession || concession.isOwned) return false;
+
+    if (state.balanceUsd < concession.acquisitionCostUsd) {
+      notifyUser('Insufficient Capital', `Acquiring concession ${concession.name} requires $${concession.acquisitionCostUsd.toLocaleString()} USD.`, 'finance');
+      return false;
+    }
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd - concession.acquisitionCostUsd;
+
+    setState(prev => ({
+      ...prev,
+      balanceUsd: nextBal,
+      terminalConcessions: (prev.terminalConcessions || []).map(c => c.id === concessionId ? { ...c, isOwned: true } : c),
+      ledger: [
+        {
+          id: `led-term-acq-${Date.now()}`,
+          simDay,
+          simTimeFormatted: `Day ${simDay}`,
+          type: 'equipment_purchase',
+          description: `Acquired Intermodal / Port Terminal Concession: ${concession.name}`,
+          amountUsd: -concession.acquisitionCostUsd,
+          runningBalanceUsd: nextBal,
+        },
+        ...prev.ledger,
+      ],
+    }));
+
+    notifyUser('Terminal Acquired!', `Successfully acquired concession for ${concession.name}. It will yield daily dividend payouts of $${Math.round(concession.weeklyRevenueUsd / 7).toLocaleString()} USD.`, 'finance');
+    return true;
+  };
+
   return (
     <GameContext.Provider
       value={{
@@ -5803,10 +6950,19 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         fileInsuranceClaim,
         buyCrypto,
         sellCrypto,
+        cancelLimitOrder,
         stakeCrypto,
         unstakeCrypto,
         claimCryptoRewards,
+        claimAllCryptoRewards,
+        applyCryptoFuelDiscount,
+        upgradeColdStorageVault,
+        procureBulkFuelForHub,
+        refuelTruckFromBulkReserve,
+        refuelAllStationedTrucksFromReserves,
+        acquireTerminalConcession,
         clearLedgerRecords,
+        setState,
       }}
     >
       {children}
