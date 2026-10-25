@@ -26,6 +26,7 @@ export const LiveOperations: React.FC<LiveOperationsProps> = ({ onInspectTruck, 
   const [isEnRouteExpanded, setIsEnRouteExpanded] = useState(false);
   const [expandedTripIds, setExpandedTripIds] = useState<Record<string, boolean>>({});
   const [currentPage, setCurrentPage] = useState(1);
+  const [fleetFilter, setFleetFilter] = useState<'all' | 'cruising' | 'resting' | 'alert'>('all');
   const TRIPS_PER_PAGE = 6;
 
   const totalTrucks = state.trucks.length;
@@ -37,9 +38,23 @@ export const LiveOperations: React.FC<LiveOperationsProps> = ({ onInspectTruck, 
     : '31.4';
 
   const totalTrips = state.activeTrips.length;
-  const totalPages = Math.max(1, Math.ceil(totalTrips / TRIPS_PER_PAGE));
+
+  const filteredTrips = state.activeTrips.filter((trip) => {
+    const truck = state.trucks.find((t) => t.id === trip.truckId);
+    const hasAlert = trip.isStalledBreakdown || (truck?.activeDTCs && truck.activeDTCs.length > 0) || (truck?.health ?? 100) < 60;
+    const isResting = Boolean(trip.isRestingNow);
+    const isCruising = !isResting && !hasAlert;
+
+    if (fleetFilter === 'cruising') return isCruising;
+    if (fleetFilter === 'resting') return isResting;
+    if (fleetFilter === 'alert') return hasAlert;
+    return true;
+  });
+
+  const totalFilteredTrips = filteredTrips.length;
+  const totalPages = Math.max(1, Math.ceil(totalFilteredTrips / TRIPS_PER_PAGE));
   const safePage = Math.min(Math.max(1, currentPage), totalPages);
-  const paginatedTrips = state.activeTrips.slice((safePage - 1) * TRIPS_PER_PAGE, safePage * TRIPS_PER_PAGE);
+  const paginatedTrips = filteredTrips.slice((safePage - 1) * TRIPS_PER_PAGE, safePage * TRIPS_PER_PAGE);
 
   const toggleTripExpanded = (tripId: string) => {
     setExpandedTripIds((prev) => ({
@@ -197,7 +212,33 @@ export const LiveOperations: React.FC<LiveOperationsProps> = ({ onInspectTruck, 
           {/* Expanded Cards Section with individual trip card accordions */}
           {isEnRouteExpanded && (
             <div className="space-y-3 sm:space-y-4">
-              {totalTrips === 0 ? (
+              {/* Fleet Filter Bar */}
+              <div className="flex items-center gap-1.5 px-1 py-1 overflow-x-auto">
+                <span className="text-[10px] font-mono uppercase text-slate-400 mr-1">Filter Fleet:</span>
+                {(['all', 'cruising', 'resting', 'alert'] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => {
+                      setFleetFilter(f);
+                      setCurrentPage(1);
+                    }}
+                    className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                      fleetFilter === f
+                        ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                        : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60'
+                    }`}
+                  >
+                    {f.charAt(0).toUpperCase() + f.slice(1)} ({
+                      f === 'all' ? state.activeTrips.length :
+                      f === 'cruising' ? state.activeTrips.filter(t => !t.isRestingNow && !t.isStalledBreakdown && !(state.trucks.find(trk => trk.id === t.truckId)?.activeDTCs?.length || 0)).length :
+                      f === 'resting' ? state.activeTrips.filter(t => t.isRestingNow).length :
+                      state.activeTrips.filter(t => t.isStalledBreakdown || (state.trucks.find(trk => trk.id === t.truckId)?.activeDTCs?.length || 0) > 0 || ((state.trucks.find(trk => trk.id === t.truckId)?.health ?? 100) < 60)).length
+                    })
+                  </button>
+                ))}
+              </div>
+
+              {totalFilteredTrips === 0 ? (
                 <div className="p-6 sm:p-8 bg-slate-900/40 border border-slate-800 rounded-xl text-center space-y-3">
                   <Truck className="w-8 h-8 text-slate-600 mx-auto" />
                   <div className="text-sm font-semibold text-slate-300">No trucks currently rolling</div>
@@ -414,29 +455,29 @@ export const LiveOperations: React.FC<LiveOperationsProps> = ({ onInspectTruck, 
 
                   {/* Pagination Toolbar */}
                   {totalPages > 1 && (
-                    <div className="p-3 bg-slate-900/90 border border-slate-800 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs font-mono">
-                      <div className="text-slate-400 text-[11px]">
-                        Showing <span className="text-white font-bold">{(safePage - 1) * TRIPS_PER_PAGE + 1}–{Math.min(safePage * TRIPS_PER_PAGE, totalTrips)}</span> of <span className="text-white font-bold">{totalTrips}</span> trucks
+                    <div className="p-3 sm:p-4 bg-slate-900/90 border border-slate-800 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono">
+                      <div className="text-slate-400 text-xs shrink-0">
+                        Showing <span className="text-white font-bold">{(safePage - 1) * TRIPS_PER_PAGE + 1}–{Math.min(safePage * TRIPS_PER_PAGE, totalFilteredTrips)}</span> of <span className="text-white font-bold">{totalFilteredTrips}</span> trucks
                       </div>
 
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 w-full sm:w-auto justify-between sm:justify-end overflow-x-auto max-w-full no-scrollbar py-0.5">
                         <button
                           onClick={() => setCurrentPage(Math.max(1, safePage - 1))}
                           disabled={safePage === 1}
-                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 min-h-[36px]"
+                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 rounded-lg text-xs font-mono font-semibold transition-colors flex items-center gap-1 shrink-0 min-h-[36px]"
                         >
                           <ChevronLeft className="w-3.5 h-3.5" />
                           <span>Prev</span>
                         </button>
 
-                        <div className="flex items-center gap-1 px-1">
+                        <div className="flex items-center gap-1 px-1 overflow-x-auto no-scrollbar max-w-[200px] sm:max-w-none">
                           {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                             <button
                               key={p}
                               onClick={() => setCurrentPage(p)}
-                              className={`w-7 h-7 rounded-lg text-xs font-bold transition-colors ${
+                              className={`shrink-0 w-8 h-8 rounded-lg text-xs font-mono font-bold flex items-center justify-center transition-colors cursor-pointer ${
                                 p === safePage
-                                  ? 'bg-amber-400 text-slate-950 font-bold'
+                                  ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20 font-bold'
                                   : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
                               }`}
                             >
@@ -448,7 +489,7 @@ export const LiveOperations: React.FC<LiveOperationsProps> = ({ onInspectTruck, 
                         <button
                           onClick={() => setCurrentPage(Math.min(totalPages, safePage + 1))}
                           disabled={safePage === totalPages}
-                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 min-h-[36px]"
+                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 rounded-lg text-xs font-mono font-semibold transition-colors flex items-center gap-1 shrink-0 min-h-[36px]"
                         >
                           <span>Next</span>
                           <ChevronRight className="w-3.5 h-3.5" />

@@ -502,8 +502,8 @@ export const IncidentsAndEventsPage: React.FC<IncidentsAndEventsPageProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Select amount */}
                 <div className="space-y-2">
-                  <label className="text-xs text-slate-400 font-mono">Select Bullion Quantity (Troy Ounces):</label>
-                  <div className="flex items-center gap-2">
+                  <label className="text-xs text-slate-400 font-mono">Select or Enter Bullion Quantity (Troy Ounces):</label>
+                  <div className="flex items-center gap-2 flex-wrap">
                     {[1, 5, 10, 25, 50].map((qty) => (
                       <button
                         key={qty}
@@ -517,6 +517,13 @@ export const IncidentsAndEventsPage: React.FC<IncidentsAndEventsPageProps> = ({
                         {qty}
                       </button>
                     ))}
+                    <input
+                      type="number"
+                      min="1"
+                      value={goldAmount}
+                      onChange={(e) => setGoldAmount(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-24 px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500"
+                    />
                   </div>
                 </div>
 

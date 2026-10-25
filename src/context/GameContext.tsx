@@ -169,7 +169,7 @@ interface GameContextType {
   connectRouteBetweenHubs: (hubAId: string, hubBId: string) => boolean;
   ferryTruck: (truckId: string, destinationHubId: string) => boolean;
   restartOnboarding: () => void;
-  refreshAvailableContracts: (paidByPlayer?: boolean) => boolean;
+  refreshAvailableContracts: (paidByPlayer?: boolean, targetRegion?: string) => boolean;
   buySpokeLocationRoute: (hubId: string, spokeLocationId: string) => boolean;
   claimAchievementReward: (achievementId: string, cashReward: number, xpReward: number, currentValue: number, targetValue: number) => boolean;
   unlockRegion: (region: GeoRegion) => boolean;
@@ -196,6 +196,12 @@ interface GameContextType {
   sellGold: (amount: number) => boolean;
   upgradeInsurancePolicy: (tier: 'basic_liability' | 'comprehensive_fleet' | 'platinum_umbrella') => boolean;
   fileInsuranceClaim: (incidentId: string) => boolean;
+  buyCrypto: (symbol: string, amount: number) => boolean;
+  sellCrypto: (symbol: string, amount: number) => boolean;
+  stakeCrypto: (symbol: string, amount: number) => boolean;
+  unstakeCrypto: (symbol: string, amount: number) => boolean;
+  claimCryptoRewards: (symbol: string) => boolean;
+  clearLedgerRecords: () => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -312,6 +318,22 @@ const createInitialState = (): GameState => {
       brokerFeePercent: 1.5,
       totalGoldReserveUsd: 15 * 2540,
       history: [{ simDay: 1, price: 2540 }],
+    },
+    cryptoMarket: {
+      coins: {
+        BTC: { symbol: 'BTC', name: 'Bitcoin', currentPriceUsd: 68500, prevDayPriceUsd: 67200, dayHighUsd: 69400, dayLowUsd: 66800, stakingApyPercent: 4.5, history: [{ simDay: 1, price: 67200 }] },
+        ETH: { symbol: 'ETH', name: 'Ethereum', currentPriceUsd: 3520, prevDayPriceUsd: 3450, dayHighUsd: 3590, dayLowUsd: 3410, stakingApyPercent: 6.2, history: [{ simDay: 1, price: 3450 }] },
+        SOL: { symbol: 'SOL', name: 'Solana', currentPriceUsd: 184, prevDayPriceUsd: 178, dayHighUsd: 191, dayLowUsd: 175, stakingApyPercent: 7.8, history: [{ simDay: 1, price: 178 }] },
+        HAUL: { symbol: 'HAUL', name: 'HaulMaster Token', currentPriceUsd: 14.50, prevDayPriceUsd: 12.80, dayHighUsd: 15.20, dayLowUsd: 12.50, stakingApyPercent: 14.5, history: [{ simDay: 1, price: 12.80 }] },
+        LGT: { symbol: 'LGT', name: 'LogiChain IoT', currentPriceUsd: 4.25, prevDayPriceUsd: 4.10, dayHighUsd: 4.45, dayLowUsd: 3.95, stakingApyPercent: 11.2, history: [{ simDay: 1, price: 4.10 }] },
+      },
+      holdings: {
+        BTC: { symbol: 'BTC', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
+        ETH: { symbol: 'ETH', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
+        SOL: { symbol: 'SOL', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
+        HAUL: { symbol: 'HAUL', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
+        LGT: { symbol: 'LGT', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
+      },
     },
     insurancePolicy: {
       policyTier: 'comprehensive_fleet',
@@ -866,6 +888,7 @@ const runOfflineCatchUp = (prevState: GameState, simMinutesToAdd: number): GameS
     playerXp: updatedPlayerXp,
     rankTitle: updatedRankTitle,
     gold: updatedGold,
+    cryptoMarket: prevState.cryptoMarket || { coins: {}, holdings: {} },
     lastRealTimeTimestamp: Date.now(),
     offlineProgress: progressReport,
   };
@@ -894,6 +917,24 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               brokerFeePercent: 1.5,
               totalGoldReserveUsd: (parsed.gold || 15) * 2540,
               history: [{ simDay: 1, price: 2540 }],
+            };
+          }
+          if (!parsed.cryptoMarket) {
+            parsed.cryptoMarket = {
+              coins: {
+                BTC: { symbol: 'BTC', name: 'Bitcoin', currentPriceUsd: 68500, prevDayPriceUsd: 67200, dayHighUsd: 69400, dayLowUsd: 66800, stakingApyPercent: 4.5, history: [{ simDay: 1, price: 67200 }] },
+                ETH: { symbol: 'ETH', name: 'Ethereum', currentPriceUsd: 3520, prevDayPriceUsd: 3450, dayHighUsd: 3590, dayLowUsd: 3410, stakingApyPercent: 6.2, history: [{ simDay: 1, price: 3450 }] },
+                SOL: { symbol: 'SOL', name: 'Solana', currentPriceUsd: 184, prevDayPriceUsd: 178, dayHighUsd: 191, dayLowUsd: 175, stakingApyPercent: 7.8, history: [{ simDay: 1, price: 178 }] },
+                HAUL: { symbol: 'HAUL', name: 'HaulMaster Token', currentPriceUsd: 14.50, prevDayPriceUsd: 12.80, dayHighUsd: 15.20, dayLowUsd: 12.50, stakingApyPercent: 14.5, history: [{ simDay: 1, price: 12.80 }] },
+                LGT: { symbol: 'LGT', name: 'LogiChain IoT', currentPriceUsd: 4.25, prevDayPriceUsd: 4.10, dayHighUsd: 4.45, dayLowUsd: 3.95, stakingApyPercent: 11.2, history: [{ simDay: 1, price: 4.10 }] },
+              },
+              holdings: {
+                BTC: { symbol: 'BTC', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
+                ETH: { symbol: 'ETH', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
+                SOL: { symbol: 'SOL', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
+                HAUL: { symbol: 'HAUL', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
+                LGT: { symbol: 'LGT', amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 },
+              },
             };
           }
           if (!parsed.insurancePolicy) {
@@ -1198,6 +1239,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             dailyPremiumUsd: 120,
             claimsPaidTotalUsd: 0,
           };
+          let updatedCryptoMarket: CryptoMarketState = JSON.parse(JSON.stringify(prevState.cryptoMarket || { coins: {}, holdings: {} }));
           let updatedEvents: MacroWorldEvent[] = [...(prevState.activeEvents || [])];
           let updatedIncidents: FleetIncidentRecord[] = [...(prevState.incidentHistory || [])];
 
@@ -1234,6 +1276,29 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               totalGoldReserveUsd: prevState.gold * newSpot,
               history: [...(updatedGoldMarket.history || []), { simDay: currentDay, price: newSpot }].slice(-30),
             };
+
+            // Crypto Market Volatility & Staking Yield Accrual
+            if (updatedCryptoMarket.coins) {
+              Object.keys(updatedCryptoMarket.coins).forEach((sym) => {
+                const coin = updatedCryptoMarket.coins[sym];
+                const volatility = sym === 'BTC' ? 0.025 : sym === 'ETH' ? 0.035 : sym === 'SOL' ? 0.045 : sym === 'HAUL' ? 0.065 : 0.05;
+                const deltaPct = (Math.random() - 0.49) * volatility;
+                const prevPrice = coin.currentPriceUsd;
+                const newPrice = Math.max(0.1, Math.round((prevPrice * (1 + deltaPct)) * 100) / 100);
+
+                coin.prevDayPriceUsd = prevPrice;
+                coin.currentPriceUsd = newPrice;
+                coin.dayHighUsd = Math.max(coin.dayHighUsd, newPrice);
+                coin.dayLowUsd = Math.min(coin.dayLowUsd, newPrice);
+                coin.history = [...(coin.history || []), { simDay: currentDay, price: newPrice }].slice(-30);
+
+                const holding = updatedCryptoMarket.holdings[sym];
+                if (holding && holding.stakedAmount > 0) {
+                  const dailyReward = holding.stakedAmount * (coin.stakingApyPercent / 100 / 365);
+                  holding.stakingRewardsClaimable += dailyReward;
+                }
+              });
+            }
 
             // Macro Real-World Events Lifecycle
             updatedEvents = updatedEvents.filter(e => e.expiresSimMinutes > newSimMinutes);
@@ -2175,6 +2240,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             rankTitle: updatedRankTitle,
             gold: updatedGold,
             goldMarket: updatedGoldMarket,
+            cryptoMarket: updatedCryptoMarket,
             insurancePolicy: updatedInsurance,
             activeEvents: updatedEvents,
             incidentHistory: updatedIncidents,
@@ -3637,6 +3703,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
+  const clearLedgerRecords = () => {
+    setState((prev) => ({
+      ...prev,
+      ledger: prev.ledger.slice(0, 15),
+    }));
+    notifyUser('Journal Cleaned', 'Old financial records cleared from transaction journal (kept latest 15 entries).', 'finance');
+  };
+
   const upgradeInsurancePolicy = (tier: 'basic_liability' | 'comprehensive_fleet' | 'platinum_umbrella'): boolean => {
     const tiers = {
       basic_liability: {
@@ -3686,6 +3760,165 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
 
     notifyUser('Policy Updated', `Fleet now covered by ${cfg.tierName}.`, 'finance');
+    return true;
+  };
+
+  const buyCrypto = (symbol: string, amount: number): boolean => {
+    if (amount <= 0) return false;
+    const coin = state.cryptoMarket?.coins?.[symbol];
+    if (!coin) return false;
+    const totalCost = amount * coin.currentPriceUsd;
+
+    if (state.balanceUsd < totalCost) {
+      notifyUser('Insufficient Treasury', `Purchasing ${amount} ${symbol} requires $${totalCost.toLocaleString()} USD. Treasury: $${state.balanceUsd.toLocaleString()} USD.`, 'finance');
+      return false;
+    }
+
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd - totalCost;
+
+    setState((prev) => {
+      const curHolding = prev.cryptoMarket.holdings[symbol] || { symbol, amount: 0, averageBuyPriceUsd: 0, stakedAmount: 0, stakingRewardsClaimable: 0 };
+      const newAmount = curHolding.amount + amount;
+      const newAvgCost = ((curHolding.amount * curHolding.averageBuyPriceUsd) + (amount * coin.currentPriceUsd)) / newAmount;
+
+      return {
+        ...prev,
+        balanceUsd: nextBal,
+        cryptoMarket: {
+          ...prev.cryptoMarket,
+          holdings: {
+            ...prev.cryptoMarket.holdings,
+            [symbol]: {
+              ...curHolding,
+              amount: newAmount,
+              averageBuyPriceUsd: newAvgCost,
+            },
+          },
+        },
+        ledger: [
+          {
+            id: `led-crypto-buy-${Date.now()}`,
+            simDay,
+            simTimeFormatted: `Day ${simDay}`,
+            type: 'equipment_purchase',
+            description: `Acquired ${amount} ${symbol} at $${coin.currentPriceUsd.toLocaleString()}/unit`,
+            amountUsd: -totalCost,
+            runningBalanceUsd: nextBal,
+          },
+          ...prev.ledger,
+        ],
+      };
+    });
+    return true;
+  };
+
+  const sellCrypto = (symbol: string, amount: number): boolean => {
+    if (amount <= 0) return false;
+    const curHolding = state.cryptoMarket?.holdings?.[symbol];
+    const coin = state.cryptoMarket?.coins?.[symbol];
+    if (!curHolding || !coin || curHolding.amount < amount) {
+      notifyUser('Insufficient Holdings', `You hold ${curHolding?.amount || 0} ${symbol}. Cannot sell ${amount}.`, 'finance');
+      return false;
+    }
+
+    const proceeds = amount * coin.currentPriceUsd;
+    const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
+    const nextBal = state.balanceUsd + proceeds;
+
+    setState((prev) => ({
+      ...prev,
+      balanceUsd: nextBal,
+      cryptoMarket: {
+        ...prev.cryptoMarket,
+        holdings: {
+          ...prev.cryptoMarket.holdings,
+          [symbol]: {
+            ...curHolding,
+            amount: curHolding.amount - amount,
+          },
+        },
+      },
+      ledger: [
+        {
+          id: `led-crypto-sell-${Date.now()}`,
+          simDay,
+          simTimeFormatted: `Day ${simDay}`,
+          type: 'freight_revenue',
+          description: `Liquidated ${amount} ${symbol} for working capital at $${coin.currentPriceUsd.toLocaleString()}/unit`,
+          amountUsd: proceeds,
+          runningBalanceUsd: nextBal,
+        },
+        ...prev.ledger,
+      ],
+    }));
+    return true;
+  };
+
+  const stakeCrypto = (symbol: string, amount: number): boolean => {
+    if (amount <= 0) return false;
+    const curHolding = state.cryptoMarket?.holdings?.[symbol];
+    if (!curHolding || curHolding.amount < amount) return false;
+
+    setState((prev) => ({
+      ...prev,
+      cryptoMarket: {
+        ...prev.cryptoMarket,
+        holdings: {
+          ...prev.cryptoMarket.holdings,
+          [symbol]: {
+            ...curHolding,
+            amount: curHolding.amount - amount,
+            stakedAmount: curHolding.stakedAmount + amount,
+          },
+        },
+      },
+    }));
+    return true;
+  };
+
+  const unstakeCrypto = (symbol: string, amount: number): boolean => {
+    if (amount <= 0) return false;
+    const curHolding = state.cryptoMarket?.holdings?.[symbol];
+    if (!curHolding || curHolding.stakedAmount < amount) return false;
+
+    setState((prev) => ({
+      ...prev,
+      cryptoMarket: {
+        ...prev.cryptoMarket,
+        holdings: {
+          ...prev.cryptoMarket.holdings,
+          [symbol]: {
+            ...curHolding,
+            stakedAmount: curHolding.stakedAmount - amount,
+            amount: curHolding.amount + amount,
+          },
+        },
+      },
+    }));
+    return true;
+  };
+
+  const claimCryptoRewards = (symbol: string): boolean => {
+    const curHolding = state.cryptoMarket?.holdings?.[symbol];
+    if (!curHolding || curHolding.stakingRewardsClaimable <= 0) return false;
+
+    const reward = curHolding.stakingRewardsClaimable;
+    setState((prev) => ({
+      ...prev,
+      cryptoMarket: {
+        ...prev.cryptoMarket,
+        holdings: {
+          ...prev.cryptoMarket.holdings,
+          [symbol]: {
+            ...curHolding,
+            amount: curHolding.amount + reward,
+            stakingRewardsClaimable: 0,
+          },
+        },
+      },
+    }));
+    notifyUser('Staking Rewards Claimed', `Successfully claimed and added ${reward.toFixed(4)} ${symbol} to your exchange wallet.`, 'finance');
     return true;
   };
 
@@ -4351,10 +4584,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const simDay = Math.floor(state.simTimeMinutes / 1440) + 1;
     const nextBal = state.balanceUsd - unlockPriceUsd;
 
+    const regionRoutes = state.routes.filter(
+      (r) => r.isUnlocked && state.hubs.find((h) => h.id === r.originHubId)?.region === region
+    );
+    const newRegionContracts = generateContractsForRoutes(regionRoutes, state.hubs, 10);
+
     setState((prev) => ({
       ...prev,
       balanceUsd: nextBal,
       unlockedRegions: [...(prev.unlockedRegions || [prev.selectedRegion]), region],
+      availableContracts: [...newRegionContracts, ...prev.availableContracts],
       ledger: [
         {
           id: `led-region-${region}-${Date.now()}`,
@@ -4649,10 +4888,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const refreshAvailableContracts = (paidByPlayer: boolean = false): boolean => {
-    const unlockedRoutes = state.routes.filter(
-      (r) => r.isUnlocked && state.hubs.find((h) => h.id === r.originHubId)?.region === state.selectedRegion
+  const refreshAvailableContracts = (paidByPlayer: boolean = false, targetRegion?: string): boolean => {
+    const regionToUse = targetRegion || state.selectedRegion;
+    let unlockedRoutes = state.routes.filter(
+      (r) => r.isUnlocked && state.hubs.find((h) => h.id === r.originHubId)?.region === regionToUse
     );
+
+    if (unlockedRoutes.length === 0) {
+      unlockedRoutes = state.routes.filter(
+        (r) => r.isUnlocked && state.hubs.find((h) => h.id === r.originHubId)?.region
+      );
+    }
 
     if (unlockedRoutes.length === 0) {
       notifyUser('No Active Corridors', 'No trade corridors are currently unlocked in this region to generate freight contracts.', 'delivery');
@@ -4685,10 +4931,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ]
         : prev.ledger;
 
+      const otherRegionContracts = (prev.availableContracts || []).filter((c) => {
+        const h = prev.hubs.find((hub) => hub.id === c.originHubId);
+        return h?.region !== regionToUse;
+      });
+
+      const combinedContracts = [...freshContracts, ...otherRegionContracts];
+
       return {
         ...prev,
         balanceUsd: nextBal,
-        availableContracts: freshContracts,
+        availableContracts: combinedContracts,
         ledger: newLedger,
         lastMarketRefreshSimTime: prev.simTimeMinutes,
         notifications: deduplicateNotifications([
@@ -4697,8 +4950,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             simTimeFormatted: `Day ${simDay}`,
             title: 'Freight Exchange Board Refreshed',
             message: paidByPlayer
-              ? `Expedited brokerage dispatch board refreshed with ${freshContracts.length} newly tendered commercial consignments ($${brokerFee.toLocaleString()} brokerage fee paid).`
-              : `Freight dispatch board replenished with ${freshContracts.length} available consignments.`,
+              ? `Expedited brokerage dispatch board for ${regionToUse} refreshed with ${freshContracts.length} newly tendered consignments ($${brokerFee.toLocaleString()} brokerage fee paid).`
+              : `Freight dispatch board for ${regionToUse} replenished with ${freshContracts.length} available consignments.`,
             type: 'delivery',
             timestamp: Date.now(),
           },
@@ -5548,6 +5801,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sellGold,
         upgradeInsurancePolicy,
         fileInsuranceClaim,
+        buyCrypto,
+        sellCrypto,
+        stakeCrypto,
+        unstakeCrypto,
+        claimCryptoRewards,
+        clearLedgerRecords,
       }}
     >
       {children}

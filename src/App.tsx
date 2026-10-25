@@ -24,6 +24,7 @@ import { RepairWorkshopPage } from './components/RepairWorkshopPage';
 import { AiQuickActionModal } from './components/AiQuickActionModal';
 import { IncidentsAndEventsPage } from './components/IncidentsAndEventsPage';
 import { EnterpriseExchangePage } from './components/EnterpriseExchangePage';
+import { CryptoExchangePage } from './components/CryptoExchangePage';
 import {
   Activity,
   Truck,
@@ -212,7 +213,12 @@ const DashboardContent: React.FC = () => {
         )}
 
         {/* Company Profile Full Page View */}
-        {currentTab === 'profile' && <CompanyProfilePage onOpenAchievements={() => setCurrentTab('achievements')} onOpenDatabase={() => setIsDbModalOpen(true)} onOpenAiPage={() => setCurrentTab('ai')} onOpenExchange={() => setCurrentTab('exchange')} onOpenEventsPage={() => { setEventsInitialTab('events'); setCurrentTab('events'); }} />}
+        {currentTab === 'profile' && <CompanyProfilePage onOpenAchievements={() => setCurrentTab('achievements')} onOpenDatabase={() => setIsDbModalOpen(true)} onOpenAiPage={() => setCurrentTab('ai')} onOpenExchange={() => setCurrentTab('exchange')} onOpenCryptoExchange={() => setCurrentTab('crypto_exchange')} onOpenEventsPage={() => { setEventsInitialTab('events'); setCurrentTab('events'); }} />}
+
+        {/* Crypto Exchange Full Page View */}
+        {currentTab === 'crypto_exchange' && (
+          <CryptoExchangePage onBackToProfile={() => setCurrentTab('profile')} />
+        )}
       </main>
 
       {/* Floating Mobile AI Quick Action Button (only displayed when AI subscription is active) */}

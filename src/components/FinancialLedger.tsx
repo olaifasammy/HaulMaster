@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 export const FinancialLedger: React.FC<{ onOpenLoansPage: () => void }> = ({ onOpenLoansPage }) => {
-  const { state, repayLoan, takeLoan } = useGame();
+  const { state, repayLoan, takeLoan, clearLedgerRecords } = useGame();
   const [filterType, setFilterType] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -219,6 +219,19 @@ export const FinancialLedger: React.FC<{ onOpenLoansPage: () => void }> = ({ onO
             <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 font-mono">
               Transaction Journal ({filteredLedger.length} of {state.ledger.length})
             </h3>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => {
+                if (window.confirm('Clear old transaction history records? (Keeps latest 15 entries)')) {
+                  clearLedgerRecords();
+                }
+              }}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-mono transition-colors cursor-pointer"
+            >
+              Clear Old Records
+            </button>
           </div>
 
           {/* Filters & Search Toolbar */}

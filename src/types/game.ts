@@ -459,6 +459,30 @@ export interface GoldMarketState {
   history: Array<{ simDay: number; price: number }>;
 }
 
+export interface CryptoCoinMarket {
+  symbol: string;
+  name: string;
+  currentPriceUsd: number;
+  prevDayPriceUsd: number;
+  dayHighUsd: number;
+  dayLowUsd: number;
+  stakingApyPercent: number;
+  history: Array<{ simDay: number; price: number }>;
+}
+
+export interface CryptoHoldingItem {
+  symbol: string;
+  amount: number;
+  averageBuyPriceUsd: number;
+  stakedAmount: number;
+  stakingRewardsClaimable: number;
+}
+
+export interface CryptoMarketState {
+  coins: Record<string, CryptoCoinMarket>;
+  holdings: Record<string, CryptoHoldingItem>;
+}
+
 export interface CommercialInsurancePolicy {
   policyTier: 'basic_liability' | 'comprehensive_fleet' | 'platinum_umbrella';
   tierName: string;
@@ -500,6 +524,7 @@ export interface GameState {
   balanceUsd: number;
   gold: number;
   goldMarket: GoldMarketState;
+  cryptoMarket: CryptoMarketState;
   insurancePolicy: CommercialInsurancePolicy;
   activeEvents: MacroWorldEvent[];
   incidentHistory: FleetIncidentRecord[];

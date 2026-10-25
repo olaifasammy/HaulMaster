@@ -19,6 +19,7 @@ import {
   Package,
   MapPin,
   Truck,
+  Lock,
 } from 'lucide-react';
 
 const generateRecursiveGrantTiers = (baseTarget: number, baseReward: number, multiplier: number = 2.0) => {
@@ -49,8 +50,12 @@ export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ o
   const totalTruckValue = state.trucks.length * 125000;
   const totalHubValue = state.hubs.filter((h) => h.isUnlocked).length * 85000;
   const companyNetWorth = state.balanceUsd + totalTruckValue + totalHubValue;
+  const truckCount = state.trucks.length;
+  const ownedHubsCount = state.hubs.filter((h) => h.isUnlocked).length;
+  const playerRank = state.playerRank || 1;
 
   const totalActiveDebt = state.loans.reduce((acc, l) => acc + l.remainingBalanceUsd, 0);
+  const hasActiveLoans = state.loans.length > 0;
   const maxDebtLimit = Math.max(1000000, companyNetWorth * 4.5);
   const availableCredit = Math.max(0, maxDebtLimit - totalActiveDebt);
   const creditUtilizationPct = Math.round((totalActiveDebt / maxDebtLimit) * 100);
@@ -60,8 +65,6 @@ export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ o
   // Operational metrics for recursive grants
   const totalKm = state.totalKilometersDriven;
   const totalDeliveries = state.drivers.reduce((acc, d) => acc + d.stats.deliveriesCompleted, 0);
-  const ownedHubsCount = state.hubs.filter((h) => h.isUnlocked).length;
-  const truckCount = state.trucks.length;
 
   const grantPrograms = [
     {
@@ -102,8 +105,68 @@ export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ o
     },
   ];
 
-  const handleApplyLoan = (amount: number, days: number, interestRate: number, title: string) => {
-    if (totalActiveDebt + amount > maxDebtLimit) {
+  // Underwriting conditions & requirements
+  const loanFacilities = [
+    {
+      id: 'loan-150k',
+      title: 'Working Capital Revolver ($150k)',
+      amount: 150000,
+      days: 30,
+      apr: 6.2,
+      minRank: 1,
+      minTrucks: 0,
+      minHubs: 1,
+      minNetWorth: 25000,
+      subtitle: 'Working Capital Revolver',
+      desc: 'Short-term liquidity for fuel reserves, driver payroll, and AI subscriber billing.',
+    },
+    {
+      id: 'loan-500k',
+      title: 'Heavy Fleet Financing Note ($500k)',
+      amount: 500000,
+      days: 60,
+      apr: 6.8,
+      minRank: 3,
+      minTrucks: 3,
+      minHubs: 1,
+      minNetWorth: 200000,
+      subtitle: 'Equipment Syndicate',
+      desc: 'Medium-term capital dedicated to scaling heavy semi-tractor fleets and specialized trailers.',
+    },
+    {
+      id: 'loan-1.5m',
+      title: 'Global Logistics Expansion Note ($1.5M)',
+      amount: 1500000,
+      days: 90,
+      apr: 7.2,
+      minRank: 5,
+      minTrucks: 10,
+      minHubs: 2,
+      minNetWorth: 1000000,
+      subtitle: 'Enterprise Syndicate',
+      desc: 'High-volume capital for acquiring regional hubs, port concessions, and scaling operations.',
+    },
+    {
+      id: 'loan-5m',
+      title: 'AI Fleet & Infrastructure Note ($5.0M)',
+      amount: 5000000,
+      days: 120,
+      apr: 7.8,
+      minRank: 8,
+      minTrucks: 22,
+      minHubs: 4,
+      minNetWorth: 3500000,
+      subtitle: 'Sovereign Syndicate',
+      desc: 'Massive institutional debt facility for multi-year AI suites, terminal ports, and mega-fleets.',
+    },
+  ];
+
+  const handleApplyLoan = (facility: typeof loanFacilities[0]) => {
+    if (hasActiveLoans) {
+      notifyUser('Active Debt Restriction', 'Corporate banking committee strictly prohibits issuing new credit facilities while existing commercial loans remain unpaid. Settle active debt first.', 'finance');
+      return;
+    }
+    if (totalActiveDebt + facility.amount > maxDebtLimit) {
       notifyUser(
         'Credit Limit Exceeded',
         `Corporate borrowing ceiling is $${maxDebtLimit.toLocaleString()}. Active debt ($${Math.round(totalActiveDebt).toLocaleString()}) plus requested loan exceeds credit capacity.`,
@@ -112,9 +175,9 @@ export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ o
       return;
     }
 
-    if (window.confirm(`Corporate Banking Committee Approval:\n\nFacility: ${title}\nPrincipal: $${amount.toLocaleString()}\nTerm: ${days} Sim Days\nInterest Rate: ${interestRate}% APR\n\nDisburse funds to corporate treasury?`)) {
-      takeLoan(amount, days);
-      notifyUser('Loan Disbursed', `Successfully secured ${title} for $${amount.toLocaleString()}. Funds deposited into corporate treasury.`, 'finance');
+    if (window.confirm(`Corporate Banking Committee Approval:\n\nFacility: ${facility.title}\nPrincipal: $${facility.amount.toLocaleString()}\nTerm: ${facility.days} Sim Days\nInterest Rate: ${facility.apr}% APR\n\nDisburse funds to corporate treasury?`)) {
+      takeLoan(facility.amount, facility.days);
+      notifyUser('Loan Disbursed', `Successfully secured ${facility.title} for $${facility.amount.toLocaleString()}. Funds deposited into corporate treasury.`, 'finance');
     }
   };
 
@@ -186,144 +249,91 @@ export const GrantsAndLoansPage: React.FC<{ onBackToLedger: () => void }> = ({ o
           <div>
             <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 font-mono flex items-center gap-2">
               <Percent className="w-4 h-4 text-amber-400" />
-              <span>Available Corporate Debt Facilities (Scaled by Enterprise Valuation)</span>
+              <span>Available Corporate Debt Facilities (Strict Underwriting Criteria)</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Strictly regulated institutional corporate credit facilities scaling dynamically with your fleet value and net worth.
+              Higher-tier institutional loans require rigorous underwriting prerequisites. Active unpaid debt strictly blocks new borrowings.
             </p>
           </div>
-          {totalActiveDebt >= maxDebtLimit && (
+          {hasActiveLoans && (
             <div className="flex items-center gap-1.5 px-3 py-1 bg-rose-500/10 border border-rose-500/30 rounded-lg text-rose-400 text-xs font-mono">
               <AlertTriangle className="w-3.5 h-3.5" />
-              <span>Credit Ceiling Reached</span>
+              <span>Active Unpaid Debt (New Loans Locked)</span>
             </div>
           )}
         </div>
 
+        {hasActiveLoans && (
+          <div className="p-4 bg-rose-950/40 border border-rose-800/80 rounded-2xl text-xs font-mono text-rose-300 flex items-center gap-3 shadow-xl">
+            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+            <div>
+              <strong className="text-white block mb-0.5">Active Debt Restriction in Effect</strong>
+              Corporate banking committee policy strictly prohibits issuing new credit facilities while existing commercial loans remain unpaid. Settle your active debt portfolio below to unlock new loan facilities.
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Facility 1 */}
-          <div className="p-5 bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-2xl flex flex-col justify-between space-y-4">
-            <div>
-              <div className="flex items-center justify-between text-xs font-mono mb-2">
-                <span className="text-amber-400 font-bold">Revolving Line</span>
-                <span className="px-2 py-0.5 bg-amber-500/10 text-amber-300 rounded font-bold">6.2% APR</span>
-              </div>
-              <h4 className="text-base font-bold text-white">Working Capital Revolver</h4>
-              <p className="text-xs text-slate-400 mt-1">
-                Short-term liquidity for fuel reserves, driver payroll, and AI subscriber billing.
-              </p>
-            </div>
-            <div className="space-y-3 pt-3 border-t border-slate-800 font-mono text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Principal Amount:</span>
-                <span className="text-white font-bold">$150,000</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Repayment Term:</span>
-                <span className="text-slate-200">30 Sim Days</span>
-              </div>
-              <button
-                onClick={() => handleApplyLoan(150000, 30, 6.2, 'Working Capital Revolver ($150k)')}
-                disabled={totalActiveDebt + 150000 > maxDebtLimit}
-                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-bold rounded-xl transition-colors cursor-pointer shadow-lg shadow-amber-500/20"
-              >
-                Draw $150,000 Facility
-              </button>
-            </div>
-          </div>
+          {loanFacilities.map((facility) => {
+            const meetsRank = playerRank >= facility.minRank;
+            const meetsTrucks = truckCount >= facility.minTrucks;
+            const meetsHubs = ownedHubsCount >= facility.minHubs;
+            const meetsNetWorth = companyNetWorth >= facility.minNetWorth;
+            const meetsCredit = totalActiveDebt + facility.amount <= maxDebtLimit;
+            const isEligible = !hasActiveLoans && meetsRank && meetsTrucks && meetsHubs && meetsNetWorth && meetsCredit;
 
-          {/* Facility 2 */}
-          <div className="p-5 bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-2xl flex flex-col justify-between space-y-4">
-            <div>
-              <div className="flex items-center justify-between text-xs font-mono mb-2">
-                <span className="text-amber-400 font-bold">Equipment Syndicate</span>
-                <span className="px-2 py-0.5 bg-amber-500/10 text-amber-300 rounded font-bold">6.8% APR</span>
-              </div>
-              <h4 className="text-base font-bold text-white">Heavy Fleet Financing Note</h4>
-              <p className="text-xs text-slate-400 mt-1">
-                Medium-term capital dedicated to scaling heavy semi-tractor fleets and specialized trailers.
-              </p>
-            </div>
-            <div className="space-y-3 pt-3 border-t border-slate-800 font-mono text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Principal Amount:</span>
-                <span className="text-white font-bold">$500,000</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Repayment Term:</span>
-                <span className="text-slate-200">60 Sim Days</span>
-              </div>
-              <button
-                onClick={() => handleApplyLoan(500000, 60, 6.8, 'Heavy Fleet Financing Note ($500k)')}
-                disabled={totalActiveDebt + 500000 > maxDebtLimit}
-                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-bold rounded-xl transition-colors cursor-pointer shadow-lg shadow-amber-500/20"
-              >
-                Draw $500,000 Facility
-              </button>
-            </div>
-          </div>
+            return (
+              <div key={facility.id} className="p-5 bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-2xl flex flex-col justify-between space-y-4">
+                <div>
+                  <div className="flex items-center justify-between text-xs font-mono mb-2">
+                    <span className="text-amber-400 font-bold">{facility.subtitle}</span>
+                    <span className="px-2 py-0.5 bg-amber-500/10 text-amber-300 rounded font-bold">{facility.apr}% APR</span>
+                  </div>
+                  <h4 className="text-base font-bold text-white">{facility.title}</h4>
+                  <p className="text-xs text-slate-400 mt-1">{facility.desc}</p>
 
-          {/* Facility 3 */}
-          <div className="p-5 bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-2xl flex flex-col justify-between space-y-4">
-            <div>
-              <div className="flex items-center justify-between text-xs font-mono mb-2">
-                <span className="text-amber-400 font-bold">Enterprise Syndicate</span>
-                <span className="px-2 py-0.5 bg-amber-500/10 text-amber-300 rounded font-bold">7.2% APR</span>
-              </div>
-              <h4 className="text-base font-bold text-white">Global Logistics Expansion Note</h4>
-              <p className="text-xs text-slate-400 mt-1">
-                High-volume capital for acquiring regional hubs, port concessions, and scaling operations.
-              </p>
-            </div>
-            <div className="space-y-3 pt-3 border-t border-slate-800 font-mono text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Principal Amount:</span>
-                <span className="text-white font-bold">$1,500,000</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Repayment Term:</span>
-                <span className="text-slate-200">90 Sim Days</span>
-              </div>
-              <button
-                onClick={() => handleApplyLoan(1500000, 90, 7.2, 'Global Logistics Expansion Note ($1.5M)')}
-                disabled={totalActiveDebt + 1500000 > maxDebtLimit}
-                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-bold rounded-xl transition-colors cursor-pointer shadow-lg shadow-amber-500/20"
-              >
-                Draw $1,500,000 Facility
-              </button>
-            </div>
-          </div>
+                  {/* Underwriting prerequisites list */}
+                  <div className="mt-3 space-y-1 text-[11px] font-mono border-t border-slate-800/80 pt-3 text-slate-400">
+                    <div className="flex justify-between">
+                      <span>Min Rank:</span>
+                      <strong className={meetsRank ? 'text-emerald-400' : 'text-rose-400'}>Rank {facility.minRank}</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Min Fleet:</span>
+                      <strong className={meetsTrucks ? 'text-emerald-400' : 'text-rose-400'}>{facility.minTrucks} Trucks</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Min Terminals:</span>
+                      <strong className={meetsHubs ? 'text-emerald-400' : 'text-rose-400'}>{facility.minHubs} Hubs</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Min Net Worth:</span>
+                      <strong className={meetsNetWorth ? 'text-emerald-400' : 'text-rose-400'}>${facility.minNetWorth.toLocaleString()}</strong>
+                    </div>
+                  </div>
+                </div>
 
-          {/* Facility 4 */}
-          <div className="p-5 bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-2xl flex flex-col justify-between space-y-4">
-            <div>
-              <div className="flex items-center justify-between text-xs font-mono mb-2">
-                <span className="text-cyan-400 font-bold">Sovereign Syndicate</span>
-                <span className="px-2 py-0.5 bg-cyan-500/10 text-cyan-300 rounded font-bold">7.8% APR</span>
+                <div className="space-y-3 pt-3 border-t border-slate-800 font-mono text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Term Length:</span>
+                    <span className="text-slate-200">{facility.days} Sim Days</span>
+                  </div>
+                  <button
+                    onClick={() => handleApplyLoan(facility)}
+                    disabled={!isEligible}
+                    className={`w-full py-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg ${
+                      isEligible
+                        ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20'
+                        : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                    }`}
+                  >
+                    {!isEligible ? <Lock className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                    {isEligible ? `Draw $${(facility.amount / 1000).toFixed(0)}k Facility` : hasActiveLoans ? 'Active Debt Lock' : 'Underwriting Locked'}
+                  </button>
+                </div>
               </div>
-              <h4 className="text-base font-bold text-white">AI Fleet & Infrastructure Note</h4>
-              <p className="text-xs text-slate-400 mt-1">
-                Massive institutional debt facility for multi-year AI suites, terminal ports, and mega-fleets.
-              </p>
-            </div>
-            <div className="space-y-3 pt-3 border-t border-slate-800 font-mono text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Principal Amount:</span>
-                <span className="text-white font-bold">$5,000,000</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Repayment Term:</span>
-                <span className="text-slate-200">120 Sim Days</span>
-              </div>
-              <button
-                onClick={() => handleApplyLoan(5000000, 120, 7.8, 'AI Fleet & Infrastructure Note ($5.0M)')}
-                disabled={totalActiveDebt + 5000000 > maxDebtLimit}
-                className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-bold rounded-xl transition-colors cursor-pointer shadow-lg shadow-cyan-500/20"
-              >
-                Draw $5,000,000 Facility
-              </button>
-            </div>
-          </div>
+            );
+          })}
         </div>
       </div>
 

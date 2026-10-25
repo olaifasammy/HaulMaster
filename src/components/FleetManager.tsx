@@ -128,19 +128,29 @@ export const FleetManager: React.FC<FleetManagerProps> = ({ onInspectTruck, onOp
                   <Globe className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Region:</span>
                 </span>
-                {activeRegions.map((region) => (
-                  <button
-                    key={region}
-                    onClick={() => handleRegionSelect(region)}
-                    className={`px-3 py-1 rounded-lg transition-colors whitespace-nowrap text-xs font-semibold ${
-                      selectedRegion === region
-                        ? 'bg-cyan-500 text-slate-950 font-bold'
-                        : 'text-slate-400 hover:text-white bg-slate-900 border border-slate-800'
-                    }`}
-                  >
-                    {region}
-                  </button>
-                ))}
+                {activeRegions.map((region) => {
+                  const totalTrucksInRegion = state.trucks.filter((t) => {
+                    const h = state.hubs.find((hub) => hub.id === t.currentHubId);
+                    const r = h?.region || activeRegions[0];
+                    return r === region;
+                  }).length;
+                  return (
+                    <button
+                      key={region}
+                      onClick={() => handleRegionSelect(region)}
+                      className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap text-xs font-mono font-semibold flex items-center gap-1.5 cursor-pointer ${
+                        selectedRegion === region
+                          ? 'bg-cyan-500 text-slate-950 font-bold'
+                          : 'text-slate-400 hover:text-white bg-slate-900 border border-slate-800'
+                      }`}
+                    >
+                      <span>{region}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${selectedRegion === region ? 'bg-slate-950 text-cyan-300' : 'bg-slate-800 text-cyan-400'}`}>
+                        {totalTrucksInRegion}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
 

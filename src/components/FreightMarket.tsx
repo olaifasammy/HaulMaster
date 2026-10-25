@@ -19,7 +19,7 @@ interface FreightMarketProps {
 }
 
 export const FreightMarket: React.FC<FreightMarketProps> = ({ onDispatchContract }) => {
-  const { state, refreshAvailableContracts, executeAiAutoDispatch } = useGame();
+  const { state, refreshAvailableContracts, executeAiAutoDispatch, setSelectedRegion: setGlobalRegion } = useGame();
   const unlockedRegions = state.unlockedRegions || [];
   const [selectedRegion, setSelectedRegion] = useState<string>(unlockedRegions[0] || '');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -56,7 +56,7 @@ export const FreightMarket: React.FC<FreightMarketProps> = ({ onDispatchContract
 
   const handleManualRefresh = () => {
     setIsRefreshing(true);
-    refreshAvailableContracts(true);
+    refreshAvailableContracts(true, selectedRegion);
     setTimeout(() => setIsRefreshing(false), 600);
   };
 
@@ -142,7 +142,10 @@ export const FreightMarket: React.FC<FreightMarketProps> = ({ onDispatchContract
           {unlockedRegions.map((reg) => (
             <button
               key={reg}
-              onClick={() => setSelectedRegion(reg)}
+              onClick={() => {
+                setSelectedRegion(reg);
+                setGlobalRegion(reg as any);
+              }}
               className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                 selectedRegion === reg
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'

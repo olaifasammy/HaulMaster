@@ -12,6 +12,7 @@ import {
   Brain,
   Database,
   ShieldAlert,
+  Coins,
 } from 'lucide-react';
 
 interface CompanyProfilePageProps {
@@ -19,10 +20,11 @@ interface CompanyProfilePageProps {
   onOpenDatabase?: () => void;
   onOpenAiPage?: () => void;
   onOpenExchange: () => void;
+  onOpenCryptoExchange: () => void;
   onOpenEventsPage: () => void;
 }
 
-export const CompanyProfilePage: React.FC<CompanyProfilePageProps> = ({ onOpenAchievements, onOpenDatabase, onOpenAiPage, onOpenExchange, onOpenEventsPage }) => {
+export const CompanyProfilePage: React.FC<CompanyProfilePageProps> = ({ onOpenAchievements, onOpenDatabase, onOpenAiPage, onOpenExchange, onOpenCryptoExchange, onOpenEventsPage }) => {
   const { state, resetGame } = useGame();
   const [companyNameInput, setCompanyNameInput] = useState<string>(state.companyName);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
@@ -146,6 +148,27 @@ export const CompanyProfilePage: React.FC<CompanyProfilePageProps> = ({ onOpenAc
           </div>
         </div>
         <ChevronRight className="w-5 h-5 text-amber-400 group-hover:translate-x-1 transition-transform" />
+      </button>
+
+      {/* Enterprise Crypto Exchange & Digital Asset Treasury Banner */}
+      <button
+        onClick={onOpenCryptoExchange}
+        className="w-full p-6 bg-gradient-to-r from-blue-500/20 via-blue-500/10 to-slate-950 border border-blue-500/40 hover:border-blue-400 rounded-2xl flex items-center justify-between group transition-all cursor-pointer shadow-xl"
+      >
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-xl bg-blue-400 text-slate-950 font-bold">
+            <Coins className="w-6 h-6" />
+          </div>
+          <div className="text-left">
+            <div className="text-base font-bold text-white group-hover:text-blue-300 transition-colors">
+              Enterprise Crypto Treasury & Digital Asset Exchange
+            </div>
+            <div className="text-xs text-slate-300 mt-0.5">
+              Trade major digital assets (BTC, ETH, SOL, HAUL, LGT), manage cold storage reserves, and earn compounding APY in yield staking vaults
+            </div>
+          </div>
+        </div>
+        <ChevronRight className="w-5 h-5 text-blue-400 group-hover:translate-x-1 transition-transform" />
       </button>
 
       {/* Enterprise Exchange & International Trade Banner */}
